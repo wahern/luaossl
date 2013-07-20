@@ -29,7 +29,14 @@ ifeq ($(CC_$(d)), sunpro)
 CPPFLAGS_$(d) += -DOPENSSL_NO_EC
 endif
 
-LDFLAGS_$(d) += -lssl -lcrypto -lpthread -ldl
+LDFLAGS_$(d) += -lssl -lcrypto -lpthread
+
+# NetBSD, FreeBSD, OpenBSD (and presumably descendants) lack any libdl;
+# dlopen, et al are part of libc.
+ifneq ($(patsubst %BSD,BSD,$(OS_$(d))), BSD)
+LDFLAGS_$(d) += -ldl
+endif
+
 
 #
 # C O M P I L A T I O N  R U L E S
