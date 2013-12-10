@@ -1,0 +1,5 @@
+liblua-openssl (20131209-1) unstable; urgency=low
+
+  * Initial release after splitting from cqueues project.
+
+ -- William Ahern <william@25thandClement.com>  Sun, 09 Dec 2013 21:17:33 -0800

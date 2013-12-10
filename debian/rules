@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+
+CFLAGS := -O3 -g -fstack-protector --param=ssp-buffer-size=4
+
+DESTDIR=debian/tmp
+prefix=/usr
+build=liblua5.1-openssl liblua5.2-openssl
+install=$(addsuffix -install,$(build))
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	true
+
+override_dh_auto_build:
+	make DESTDIR=$(DESTDIR) prefix=$(prefix) $(build)
+
+override_dh_auto_install:
+	make DESTDIR=$(DESTDIR) prefix=$(prefix) $(install)
+
+override_dh_auto_clean:
+	make clean
+
+override_dh_auto_test:
+	true
