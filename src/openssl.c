@@ -4167,7 +4167,7 @@ static int mt_init(void) {
 	if (bound && !mt_state.dlref) {
 		Dl_info info;
 
-		if (!dladdr(&luaopen__openssl_rand, &info)) {
+		if (!dladdr((void *)&luaopen__openssl_rand, &info)) {
 			error = -1;
 			goto leave;
 		}
