@@ -1,3 +1,11 @@
+liblua-openssl (20141231-0) unstable; urgency=low
+
+  * Add multi-threaded re-entrancy protection, including explicitly
+    synchronizing OpenSSL initialization because OpenSSL doesn't appear to
+    use its own locking callbacks from initialization routines.
+
+ -- William Ahern <william@25thandClement.com>  Fri, 31 Jan 2014 14:27:30 -0800
+
 liblua-openssl (20131209-1) unstable; urgency=low
 
   * Initial release after splitting from cqueues project.

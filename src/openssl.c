@@ -1,7 +1,7 @@
 /* ==========================================================================
  * openssl.c - Lua OpenSSL
  * --------------------------------------------------------------------------
- * Copyright (c) 2012  William Ahern
+ * Copyright (c) 2012-2014  William Ahern
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
@@ -39,6 +39,10 @@
 #include <netinet/in.h>	/* struct in_addr struct in6_addr */
 #include <arpa/inet.h>	/* inet_pton(3) */
 
+#include <pthread.h>    /* pthread_mutex_init(3) pthread_mutex_lock(3) pthread_mutex_unlock(3) */
+
+#include <dlfcn.h>      /* dladdr(3) dlopen(3) */
+
 #include <openssl/err.h>
 #include <openssl/bn.h>
 #include <openssl/asn1.h>
@@ -72,6 +76,13 @@
 #define DIGEST_CLASS     "EVP_MD_CTX"     /* not a pointer */
 #define HMAC_CLASS       "HMAC_CTX"       /* not a pointer */
 #define CIPHER_CLASS     "EVP_CIPHER_CTX" /* not a pointer */
+
+
+#if __GNUC__
+#define NOTUSED __attribute__((unused))
+#else
+#define NOTUSED
+#endif
 
 
 #define countof(a) (sizeof (a) / sizeof *(a))
@@ -3906,9 +3917,151 @@ int luaopen__openssl_rand(lua_State *L) {
 } /* luaopen__openssl_rand() */
 
 
+/*
+ * Multithread Reentrancy Protection
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static struct {
+	pthread_mutex_t *lock;
+	int nlock;
+
+	void *dlref;
+} mt_state;
+
+
+static void mt_lock(int mode, int type, const char *file NOTUSED, int line NOTUSED) {
+	if (mode & CRYPTO_LOCK)
+		pthread_mutex_lock(&mt_state.lock[type]);
+	else
+		pthread_mutex_unlock(&mt_state.lock[type]);
+} /* mt_lock() */
+
+
+/*
+ * Sources include Google and especially the Wine Project. See get_unix_tid
+ * at http://source.winehq.org/git/wine.git/?a=blob;f=dlls/ntdll/server.c.
+ */
+#if __FreeBSD__
+#include <sys/thr.h> /* thr_self(2) */
+#elif __NetBSD__
+#include <lwp.h> /* _lwp_self(2) */
+#endif
+
+static unsigned long mt_gettid(void) {
+#if __APPLE__
+	return pthread_mach_thread_np(pthread_self());
+#elif __DragonFly__
+	return lwp_gettid();
+#elif  __FreeBSD__
+	long id;
+
+	thr_self(&id);
+
+	return id;
+#elif __NetBSD__
+	return _lwp_self();
+#else
+	/*
+	 * pthread_t is an integer on Solaris and Linux, and a unique pointer
+	 * on OpenBSD.
+	 */
+	return (unsigned long)pthread_self();
+#endif
+} /* mt_gettid() */
+
+
+static int mt_init(void) {
+	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	int bound = 0, error = 0;
+
+	pthread_mutex_lock(&mutex);
+
+	if (!CRYPTO_get_locking_callback()) {
+		if (!mt_state.lock) {
+			int i;
+
+			mt_state.nlock = CRYPTO_num_locks();
+		
+			if (!(mt_state.lock = malloc(mt_state.nlock * sizeof *mt_state.lock))) {
+				error = errno;
+				goto leave;
+			}
+
+			for (i = 0; i < mt_state.nlock; i++) {
+				pthread_mutex_init(&mt_state.lock[i], NULL);
+			}
+		}
+
+		CRYPTO_set_locking_callback(&mt_lock);
+		bound = 1;
+	}
+
+	if (!CRYPTO_get_id_callback()) {
+		CRYPTO_set_id_callback(&mt_gettid);
+		bound = 1;
+	}
+
+	/*
+	 * Prevent loader from unlinking us if we've registered a callback
+	 * with OpenSSL by taking another reference to ourselves.
+	 */
+	if (bound && !mt_state.dlref) {
+		Dl_info info;
+
+		if (!dladdr(&luaopen__openssl_rand, &info)) {
+			error = -1;
+			goto leave;
+		}
+
+		if (!(mt_state.dlref = dlopen(info.dli_fname, RTLD_NOW|RTLD_LOCAL))) {
+			error = -1;
+			goto leave;
+		}
+	}
+
+leave:
+	pthread_mutex_unlock(&mutex);
+
+	return error;
+} /* mt_init() */
+
+
 static void initall(lua_State *L) {
-	ERR_load_crypto_strings();
-	OpenSSL_add_all_algorithms();
+	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	static int initssl;
+	int error;
+
+	if ((error = mt_init())) {
+		if (error == -1) {
+			luaL_error(L, "openssl.init: %s", dlerror());
+		} else {
+			char why[256];
+
+			if (0 != strerror_r(error, why, sizeof why) || *why == '\0')
+				luaL_error(L, "openssl.init: Unknown error: %d", error);
+
+			luaL_error(L, "openssl.init: %s", why);
+		}
+	}
+
+	pthread_mutex_lock(&mutex);
+
+	if (!initssl) {
+		initssl = 1;
+
+		SSL_load_error_strings();
+		SSL_library_init();
+		OpenSSL_add_all_algorithms();
+
+		/*
+		 * TODO: Figure out a way to detect whether OpenSSL has
+		 * already been configured.
+		 */
+		OPENSSL_config(NULL);
+	}
+
+	pthread_mutex_unlock(&mutex);
 
 	addclass(L, BIGNUM_CLASS, bn_methods, bn_metatable);
 	addclass(L, PUBKEY_CLASS, pk_methods, pk_metatable);

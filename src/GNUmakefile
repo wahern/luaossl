@@ -29,7 +29,7 @@ ifeq ($(CC_$(d)), sunpro)
 CPPFLAGS_$(d) += -DOPENSSL_NO_EC
 endif
 
-LDFLAGS_$(d) += -lssl -lcrypto
+LDFLAGS_$(d) += -lssl -lcrypto -lpthread -ldl
 
 #
 # C O M P I L A T I O N  R U L E S
