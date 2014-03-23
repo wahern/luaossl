@@ -23,8 +23,8 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.
  * ==========================================================================
  */
-#ifndef L_OPENSSL_H
-#define L_OPENSSH_H
+#ifndef LUAOSSL_H
+#define LUAOSSL_H
 
 #include <limits.h>	/* INT_MAX INT_MIN */
 #include <string.h>	/* memset(3) */
@@ -4079,4 +4079,4 @@ static void initall(lua_State *L) {
 } /* initall() */
 
 
-#endif /* L_OPENSSL_H */
+#endif /* LUAOSSL_H */
