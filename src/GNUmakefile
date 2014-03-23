@@ -206,13 +206,13 @@ $(d)/help:
 	@echo ""
 	@echo "Some important Make variables:"
 	@echo ""
-	@echo "    prefix - path to install root"
-	@echo ' lua51path - install path for Lua 5.1 modules ($$(lua51path))'
-	@echo 'lua51cpath - install path for Lua 5.1 C modules ($$(lua51cpath))'
-	@echo ' lua52path - install path for Lua 5.2 modules ($$(lua52path))'
-	@echo 'lua52cpath - install path for Lua 5.2 C modules ($$(lua52cpath))'
-	@echo ' lua53path - install path for Lua 5.3 modules ($$(lua53path))'
-	@echo 'lua53cpath - install path for Lua 5.3 C modules ($$(lua53cpath))'
+	@echo "    prefix - path to install root ($(value prefix))"
+	@echo ' lua51path - install path for Lua 5.1 modules ($(value lua51path))'
+	@echo 'lua51cpath - install path for Lua 5.1 C modules ($(value lua51cpath))'
+	@echo ' lua52path - install path for Lua 5.2 modules ($(value lua52path))'
+	@echo 'lua52cpath - install path for Lua 5.2 C modules ($(value lua52cpath))'
+	@echo ' lua53path - install path for Lua 5.3 modules ($(value lua53path))'
+	@echo 'lua53cpath - install path for Lua 5.3 C modules ($(value lua53cpath))'
 	@echo ""
 	@echo "(NOTE: all the common GNU-style paths are supported, including"
 	@echo "prefix, bindir, libdir, datadir, includedir, and DESTDIR.)"
