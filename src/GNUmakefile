@@ -55,12 +55,16 @@ $(eval $(call BUILD_$(d),5.1))
 
 $(eval $(call BUILD_$(d),5.2))
 
+$(eval $(call BUILD_$(d),5.3))
+
 ifneq "$(filter $(abspath $(d)/..)/%, $(abspath $(firstword $(MAKEFILE_LIST))))" ""
 .SECONDARY: all5.1 all5.2 all
 
 all5.1: liblua5.1-openssl
 
 all5.2: liblua5.2-openssl
+
+all5.3: liblua5.3-openssl
 
 all: all5.1 all5.2
 
@@ -132,20 +136,26 @@ $(eval $(call INSTALL_$(d),5.1,$$(lua51cpath),$$(lua51path)))
 
 $(eval $(call INSTALL_$(d),5.2,$$(lua52cpath),$$(lua52path)))
 
+$(eval $(call INSTALL_$(d),5.3,$$(lua53cpath),$$(lua53path)))
+
 ifneq "$(filter $(abspath $(d)/..)/%, $(abspath $(firstword $(MAKEFILE_LIST))))" ""
-.SECONDARY: install5.1 install5.2 install
+.SECONDARY: install5.1 install5.2 install5.3 install
 
 install5.1: liblua5.1-openssl-install
 
 install5.2: liblua5.2-openssl-install
 
+install5.3: liblua5.3-openssl-install
+
 install: install5.1 install5.2
 
-.PHONY: uninstall5.1 uninstall5.2 uninstall
+.PHONY: uninstall5.1 uninstall5.2 uninstall5.3 uninstall
 
 uninstall5.1: liblua5.1-openssl-uninstall
 
 uninstall5.2: liblua5.2-openssl-uninstall
+
+uninstall5.3: liblua5.3-openssl-uninstall
 
 uninstall: uninstall5.1 uninstall5.2
 
@@ -158,7 +168,7 @@ endif
 .PHONY: $(d)/clean $(d)/clean~ clean clean~
 
 $(d)/clean:
-	$(RM) -fr $(@D)/*.so $(@D)/*.o $(@D)/*.dSYM $(@D)/5.1 $(@D)/5.2
+	$(RM) -fr $(@D)/*.so $(@D)/*.o $(@D)/*.dSYM $(@D)/5.1 $(@D)/5.2 $(@D)/5.3
 
 $(d)/clean~: $(d)/clean
 	$(RM) -f $(@D)/*~
@@ -181,12 +191,15 @@ $(d)/help:
 	@echo "openssl      - invokes openssl5.1 and openssl5.2"
 	@echo "openssl5.1   - build 5.1/openssl.so"
 	@echo "openssl5.2   - build 5.2/openssl.so"
+	@echo "openssl5.3   - build 5.3/openssl.so"
 	@echo "install      - invokes install5.1 and install5.2"
 	@echo "install5.1   - install openssl Lua 5.1 modules"
 	@echo "install5.2   - install openssl Lua 5.2 modules"
+	@echo "install5.3   - install openssl Lua 5.3 modules"
 	@echo "uninstall    - invokes uninstall5.1 and uninstall5.2"
 	@echo "uninstall5.1 - uninstall openssl Lua 5.1 modules"
 	@echo "uninstall5.2 - uninstall openssl Lua 5.2 modules"
+	@echo "uninstall5.3 - uninstall openssl Lua 5.3 modules"
 	@echo "  clean      - rm binary targets, object files, debugging symbols, etc"
 	@echo " clean~      - clean + rm *~"
 	@echo "   help      - echo this help message"
@@ -196,8 +209,10 @@ $(d)/help:
 	@echo "    prefix - path to install root"
 	@echo ' lua51path - install path for Lua 5.1 modules ($$(lua51path))'
 	@echo 'lua51cpath - install path for Lua 5.1 C modules ($$(lua51cpath))'
-	@echo ' lua52path - install path for Lua 5.1 modules ($$(lua51path))'
-	@echo 'lua52cpath - install path for Lua 5.1 C modules ($$(lua51cpath))'
+	@echo ' lua52path - install path for Lua 5.2 modules ($$(lua52path))'
+	@echo 'lua52cpath - install path for Lua 5.2 C modules ($$(lua52cpath))'
+	@echo ' lua53path - install path for Lua 5.3 modules ($$(lua53path))'
+	@echo 'lua53cpath - install path for Lua 5.3 C modules ($$(lua53cpath))'
 	@echo ""
 	@echo "(NOTE: all the common GNU-style paths are supported, including"
 	@echo "prefix, bindir, libdir, datadir, includedir, and DESTDIR.)"
