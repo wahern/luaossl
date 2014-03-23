@@ -1,4 +1,4 @@
-liblua-openssl (20141231-0) unstable; urgency=low
+liblua-openssl (20140131-0) unstable; urgency=low
 
   * Add multi-threaded re-entrancy protection, including explicitly
     synchronizing OpenSSL initialization because OpenSSL doesn't appear to
