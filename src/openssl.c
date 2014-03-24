@@ -1624,22 +1624,26 @@ int luaopen__openssl_x509_altname(lua_State *L) {
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 static int xc_new(lua_State *L) {
-	const char *pem;
+	const char *data;
 	size_t len;
 	X509 **ud;
 
-	lua_settop(L, 1);
+	lua_settop(L, 2);
 
 	ud = prepsimple(L, X509_CERT_CLASS);
 
-	if ((pem = luaL_optlstring(L, 1, NULL, &len))) {
+	if ((data = luaL_optlstring(L, 1, NULL, &len))) {
+		const char *format = luaL_optstring(L, 2, "pem");
 		BIO *tmp;
-		int ok;
+		int ok = 0;
 
-		if (!(tmp = BIO_new_mem_buf((char *)pem, len)))
+		if (!(tmp = BIO_new_mem_buf((char *)data, len)))
 			return throwssl(L, "x509.cert.new");
 
-		ok = !!PEM_read_bio_X509(tmp, ud, 0, ""); /* no password */
+		if (strcmp(format, "pem") == 0)
+			ok = !!PEM_read_bio_X509(tmp, ud, 0, ""); /* no password */
+		else if (strcmp(format, "der") == 0)
+			ok = !!(*ud = d2i_X509_bio(tmp, NULL));
 
 		BIO_free(tmp);
 
