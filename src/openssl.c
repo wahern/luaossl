@@ -1433,6 +1433,7 @@ static int gn_checktype(lua_State *L, int index) {
 		{ GEN_DNS,   "DNS" },
 		{ GEN_IPADD, "IPAddress" },
 		{ GEN_IPADD, "IP" },
+		{ GEN_DIRNAME, "DirName" },
 	};
 	const char *type = luaL_checkstring(L, index);
 	unsigned i;
@@ -1450,9 +1451,15 @@ static int gn_add(lua_State *L) {
 	GENERAL_NAMES *gens = checksimple(L, 1, X509_GENS_CLASS);
 	int type = gn_checktype(L, 2);
 	size_t len;
-	const char *txt = luaL_checklstring(L, 3, &len);
+	const char *txt = NULL;
+	X509_NAME *name = NULL;
 	GENERAL_NAME *gen = NULL;
 	union { struct in6_addr in6; struct in_addr in; } ip;
+
+	if (type == GEN_DIRNAME)
+		name = checksimple(L, 3, X509_NAME_CLASS);
+	else
+		txt = luaL_checklstring(L, 3, &len);
 
 	if (type == GEN_IPADD) {
 		if (strchr(txt, ':')) {
@@ -1475,11 +1482,16 @@ static int gn_add(lua_State *L) {
 
 	gen->type = type;
 
-	if (!(gen->d.ia5 = M_ASN1_IA5STRING_new()))
-		goto error;
+	if (type == GEN_DIRNAME) {
+		if (!(gen->d.dirn = X509_NAME_dup(name)))
+			goto error;
+	} else {
+		if (!(gen->d.ia5 = M_ASN1_IA5STRING_new()))
+			goto error;
 
-	if (!ASN1_STRING_set(gen->d.ia5, (unsigned char *)txt, len))
-		goto error;
+		if (!ASN1_STRING_set(gen->d.ia5, (unsigned char *)txt, len))
+			goto error;
+	}
 
 	sk_GENERAL_NAME_push(gens, gen);
 
@@ -1556,12 +1568,19 @@ static int gn__next(lua_State *L) {
 			len = strlen(txt);
 
 			break;
+		case GEN_DIRNAME:
+			tag = "DirName";
+			txt = NULL;
+			break;
 		default:
 			continue;
 		}
 
 		lua_pushstring(L, tag);
-		lua_pushlstring(L, txt, len);
+		if (txt)
+			lua_pushlstring(L, txt, len);
+		else
+			xn_dup(L, name->d.dirn);
 
 		break;
 	}
@@ -1624,22 +1643,26 @@ int luaopen__openssl_x509_altname(lua_State *L) {
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 static int xc_new(lua_State *L) {
-	const char *pem;
+	const char *data;
 	size_t len;
 	X509 **ud;
 
-	lua_settop(L, 1);
+	lua_settop(L, 2);
 
 	ud = prepsimple(L, X509_CERT_CLASS);
 
-	if ((pem = luaL_optlstring(L, 1, NULL, &len))) {
+	if ((data = luaL_optlstring(L, 1, NULL, &len))) {
+		const char *format = luaL_optstring(L, 2, "pem");
 		BIO *tmp;
-		int ok;
+		int ok = 0;
 
-		if (!(tmp = BIO_new_mem_buf((char *)pem, len)))
+		if (!(tmp = BIO_new_mem_buf((char *)data, len)))
 			return throwssl(L, "x509.cert.new");
 
-		ok = !!PEM_read_bio_X509(tmp, ud, 0, ""); /* no password */
+		if (strcmp(format, "pem") == 0)
+			ok = !!PEM_read_bio_X509(tmp, ud, 0, ""); /* no password */
+		else if (strcmp(format, "der") == 0)
+			ok = !!(*ud = d2i_X509_bio(tmp, NULL));
 
 		BIO_free(tmp);
 
