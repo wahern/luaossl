@@ -31,6 +31,7 @@
 #include <strings.h>	/* strcasecmp(3) */
 #include <math.h>	/* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
 #include <time.h>	/* struct tm time_t strptime(3) */
+#include <ctype.h>      /* tolower(3) */
 
 #include <sys/types.h>
 #include <sys/stat.h>	/* struct stat stat(2) */
@@ -95,6 +96,8 @@
 
 #define stricmp(a, b) strcasecmp((a), (b))
 #define strieq(a, b) (!stricmp((a), (b)))
+
+#define xtolower(c) tolower((unsigned char)(c))
 
 #define SAY_(file, func, line, fmt, ...) \
 	fprintf(stderr, "%s:%d: " fmt "%s", __func__, __LINE__, __VA_ARGS__)
@@ -218,7 +221,7 @@ static void addclass(lua_State *L, const char *name, const luaL_Reg *methods, co
 } /* addclass() */
 
 
-static int checkoption(struct lua_State *L, int index, const char *def, const char *opts[]) {
+static int checkoption(struct lua_State *L, int index, const char *def, const char *const opts[]) {
 	const char *opt = (def)? luaL_optstring(L, index, def) : luaL_checkstring(L, index);
 	int i; 
 
@@ -229,6 +232,34 @@ static int checkoption(struct lua_State *L, int index, const char *def, const ch
 
 	return luaL_argerror(L, index, lua_pushfstring(L, "invalid option %s", opt));
 } /* checkoption() */
+
+
+#define X509_ANY 0x01
+#define X509_PEM 0x02
+#define X509_DER 0x04
+#define X509_ALL (X509_PEM|X509_DER)
+
+static int optencoding(lua_State *L, int index, const char *def, int allow) {
+	static const char *const opts[] = { "*", "pem", "der", NULL };
+	int type = 0;
+
+	switch (checkoption(L, index, def, opts)) {
+	case 0:
+		type = X509_ANY;
+		break;
+	case 1:
+		type = X509_PEM;
+		break;
+	case 2:
+		type = X509_DER;
+		break;
+	}
+
+	if (!(type & allow))
+		luaL_argerror(L, index, lua_pushfstring(L, "invalid option %s", luaL_checkstring(L, index)));
+
+	return type;
+} /* optencoding() */
 
 
 static _Bool getfield(lua_State *L, int index, const char *k) {
@@ -719,11 +750,12 @@ static BIO *getbio(lua_State *L) {
 static int pk_new(lua_State *L) {
 	EVP_PKEY **ud;
 
-	lua_settop(L, 1);
+	/* #1 table or key; if key, #2 format and #3 type */
+	lua_settop(L, 3);
 
 	ud = prepsimple(L, PUBKEY_CLASS);
 
-	if (lua_istable(L, 1)) {
+	if (lua_istable(L, 1) || lua_isnil(L, 1)) {
 		int type = EVP_PKEY_RSA;
 		unsigned bits = 1024;
 		unsigned exp = 65537;
@@ -860,37 +892,69 @@ creat:
 		default:
 			return luaL_error(L, "%d: unknown EVP base type (%d)", EVP_PKEY_type(type), type);
 		} /* switch() */
-	} else {
-		const char *pem;
+	} else if (lua_isstring(L, 1)) {
+		int type = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
+		int ispub = -1;
+		const char *opt, *data;
 		size_t len;
 		BIO *bio;
-		int ok;
+		int ok = 0;
 
-		if (!(*ud = EVP_PKEY_new()))
+		/* check if specified publickey or privatekey */
+		if ((opt = luaL_optstring(L, 3, NULL))) {
+			if (xtolower(opt[0]) == 'p' && xtolower(opt[1]) == 'u') {
+				ispub = 1;
+			} else if (xtolower(opt[0]) == 'p' && xtolower(opt[1]) == 'r') {
+				ispub = 0;
+			} else {
+				return luaL_argerror(L, 3, lua_pushfstring(L, "invalid option %s", opt));
+			}
+		}
+
+		data = luaL_checklstring(L, 1, &len);
+
+		if (!(bio = BIO_new_mem_buf((void *)data, len)))
 			return throwssl(L, "pubkey.new");
 
-		switch (lua_type(L, 1)) {
-		case LUA_TSTRING:
-			pem = luaL_checklstring(L, 1, &len);
+		if (type == X509_PEM || type == X509_ANY) {
+			if (ispub == 1 || ispub == -1) {
+				ok = !!(*ud = PEM_read_bio_PUBKEY(bio, NULL, 0, ""));
 
-			if (!(bio = BIO_new_mem_buf((void *)pem, len)))
-				return throwssl(L, "pubkey.new");
-
-			if (strstr(pem, "PUBLIC KEY")) {
-				ok = !!PEM_read_bio_PUBKEY(bio, ud, 0, 0);
-			} else {
-				ok = !!PEM_read_bio_PrivateKey(bio, ud, 0, 0);
+				if (ok || (type == X509_PEM && ispub == 1))
+					goto done;
 			}
 
-			BIO_free(bio);
+			if (ispub == 0 || ispub == -1) {
+				ok = !!(*ud = PEM_read_bio_PrivateKey(bio, NULL, 0, ""));
 
-			if (!ok)
-				return throwssl(L, "pubkey.new");
+				if (ok || (type == X509_PEM && ispub == 0))
+					goto done;
+			}
+		}
 
-			break;
-		default:
-			return luaL_error(L, "%s: unknown key initializer", lua_typename(L, lua_type(L, 1)));
-		} /* switch() */
+		if (type == X509_DER || type == X509_ANY) {
+			if (ispub == 1 || ispub == -1) {
+				ok = !!(*ud = d2i_PUBKEY_bio(bio, NULL));
+
+				if (ok || (type == X509_DER && ispub == 1))
+					goto done;
+			}
+
+			if (ispub == 0 || ispub == -1) {
+				ok = !!(*ud = d2i_PrivateKey_bio(bio, NULL));
+
+				if (ok || (type == X509_DER && ispub == 0))
+					goto done;
+			}
+		}
+
+done:
+		BIO_free(bio);
+
+		if (!ok)
+			return throwssl(L, "pubkey.new");
+	} else {
+		return luaL_error(L, "%s: unknown key initializer", lua_typename(L, lua_type(L, 1)));
 	}
 
 	return 1;
@@ -914,19 +978,24 @@ static int pk_type(lua_State *L) {
 
 static int pk_setPublicKey(lua_State *L) {
 	EVP_PKEY **key = luaL_checkudata(L, 1, PUBKEY_CLASS);
-	const char *pem;
+	const char *data;
 	size_t len;
 	BIO *bio;
-	int ok;
+	int type, ok = 0;
 
-	lua_settop(L, 2);
+	data = luaL_checklstring(L, 2, &len);
+	type = optencoding(L, 3, "*", X509_ANY|X509_PEM|X509_DER);
 
-	pem = luaL_checklstring(L, 2, &len);
-
-	if (!(bio = BIO_new_mem_buf((void *)pem, len)))
+	if (!(bio = BIO_new_mem_buf((void *)data, len)))
 		return throwssl(L, "pubkey.new");
 
-	ok = !!PEM_read_bio_PUBKEY(bio, key, 0, 0);
+	if (type == X509_ANY || type == X509_PEM) {
+		ok = !!PEM_read_bio_PUBKEY(bio, key, 0, "");
+	}
+
+	if (!ok && (type == X509_ANY || type == X509_DER)) {
+		ok = !!d2i_PUBKEY_bio(bio, key);
+	}
 
 	BIO_free(bio);
 
@@ -941,19 +1010,24 @@ static int pk_setPublicKey(lua_State *L) {
 
 static int pk_setPrivateKey(lua_State *L) {
 	EVP_PKEY **key = luaL_checkudata(L, 1, PUBKEY_CLASS);
-	const char *pem;
+	const char *data;
 	size_t len;
 	BIO *bio;
-	int ok;
+	int type, ok = 0;
 
-	lua_settop(L, 2);
+	data = luaL_checklstring(L, 2, &len);
+	type = optencoding(L, 3, "*", X509_ANY|X509_PEM|X509_DER);
 
-	pem = luaL_checklstring(L, 2, &len);
-
-	if (!(bio = BIO_new_mem_buf((void *)pem, len)))
+	if (!(bio = BIO_new_mem_buf((void *)data, len)))
 		return throwssl(L, "pubkey.new");
 
-	ok = !!PEM_read_bio_PrivateKey(bio, key, 0, 0);
+	if (type == X509_ANY || type == X509_PEM) {
+		ok = !!PEM_read_bio_PrivateKey(bio, key, 0, "");
+	}
+
+	if (!ok && (type == X509_ANY || type == X509_DER)) {
+		ok = !!d2i_PrivateKey_bio(bio, key);
+	}
 
 	BIO_free(bio);
 
@@ -1027,7 +1101,7 @@ static int pk_toPEM(lua_State *L) {
 	bio = getbio(L);
 
 	for (i = 2; i <= top; i++) {
-		static const char *opts[] = {
+		static const char *const opts[] = {
 			"public", "PublicKey",
 			"private", "PrivateKey",
 //			"params", "Parameters",
@@ -1624,22 +1698,29 @@ int luaopen__openssl_x509_altname(lua_State *L) {
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 static int xc_new(lua_State *L) {
-	const char *pem;
+	const char *data;
 	size_t len;
 	X509 **ud;
 
-	lua_settop(L, 1);
+	lua_settop(L, 2);
 
 	ud = prepsimple(L, X509_CERT_CLASS);
 
-	if ((pem = luaL_optlstring(L, 1, NULL, &len))) {
+	if ((data = luaL_optlstring(L, 1, NULL, &len))) {
+		int type = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
 		BIO *tmp;
-		int ok;
+		int ok = 0;
 
-		if (!(tmp = BIO_new_mem_buf((char *)pem, len)))
+		if (!(tmp = BIO_new_mem_buf((char *)data, len)))
 			return throwssl(L, "x509.cert.new");
 
-		ok = !!PEM_read_bio_X509(tmp, ud, 0, ""); /* no password */
+		if (type == X509_PEM || type == X509_ANY) {
+			ok = !!(*ud = PEM_read_bio_X509(tmp, NULL, 0, "")); /* no password */
+		}
+
+		if (!ok && (type == X509_DER || type == X509_ANY)) {
+			ok = !!(*ud = d2i_X509_bio(tmp, NULL));
+		}
 
 		BIO_free(tmp);
 
@@ -2399,17 +2480,25 @@ static int xc_sign(lua_State *L) {
 
 static int xc__tostring(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
-	int fmt = checkoption(L, 2, "pem", (const char *[]){ "pem", NULL });
+	int type = optencoding(L, 2, "pem", X509_PEM|X509_DER);
 	BIO *bio = getbio(L);
-	char *pem;
+	char *data;
 	long len;
 
-	if (!PEM_write_bio_X509(bio, crt))
-		return throwssl(L, "x509.cert:__tostring");
+	switch (type) {
+	case X509_PEM:
+		if (!PEM_write_bio_X509(bio, crt))
+			return throwssl(L, "x509.cert:__tostring");
+		break;
+	case X509_DER:
+		if (!i2d_X509_bio(bio, crt))
+			return throwssl(L, "x509.cert:__tostring");
+		break;
+	} /* switch() */
 
-	len = BIO_get_mem_data(bio, &pem);
+	len = BIO_get_mem_data(bio, &data);
 
-	lua_pushlstring(L, pem, len);
+	lua_pushlstring(L, data, len);
 
 	return 1;
 } /* xc__tostring() */
@@ -2486,26 +2575,34 @@ int luaopen__openssl_x509_cert(lua_State *L) {
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 static int xr_new(lua_State *L) {
-	const char *pem;
+	const char *data;
 	size_t len;
 	X509_REQ **ud;
 	X509 *crt;
 
 	lua_settop(L, 1);
+	lua_settop(L, 2);
 
 	ud = prepsimple(L, X509_CSR_CLASS);
 
 	if ((crt = testsimple(L, 1, X509_CERT_CLASS))) {
 		if (!(*ud = X509_to_X509_REQ(crt, 0, 0)))
 			return throwssl(L, "x509.csr.new");
-	} else if ((pem = luaL_optlstring(L, 1, NULL, &len))) {
+	} else if ((data = luaL_optlstring(L, 1, NULL, &len))) {
+		int type = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
 		BIO *tmp;
-		int ok;
+		int ok = 0;
 
-		if (!(tmp = BIO_new_mem_buf((char *)pem, len)))
+		if (!(tmp = BIO_new_mem_buf((char *)data, len)))
 			return throwssl(L, "x509.csr.new");
 
-		ok = !!PEM_read_bio_X509_REQ(tmp, ud, 0, ""); /* no password */
+		if (type == X509_PEM || type == X509_ANY) {
+			ok = !!(*ud = PEM_read_bio_X509_REQ(tmp, NULL, 0, "")); /* no password */
+		}
+
+		if (!ok && (type == X509_DER || type == X509_ANY)) {
+			ok = !!(*ud = d2i_X509_REQ_bio(tmp, NULL));
+		}
 
 		BIO_free(tmp);
 
@@ -2612,17 +2709,25 @@ static int xr_sign(lua_State *L) {
 
 static int xr__tostring(lua_State *L) {
 	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
-	int fmt = checkoption(L, 2, "pem", (const char *[]){ "pem", NULL });
+	int type = optencoding(L, 2, "pem", X509_PEM|X509_DER);
 	BIO *bio = getbio(L);
-	char *pem;
+	char *data;
 	long len;
 
-	if (!PEM_write_bio_X509_REQ(bio, csr))
-		return throwssl(L, "x509.csr:__tostring");
+	switch (type) {
+	case X509_PEM:
+		if (!PEM_write_bio_X509_REQ(bio, csr))
+			return throwssl(L, "x509.csr:__tostring");
+		break;
+	case X509_DER:
+		if (!i2d_X509_REQ_bio(bio, csr))
+			return throwssl(L, "x509.csr:__tostring");
+		break;
+	} /* switch() */
 
-	len = BIO_get_mem_data(bio, &pem);
+	len = BIO_get_mem_data(bio, &data);
 
-	lua_pushlstring(L, pem, len);
+	lua_pushlstring(L, data, len);
 
 	return 1;
 } /* xr__tostring() */
@@ -3063,7 +3168,7 @@ int luaopen__openssl_x509_store_context(lua_State *L) {
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 static int sx_new(lua_State *L) {
-	static const char *opts[] = {
+	static const char *const opts[] = {
 		"SSLv2", "SSLv3", "SSLv23", "SSL", "TLSv1", "TLS", NULL
 	};
 	/* later versions of SSL declare a const qualifier on the return type */
