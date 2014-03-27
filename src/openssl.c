@@ -1299,7 +1299,7 @@ static int xn_add(lua_State *L) {
 	if (!ok)
 		return throwssl(L, "x509.name:add");
 
-	lua_pushboolean(L, 1);
+	lua_pushvalue(L, 1);
 
 	return 1;
 } /* xn_add() */
@@ -1579,7 +1579,7 @@ text:
 
 	sk_GENERAL_NAME_push(gens, gen);
 
-	lua_pushboolean(L, 1);
+	lua_pushvalue(L, 1);
 
 	return 1;
 error:
@@ -2877,7 +2877,7 @@ static int xl_add(lua_State *L) {
 		return throwssl(L, "x509.chain:add");
 	}
 
-	lua_pushboolean(L, 1);
+	lua_pushvalue(L, 1);
 
 	return 1;
 } /* xl_add() */
@@ -3012,7 +3012,7 @@ static int xs_add(lua_State *L) {
 		}
 	}
 
-	lua_pushboolean(L, 1);
+	lua_pushvalue(L, 1);
 
 	return 1;
 } /* xs_add() */
