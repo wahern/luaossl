@@ -1194,16 +1194,26 @@ static int pk_toPEM(lua_State *L) {
 
 static int pk__tostring(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 1, PUBKEY_CLASS);
+	int type = optencoding(L, 2, "pem", X509_PEM|X509_DER);
 	BIO *bio = getbio(L);
-	char *pem;
+	char *data;
 	long len;
-	int ok;
+	int ok = 0;
 
-	if (!PEM_write_bio_PUBKEY(bio, key))
-		return throwssl(L, "pubkey:__tostring");
+	switch (type) {
+	case X509_PEM:
+		if (!PEM_write_bio_PUBKEY(bio, key))
+			return throwssl(L, "pubkey:__tostring");
+		break;
+	case X509_DER:
+		if (!i2d_PUBKEY_bio(bio, key))
+			return throwssl(L, "pubkey:__tostring");
+		break;
+	} /* switch() */
 
-	len = BIO_get_mem_data(bio, &pem);
-	lua_pushlstring(L, pem, len);
+	len = BIO_get_mem_data(bio, &data);
+
+	lua_pushlstring(L, data, len);
 
 	return 1;
 } /* pk__tostring() */
