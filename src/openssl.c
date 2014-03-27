@@ -1498,15 +1498,16 @@ static int gn_setCritical(lua_State *L) {
 
 static int gn_checktype(lua_State *L, int index) {
 	static const struct { int type; const char *name; } table[] = {
-		{ GEN_EMAIL, "RFC822Name" },
-		{ GEN_EMAIL, "RFC822" },
-		{ GEN_EMAIL, "email" },
-		{ GEN_URI,   "UniformResourceIdentifier" },
-		{ GEN_URI,   "URI" },
-		{ GEN_DNS,   "DNSName" },
-		{ GEN_DNS,   "DNS" },
-		{ GEN_IPADD, "IPAddress" },
-		{ GEN_IPADD, "IP" },
+		{ GEN_EMAIL,   "RFC822Name" },
+		{ GEN_EMAIL,   "RFC822" },
+		{ GEN_EMAIL,   "email" },
+		{ GEN_URI,     "UniformResourceIdentifier" },
+		{ GEN_URI,     "URI" },
+		{ GEN_DNS,     "DNSName" },
+		{ GEN_DNS,     "DNS" },
+		{ GEN_IPADD,   "IPAddress" },
+		{ GEN_IPADD,   "IP" },
+		{ GEN_DIRNAME, "DirName" },
 	};
 	const char *type = luaL_checkstring(L, index);
 	unsigned i;
@@ -1523,12 +1524,28 @@ static int gn_checktype(lua_State *L, int index) {
 static int gn_add(lua_State *L) {
 	GENERAL_NAMES *gens = checksimple(L, 1, X509_GENS_CLASS);
 	int type = gn_checktype(L, 2);
+	X509_NAME *name;
 	size_t len;
-	const char *txt = luaL_checklstring(L, 3, &len);
+	const char *txt;
 	GENERAL_NAME *gen = NULL;
 	union { struct in6_addr in6; struct in_addr in; } ip;
 
-	if (type == GEN_IPADD) {
+	switch (type) {
+	case GEN_DIRNAME:
+		name = checksimple(L, 3, X509_NAME_CLASS);
+
+		if (!(gen = GENERAL_NAME_new()))
+			goto error;
+
+		gen->type = type;
+
+		if (!(gen->d.dirn = X509_NAME_dup(name)))
+			goto error;
+
+		break;
+	case GEN_IPADD:
+		txt = luaL_checkstring(L, 3);
+
 		if (strchr(txt, ':')) {
 			if (1 != inet_pton(AF_INET6, txt, &ip.in6))
 				return luaL_error(L, "%s: invalid address", txt);
@@ -1542,18 +1559,23 @@ static int gn_add(lua_State *L) {
 			txt = (char *)&ip.in.s_addr;
 			len = 4;
 		}
-	}
 
-	if (!(gen = GENERAL_NAME_new()))
-		goto error;
+		goto text;
+	default:
+		txt = luaL_checklstring(L, 3, &len);
+text:
+		if (!(gen = GENERAL_NAME_new()))
+			goto error;
 
-	gen->type = type;
+		gen->type = type;
 
-	if (!(gen->d.ia5 = M_ASN1_IA5STRING_new()))
-		goto error;
+		if (!(gen->d.ia5 = M_ASN1_IA5STRING_new()))
+			goto error;
 
-	if (!ASN1_STRING_set(gen->d.ia5, (unsigned char *)txt, len))
-		goto error;
+		if (!ASN1_STRING_set(gen->d.ia5, (unsigned char *)txt, len))
+			goto error;
+		break;
+	} /* switch() */
 
 	sk_GENERAL_NAME_push(gens, gen);
 
@@ -1566,6 +1588,9 @@ error:
 	return throwssl(L, "x509.altname:add");
 } /* gn_add() */
 
+
+#define GN_PUSHSTRING(L, o) \
+	lua_pushlstring((L), (char *)M_ASN1_STRING_data((o)), M_ASN1_STRING_length((o)))
 
 static int gn__next(lua_State *L) {
 	GENERAL_NAMES *gens = checksimple(L, lua_upvalueindex(1), X509_GENS_CLASS);
@@ -1587,21 +1612,18 @@ static int gn__next(lua_State *L) {
 
 		switch (name->type) {
 		case GEN_EMAIL:
-			tag = "email";
-			txt = (char *)M_ASN1_STRING_data(name->d.rfc822Name);
-			len = M_ASN1_STRING_length(name->d.rfc822Name);
+			lua_pushstring(L, "email");
+			GN_PUSHSTRING(L, name->d.rfc822Name);
 
 			break;
 		case GEN_URI:
-			tag = "URI";
-			txt = (char *)M_ASN1_STRING_data(name->d.uniformResourceIdentifier);
-			len = M_ASN1_STRING_length(name->d.uniformResourceIdentifier);
+			lua_pushstring(L, "URI");
+			GN_PUSHSTRING(L, name->d.uniformResourceIdentifier);
 
 			break;
 		case GEN_DNS:
-			tag = "DNS";
-			txt = (char *)M_ASN1_STRING_data(name->d.dNSName);
-			len = M_ASN1_STRING_length(name->d.dNSName);
+			lua_pushstring(L, "DNS");
+			GN_PUSHSTRING(L, name->d.dNSName);
 
 			break;
 		case GEN_IPADD:
@@ -1629,16 +1651,21 @@ static int gn__next(lua_State *L) {
 
 			len = strlen(txt);
 
+			lua_pushstring(L, "IP");
+			lua_pushlstring(L, txt, len);
+
+			break;
+		case GEN_DIRNAME:
+			lua_pushstring(L, "DirName");
+			xn_dup(L, name->d.dirn);
+
 			break;
 		default:
 			continue;
-		}
-
-		lua_pushstring(L, tag);
-		lua_pushlstring(L, txt, len);
+		} /* switch() */
 
 		break;
-	}
+	} /* while() */
 
 	lua_pushinteger(L, i);
 	lua_replace(L, lua_upvalueindex(2));
