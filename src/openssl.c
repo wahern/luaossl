@@ -4017,15 +4017,18 @@ static unsigned long long rand_llu(lua_State *L) {
  * (https://groups.google.com/forum/message/raw?msg=sci.crypt/DMslf6tSrD8/rv9rk6oP3r4J)
  */
 static int rand_uniform(lua_State *L) {
+	unsigned long long r;
+
 	if (lua_isnoneornil(L, 1)) {
-		unsigned long long r = rand_llu(L);
-
-		lua_pushnumber(L, r);
-
-		return 1;
+		r = rand_llu(L);
 	} else {
-		unsigned long long N = luaL_checknumber(L, 1);
-		unsigned long long r, m;
+		unsigned long long N, m;
+
+		if (sizeof (lua_Unsigned) >= sizeof r) {
+			N = luaL_checkunsigned(L, 1);
+		} else {
+			N = luaL_checknumber(L, 1);
+		}
 
 		luaL_argcheck(L, N > 1, 1, lua_pushfstring(L, "[0, %d): interval is empty", (int)N));
 
@@ -4035,10 +4038,16 @@ static int rand_uniform(lua_State *L) {
 			r = rand_llu(L);
 		} while (r < m);
 
-		lua_pushnumber(L, (r % N));
-
-		return 1;
+		r = r % N;
 	}
+
+	if (sizeof (lua_Unsigned) >= sizeof r) {
+		lua_pushunsigned(L, r);
+	} else {
+		lua_pushnumber(L, r);
+	}
+
+	return 1;
 } /* rand_uniform() */
 
 
