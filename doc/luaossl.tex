@@ -232,19 +232,19 @@ Add or interpose a bignum class method. Returns the previous method, if any.
 \end{Module}
 
 
-\begin{Module}{openssl.pubkey}
+\begin{Module}{openssl.pkey}
 
-\module{openssl.pubkey} binds OpenSSL's libcrypto public-private key library. The \fn{\_\_tostring} metamethod generates a PEM encoded representation of the public key---excluding the private key.
+\module{openssl.pkey} binds OpenSSL's libcrypto public-private key library. The \fn{\_\_tostring} metamethod generates a PEM encoded representation of the public key---excluding the private key.
 
-\subsubsection[\fn{pubkey.new}]{\fn{pubkey.new($string$[, $format$])}}
+\subsubsection[\fn{pkey.new}]{\fn{pkey.new($string$[, $format$])}}
 
-Initializes a new pubkey object from the PEM- or DER-encoded key in $string$. $format$ defaults to ``*'', which means to automatically test the input encoding. If $format$ is explicitly ``PEM'' or ``DER'', then only that decoding format is used.
+Initializes a new pkey object from the PEM- or DER-encoded key in $string$. $format$ defaults to ``*'', which means to automatically test the input encoding. If $format$ is explicitly ``PEM'' or ``DER'', then only that decoding format is used.
 
 On failure throws an error.
 
-\subsubsection[\fn{pubkey.new}]{\fn{pubkey.new\{ $\ldots$ \}}}
+\subsubsection[\fn{pkey.new}]{\fn{pkey.new\{ $\ldots$ \}}}
 
-Generates a new pubkey object according to the specified parameters.
+Generates a new pkey object according to the specified parameters.
 
 \begin{ctabular}{ c | c | p{5in}}
 field & type:default & description\\\hline
@@ -256,35 +256,35 @@ field & type:default & description\\\hline
 
 .curve & string:prime192v1 & for elliptic curve keys, the OpenSSL string identifier of the curve
 \end{ctabular}
-\subsubsection[\fn{pubkey.interpose}]{\fn{pubkey.interpose($name$, $function$)}}
+\subsubsection[\fn{pkey.interpose}]{\fn{pkey.interpose($name$, $function$)}}
 
-Add or interpose a pubkey class method. Returns the previous method, if any.
+Add or interpose a pkey class method. Returns the previous method, if any.
 
-\subsubsection[\fn{pubkey:type}]{\fn{pubkey:type()}}
+\subsubsection[\fn{pkey:type}]{\fn{pkey:type()}}
 
 Returns the OpenSSL string identifier for the type of key.
 
-\subsubsection[\fn{pubkey:setPublicKey}]{\fn{pubkey:setPublicKey($string$[, $format$])}}
+\subsubsection[\fn{pkey:setPublicKey}]{\fn{pkey:setPublicKey($string$[, $format$])}}
 
-Set the public key component to that described by the PEM- or DER-encoded public key in $string$. $format$ is as described in \fn{openssl.pubkey.new}---``PEM'', ``DER'', or ``*'' (default).
+Set the public key component to that described by the PEM- or DER-encoded public key in $string$. $format$ is as described in \fn{openssl.pkey.new}---``PEM'', ``DER'', or ``*'' (default).
 
-\subsubsection[\fn{pubkey:setPrivateKey}]{\fn{pubkey:setPrivateKey($string$[, $format$])}}
+\subsubsection[\fn{pkey:setPrivateKey}]{\fn{pkey:setPrivateKey($string$[, $format$])}}
 
-Set the private key component to that described by the PEM encoded private key in $string$. $format$ is as described in \fn{openssl.pubkey.new}.
+Set the private key component to that described by the PEM encoded private key in $string$. $format$ is as described in \fn{openssl.pkey.new}.
 
-\subsubsection[\fn{pubkey:sign}]{\fn{pubkey:sign($digest$)}}
+\subsubsection[\fn{pkey:sign}]{\fn{pkey:sign($digest$)}}
 
 Sign data which has been consumed by the specified \module{openssl.digest} $digest$. Digests and keys are not all interchangeable. For example, an elliptic curve key requires a digest of type ``ecdsa-with-SHA1'', while DSA requires ``dss1''. OpenSSL supports more varied digests for RSA.
 
 Returns the signature as an opaque binary string\footnote{Elliptic curve signatures are two X.509 DER-encoded numbers, for example, while RSA signatures are encrypted DER structures.} on success, and throws an error otherwise.
 
-\subsubsection[\fn{pubkey:verify}]{\fn{pubkey:verify($signature$, $digest$)}}
+\subsubsection[\fn{pkey:verify}]{\fn{pkey:verify($signature$, $digest$)}}
 
 Verify the string $signature$ as signing the document consumed by \module{openssl.digest} $digest$. See the :sign method for constraints on the format and type of the parameters.
 
 Returns true on success, false for properly formatted but invalid signatures, and throws an error otherwise. Because the structure of the signature is opaque and not susceptible to sanity checking before passing to OpenSSL, an application should always be prepared for an error to be thrown when verifying untrusted signatures. OpenSSL, of course, should be able to handle all malformed inputs. But the module does not attempt to differentiate local system errors from errors triggered by malformed signatures because the set of such errors may change in the future.
 
-\subsubsection[\fn{pubkey:toPEM}]{\fn{pubkey:toPEM($which$[, $which$])}}
+\subsubsection[\fn{pkey:toPEM}]{\fn{pkey:toPEM($which$[, $which$])}}
 
 Returns the PEM encoded string representation(s) of the specified key component. $which$ must be one of ``public'', ``PublicKey'', ``private'', or ``PrivateKey''. For the two argument form, returns two values.
 
@@ -357,7 +357,7 @@ Binds the X.509 certificate OpenSSL ASN.1 object.
 
 \subsubsection[\fn{x509.new}]{\fn{x509.new([$string$[, $format$]])}}
 
-Returns a new x509 object, optionally initialized to the PEM- or DER-encoded certificate specified by $string$. $format$ is as described in \fn{openssl.pubkey.new}--``PEM'', ``DER'', or ``*'' (default).
+Returns a new x509 object, optionally initialized to the PEM- or DER-encoded certificate specified by $string$. $format$ is as described in \fn{openssl.pkey.new}--``PEM'', ``DER'', or ``*'' (default).
 
 \subsubsection[\fn{x509.interpose}]{\fn{x509.interpose($name$, $function$)}}
 
@@ -461,15 +461,15 @@ Returns a boolean according to whether the specified issuer---an \module{openssl
 
 \subsubsection[\fn{x509:getPublicKey}]{\fn{x509:getPublicKey()}}
 
-Returns the public key component as an \module{openssl.pubkey} object.
+Returns the public key component as an \module{openssl.pkey} object.
 
 \subsubsection[\fn{x509:setPublicKey}]{\fn{x509:setPublicKey($key$)}}
 
-Sets the public key component referenced by the \module{openssl.pubkey} object $key$.
+Sets the public key component referenced by the \module{openssl.pkey} object $key$.
 
 \subsubsection[\fn{x509:sign}]{\fn{x509:sign($key$ [, $type$])}}
 
-Signs and updates the instance certificate using the \module{openssl.pubkey} $key$. $type$ is an optional string describing the digest type. See \module{pubkey:sign}, regarding which types of digests are valid. If $type$ is omitted than a default type is used---``sha1'' for RSA keys, ``dss1'' for DSA keys, and ``ecdsa-with-SHA1'' for EC keys.
+Signs and updates the instance certificate using the \module{openssl.pkey} $key$. $type$ is an optional string describing the digest type. See \module{pkey:sign}, regarding which types of digests are valid. If $type$ is omitted than a default type is used---``sha1'' for RSA keys, ``dss1'' for DSA keys, and ``ecdsa-with-SHA1'' for EC keys.
 
 \subsubsection[\fn{x509:\_\_tostring}]{\fn{x509:\_\_tostring}}
 
@@ -484,7 +484,7 @@ Binds the X.509 certificate signing request OpenSSL ASN.1 object.
 
 \subsubsection[\fn{csr.new}]{\fn{csr.new([$x509$|$string$[, $format$]])}}
 
-Returns a new request object, optionally initialized to the specified \module{openssl.x509} certificate $x509$ or the PEM- or DER-encoded certificate signing request $string$. $format$ is as described in \fn{openssl.pubkey.new}---``PEM'', ``DER'', or ``*'' (default).
+Returns a new request object, optionally initialized to the specified \module{openssl.x509} certificate $x509$ or the PEM- or DER-encoded certificate signing request $string$. $format$ is as described in \fn{openssl.pkey.new}---``PEM'', ``DER'', or ``*'' (default).
 
 \subsubsection[\fn{csr.interpose}]{\fn{csr.interpose($name$, $function$)}}
 
@@ -508,15 +508,15 @@ Sets the subject distinguished name.
 
 \subsubsection[\fn{csr:getPublicKey}]{\fn{csr:getPublicKey()}}
 
-Returns the public key component as an \module{openssl.pubkey} object.
+Returns the public key component as an \module{openssl.pkey} object.
 
 \subsubsection[\fn{csr:setPublicKey}]{\fn{csr:setPublicKey($key$)}}
 
-Sets the public key component referenced by the \module{openssl.pubkey} object $key$.
+Sets the public key component referenced by the \module{openssl.pkey} object $key$.
 
 \subsubsection[\fn{car:sign}]{\fn{csr:sign($key$)}}
 
-Signs the instance request using the \module{openssl.pubkey} $key$.
+Signs the instance request using the \module{openssl.pkey} $key$.
 
 \subsubsection[\fn{csr:\_\_tostring}]{\fn{csr:\_\_tostring}}
 
@@ -615,7 +615,7 @@ Sets the X.509 certificate \module{openssl.x509} object $crt$ to send during SSL
 
 \subsubsection[\fn{context:setPrivateKey}]{\fn{context:setPrivateKey($key$)}}
 
-Sets the private key \module{openssl.pubkey} object $key$ for use during SSL connection instance handshakes.
+Sets the private key \module{openssl.pkey} object $key$ for use during SSL connection instance handshakes.
 
 \subsubsection[\fn{context:setCipherList}]{\fn{context:setCipherList($string$)}}
 
@@ -773,13 +773,13 @@ These examples and others are made available under examples/ in the source tree.
 -- specifying subject DN and public key to CAs. See API documentation for
 -- CSR generation.
 --
-local pubkey = require"openssl.pubkey"
+local pkey = require"openssl.pkey"
 local x509 = require"openssl.x509"
 local name = require"openssl.x509.name"
 local altname = require"openssl.x509.altname"
 
 -- generate our public/private key pair
-local key = pubkey.new{ type = "EC", curve = "prime192v1" }
+local key = pkey.new{ type = "EC", curve = "prime192v1" }
 
 -- our Subject and Issuer DN (self-signed, so same)
 local dn = name.new()
@@ -828,11 +828,11 @@ io.popen("openssl x509 -text -noout", "w"):write(tostring(crt))
 --
 -- Example public-key signature verification.
 --
-local pubkey = require"openssl.pubkey"
+local pkey = require"openssl.pkey"
 local digest = require"openssl.digest"
 
 -- generate a public/private key pair
-local key = pubkey.new{ type = "EC", curve = "prime192v1" }
+local key = pkey.new{ type = "EC", curve = "prime192v1" }
 
 -- digest our message using an appropriate digest ("ecdsa-with-SHA1" for EC;
 -- "dss1" for DSA; and "sha1", "sha256", etc for RSA).
@@ -844,7 +844,7 @@ local sig = key:sign(data)
 
 -- to prove verification works, instantiate a new object holding just
 -- the public key
-local pub = pubkey.new(key:toPEM"public")
+local pub = pkey.new(key:toPEM"public")
 
 -- a utility routine to output our signature
 local function tohex(b)
