@@ -3550,8 +3550,8 @@ static int md_update(lua_State *L) {
 
 	md_update_(L, ctx, 2, lua_gettop(L));
 
-	lua_pushboolean(L, 1);
-	
+	lua_pushvalue(L, 1);
+
 	return 1;
 } /* md_update() */
 
@@ -3653,8 +3653,8 @@ static int hmac_update(lua_State *L) {
 
 	hmac_update_(L, ctx, 2, lua_gettop(L));
 
-	lua_pushboolean(L, 1);
-	
+	lua_pushvalue(L, 1);
+
 	return 1;
 } /* hmac_update() */
 
