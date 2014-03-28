@@ -32,6 +32,8 @@ RANLIB ?= ranlib
 M4 ?= m4
 RM ?= rm
 CP ?= cp
+LN ?= ln
+LN_S ?= $(LN) -s
 RMDIR ?= rmdir
 MKDIR ?= mkdir
 CHMOD ?= chmod
@@ -62,6 +64,8 @@ $(d)/config:
 	printf 'M4 ?= $(value M4)'"\n" >> $(@D)/.config
 	printf 'RM ?= $(value RM)'"\n" >> $(@D)/.config
 	printf 'CP ?= $(value CP)'"\n" >> $(@D)/.config
+	printf 'LN ?= $(value LN)'"\n" >> $(@D)/.config
+	printf 'LN_S ?= $(value LN_S)'"\n" >> $(@D)/.config
 	printf 'RMDIR ?= $(value RMDIR)'"\n" >> $(@D)/.config
 	printf 'MKDIR ?= $(value MKDIR)'"\n" >> $(@D)/.config
 	printf 'CHMOD ?= $(value CHMOD)'"\n" >> $(@D)/.config

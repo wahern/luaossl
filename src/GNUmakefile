@@ -81,6 +81,7 @@ LUAC$(1)_$(d) = $$(or $$(call LUAPATH_$(d), $(1), luac), true)
 MODS$(1)_$(d) = \
 	$$(DESTDIR)$(2)/_openssl.so \
 	$$(DESTDIR)$(3)/openssl/bignum.lua \
+	$$(DESTDIR)$(3)/openssl/pkey.lua \
 	$$(DESTDIR)$(3)/openssl/pubkey.lua \
 	$$(DESTDIR)$(3)/openssl/x509.lua \
 	$$(DESTDIR)$(3)/openssl/x509/name.lua \
@@ -104,6 +105,9 @@ $$(DESTDIR)$(3)/openssl/%.lua: $$(d)/openssl.%.lua
 	$$(LUAC$(1)_$(d)) -p $$<
 	$$(MKDIR) -p $$(@D)
 	$$(CP) -p $$< $$@
+
+$$(DESTDIR)$(3)/openssl/pubkey.lua: $$(DESTDIR)$(3)/openssl/pkey.lua
+	cd $$(@D) && $(LN_S) -f $$(<F) $$(@F)
 
 $$(DESTDIR)$(3)/openssl/x509/%.lua: $$(d)/openssl.x509.%.lua
 	$$(LUAC$(1)_$(d)) -p $$<
