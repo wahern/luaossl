@@ -754,7 +754,7 @@ In the default CSPRNG engine this routine will also attempt to seed the system i
 
 Returns a cryptographically strong uniform random integer in the interval $[0, n-1]$. If $n$ is omitted, the interval is $[0, 2^{64}-1]$.
 
-The routine operates internally on 64-bit unsigned integers.\footnote{Actually, \texttt{unsigned long long}.} Because neither Lua 5.1 nor 5.2 support 64-bit integers, it's probably best to generate numbers that fit the integral range of your Lua implementation. Lua 5.3 is expected to add a new arithmetic type for 64-bit signed integers in two's-complement representation. This new arithmetic type will be used for return values when available.
+The routine operates internally on 64-bit unsigned integers.\footnote{Actually, \texttt{unsigned long long}.} Because neither Lua 5.1 nor 5.2 support 64-bit integers, it's probably best to generate numbers that fit the integral range of your Lua implementation. Lua 5.3 supports a new arithmetic type for 64-bit signed integers in two's-complement representation. This new arithmetic type will be used for argument and return values when available.
 
 \end{Module}
 
