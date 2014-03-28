@@ -2617,7 +2617,6 @@ static int xr_new(lua_State *L) {
 	X509_REQ **ud;
 	X509 *crt;
 
-	lua_settop(L, 1);
 	lua_settop(L, 2);
 
 	ud = prepsimple(L, X509_CSR_CLASS);
