@@ -64,7 +64,7 @@
 #endif
 
 #define BIGNUM_CLASS     "BIGNUM*"
-#define PUBKEY_CLASS     "EVP_PKEY*"
+#define PKEY_CLASS       "EVP_PKEY*"
 #define X509_NAME_CLASS  "X509_NAME*"
 #define X509_GENS_CLASS  "GENERAL_NAMES*"
 #define X509_CERT_CLASS  "X509*"
@@ -706,7 +706,7 @@ int luaopen__openssl_bignum(lua_State *L) {
 
 
 /*
- * EVP_PKEY - openssl.pubkey
+ * EVP_PKEY - openssl.pkey
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
@@ -753,7 +753,7 @@ static int pk_new(lua_State *L) {
 	/* #1 table or key; if key, #2 format and #3 type */
 	lua_settop(L, 3);
 
-	ud = prepsimple(L, PUBKEY_CLASS);
+	ud = prepsimple(L, PKEY_CLASS);
 
 	if (lua_istable(L, 1) || lua_isnil(L, 1)) {
 		int type = EVP_PKEY_RSA;
@@ -806,14 +806,14 @@ static int pk_new(lua_State *L) {
 
 creat:
 		if (!(*ud = EVP_PKEY_new()))
-			return throwssl(L, "pubkey.new");
+			return throwssl(L, "pkey.new");
 
 		switch (EVP_PKEY_type(type)) {
 		case EVP_PKEY_RSA: {
 			RSA *rsa;
 
 			if (!(rsa = RSA_generate_key(bits, exp, 0, 0)))
-				return throwssl(L, "pubkey.new");
+				return throwssl(L, "pkey.new");
 
 			EVP_PKEY_set1_RSA(*ud, rsa);
 
@@ -825,11 +825,11 @@ creat:
 			DSA *dsa;
 
 			if (!(dsa = DSA_generate_parameters(bits, 0, 0, 0, 0, 0, 0)))
-				return throwssl(L, "pubkey.new");
+				return throwssl(L, "pkey.new");
 
 			if (!DSA_generate_key(dsa)) {
 				DSA_free(dsa);
-				return throwssl(L, "pubkey.new");
+				return throwssl(L, "pkey.new");
 			}
 
 			EVP_PKEY_set1_DSA(*ud, dsa);
@@ -842,11 +842,11 @@ creat:
 			DH *dh;
 
 			if (!(dh = DH_generate_parameters(bits, exp, 0, 0)))
-				return throwssl(L, "pubkey.new");
+				return throwssl(L, "pkey.new");
 
 			if (!DH_generate_key(dh)) {
 				DH_free(dh);
-				return throwssl(L, "pubkey.new");
+				return throwssl(L, "pkey.new");
 			}
 
 			EVP_PKEY_set1_DH(*ud, dh);
@@ -861,7 +861,7 @@ creat:
 			EC_KEY *key;
 
 			if (!(grp = EC_GROUP_new_by_curve_name(curve)))
-				return throwssl(L, "pubkey.new");
+				return throwssl(L, "pkey.new");
 
 			EC_GROUP_set_asn1_flag(grp, OPENSSL_EC_NAMED_CURVE);
 
@@ -870,7 +870,7 @@ creat:
 
 			if (!(key = EC_KEY_new())) {
 				EC_GROUP_free(grp);
-				return throwssl(L, "pubkey.new");
+				return throwssl(L, "pkey.new");
 			}
 
 			EC_KEY_set_group(key, grp);
@@ -879,7 +879,7 @@ creat:
 
 			if (!EC_KEY_generate_key(key)) {
 				EC_KEY_free(key);
-				return throwssl(L, "pubkey.new");
+				return throwssl(L, "pkey.new");
 			}
 
 			EVP_PKEY_set1_EC_KEY(*ud, key);
@@ -914,7 +914,7 @@ creat:
 		data = luaL_checklstring(L, 1, &len);
 
 		if (!(bio = BIO_new_mem_buf((void *)data, len)))
-			return throwssl(L, "pubkey.new");
+			return throwssl(L, "pkey.new");
 
 		if (type == X509_PEM || type == X509_ANY) {
 			if (ispub == 1 || ispub == -1) {
@@ -952,7 +952,7 @@ done:
 		BIO_free(bio);
 
 		if (!ok)
-			return throwssl(L, "pubkey.new");
+			return throwssl(L, "pkey.new");
 	} else {
 		return luaL_error(L, "%s: unknown key initializer", lua_typename(L, lua_type(L, 1)));
 	}
@@ -967,7 +967,7 @@ static int pk_interpose(lua_State *L) {
 
 
 static int pk_type(lua_State *L) {
-	EVP_PKEY *key = checksimple(L, 1, PUBKEY_CLASS);
+	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
 	int nid = key->type;
 
 	pushnid(L, nid);
@@ -977,7 +977,7 @@ static int pk_type(lua_State *L) {
 
 
 static int pk_setPublicKey(lua_State *L) {
-	EVP_PKEY **key = luaL_checkudata(L, 1, PUBKEY_CLASS);
+	EVP_PKEY **key = luaL_checkudata(L, 1, PKEY_CLASS);
 	const char *data;
 	size_t len;
 	BIO *bio;
@@ -987,7 +987,7 @@ static int pk_setPublicKey(lua_State *L) {
 	type = optencoding(L, 3, "*", X509_ANY|X509_PEM|X509_DER);
 
 	if (!(bio = BIO_new_mem_buf((void *)data, len)))
-		return throwssl(L, "pubkey.new");
+		return throwssl(L, "pkey.new");
 
 	if (type == X509_ANY || type == X509_PEM) {
 		ok = !!PEM_read_bio_PUBKEY(bio, key, 0, "");
@@ -1000,7 +1000,7 @@ static int pk_setPublicKey(lua_State *L) {
 	BIO_free(bio);
 
 	if (!ok)
-		return throwssl(L, "pubkey.new");
+		return throwssl(L, "pkey.new");
 
 	lua_pushboolean(L, 1);
 
@@ -1009,7 +1009,7 @@ static int pk_setPublicKey(lua_State *L) {
 
 
 static int pk_setPrivateKey(lua_State *L) {
-	EVP_PKEY **key = luaL_checkudata(L, 1, PUBKEY_CLASS);
+	EVP_PKEY **key = luaL_checkudata(L, 1, PKEY_CLASS);
 	const char *data;
 	size_t len;
 	BIO *bio;
@@ -1019,7 +1019,7 @@ static int pk_setPrivateKey(lua_State *L) {
 	type = optencoding(L, 3, "*", X509_ANY|X509_PEM|X509_DER);
 
 	if (!(bio = BIO_new_mem_buf((void *)data, len)))
-		return throwssl(L, "pubkey.new");
+		return throwssl(L, "pkey.new");
 
 	if (type == X509_ANY || type == X509_PEM) {
 		ok = !!PEM_read_bio_PrivateKey(bio, key, 0, "");
@@ -1032,7 +1032,7 @@ static int pk_setPrivateKey(lua_State *L) {
 	BIO_free(bio);
 
 	if (!ok)
-		return throwssl(L, "pubkey.new");
+		return throwssl(L, "pkey.new");
 
 	lua_pushboolean(L, 1);
 
@@ -1041,19 +1041,19 @@ static int pk_setPrivateKey(lua_State *L) {
 
 
 static int pk_sign(lua_State *L) {
-	EVP_PKEY *key = checksimple(L, 1, PUBKEY_CLASS);
+	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
 	EVP_MD_CTX *md = luaL_checkudata(L, 2, DIGEST_CLASS);
 	luaL_Buffer B;
 	unsigned n;
 
 	if (LUAL_BUFFERSIZE < EVP_PKEY_size(key))
-		return luaL_error(L, "pubkey:sign: LUAL_BUFFERSIZE(%u) < EVP_PKEY_size(%u)", (unsigned)LUAL_BUFFERSIZE, (unsigned)EVP_PKEY_size(key));
+		return luaL_error(L, "pkey:sign: LUAL_BUFFERSIZE(%u) < EVP_PKEY_size(%u)", (unsigned)LUAL_BUFFERSIZE, (unsigned)EVP_PKEY_size(key));
 
 	luaL_buffinit(L, &B);
 	n = LUAL_BUFFERSIZE;
 
 	if (!EVP_SignFinal(md, (void *)luaL_prepbuffer(&B), &n, key))
-		return throwssl(L, "pubkey:sign");
+		return throwssl(L, "pkey:sign");
 
 	luaL_addsize(&B, n);
 	luaL_pushresult(&B);
@@ -1063,7 +1063,7 @@ static int pk_sign(lua_State *L) {
 
 
 static int pk_verify(lua_State *L) {
-	EVP_PKEY *key = checksimple(L, 1, PUBKEY_CLASS);
+	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
 	size_t len;
 	const void *sig = luaL_checklstring(L, 2, &len);
 	EVP_MD_CTX *md = luaL_checkudata(L, 3, DIGEST_CLASS);
@@ -1079,7 +1079,7 @@ static int pk_verify(lua_State *L) {
 
 		break;
 	default:
-		return throwssl(L, "pubkey:verify");
+		return throwssl(L, "pkey:verify");
 	}
 
 	return 1;
@@ -1087,7 +1087,7 @@ static int pk_verify(lua_State *L) {
 
 
 static int pk_toPEM(lua_State *L) {
-	EVP_PKEY *key = checksimple(L, 1, PUBKEY_CLASS);
+	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
 	int top, i, ok;
 	BIO *bio;
 	char *pem;
@@ -1111,7 +1111,7 @@ static int pk_toPEM(lua_State *L) {
 		switch (checkoption(L, i, NULL, opts)) {
 		case 0: case 1: /* public, PublicKey */
 			if (!PEM_write_bio_PUBKEY(bio, key))
-				return throwssl(L, "pubkey:__tostring");
+				return throwssl(L, "pkey:__tostring");
 
 			len = BIO_get_mem_data(bio, &pem);
 			lua_pushlstring(L, pem, len);
@@ -1120,7 +1120,7 @@ static int pk_toPEM(lua_State *L) {
 			break;
 		case 2: case 3: /* private, PrivateKey */
 			if (!PEM_write_bio_PrivateKey(bio, key, 0, 0, 0, 0, 0))
-				throwssl(L, "pubkey:__tostring");
+				throwssl(L, "pkey:__tostring");
 
 			len = BIO_get_mem_data(bio, &pem);
 			lua_pushlstring(L, pem, len);
@@ -1140,7 +1140,7 @@ static int pk_toPEM(lua_State *L) {
 				DSA_free(dsa);
 
 				if (!ok)
-					return throwssl(L, "pubkey:__tostring");
+					return throwssl(L, "pkey:__tostring");
 
 				break;
 			}
@@ -1152,7 +1152,7 @@ static int pk_toPEM(lua_State *L) {
 				DH_free(dh);
 
 				if (!ok)
-					return throwssl(L, "pubkey:__tostring");
+					return throwssl(L, "pkey:__tostring");
 
 				break;
 			}
@@ -1166,7 +1166,7 @@ static int pk_toPEM(lua_State *L) {
 				EC_KEY_free(ec);
 
 				if (!ok)
-					return throwssl(L, "pubkey:__tostring");
+					return throwssl(L, "pkey:__tostring");
 
 				break;
 			}
@@ -1193,7 +1193,7 @@ static int pk_toPEM(lua_State *L) {
 
 
 static int pk__tostring(lua_State *L) {
-	EVP_PKEY *key = checksimple(L, 1, PUBKEY_CLASS);
+	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
 	int type = optencoding(L, 2, "pem", X509_PEM|X509_DER);
 	BIO *bio = getbio(L);
 	char *data;
@@ -1203,11 +1203,11 @@ static int pk__tostring(lua_State *L) {
 	switch (type) {
 	case X509_PEM:
 		if (!PEM_write_bio_PUBKEY(bio, key))
-			return throwssl(L, "pubkey:__tostring");
+			return throwssl(L, "pkey:__tostring");
 		break;
 	case X509_DER:
 		if (!i2d_PUBKEY_bio(bio, key))
-			return throwssl(L, "pubkey:__tostring");
+			return throwssl(L, "pkey:__tostring");
 		break;
 	} /* switch() */
 
@@ -1220,7 +1220,7 @@ static int pk__tostring(lua_State *L) {
 
 
 static int pk__gc(lua_State *L) {
-	EVP_PKEY **ud = luaL_checkudata(L, 1, PUBKEY_CLASS);
+	EVP_PKEY **ud = luaL_checkudata(L, 1, PKEY_CLASS);
 
 	EVP_PKEY_free(*ud);
 	*ud = NULL;
@@ -1252,12 +1252,20 @@ static const luaL_Reg pk_globals[] = {
 	{ NULL,        NULL },
 };
 
-int luaopen__openssl_pubkey(lua_State *L) {
+int luaopen__openssl_pkey(lua_State *L) {
 	initall(L);
 
 	luaL_newlib(L, pk_globals);
 
 	return 1;
+} /* luaopen__openssl_pkey() */
+
+
+/*
+ * Deprecated module name.
+ */
+int luaopen__openssl_pubkey(lua_State *L) {
+	return luaopen__openssl_pkey(L);
 } /* luaopen__openssl_pubkey() */
 
 
@@ -2461,7 +2469,7 @@ done:
 
 static int xc_getPublicKey(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
-	EVP_PKEY **key = prepsimple(L, PUBKEY_CLASS);
+	EVP_PKEY **key = prepsimple(L, PKEY_CLASS);
 
 	if (!(*key = X509_get_pubkey(crt)))
 		return throwssl(L, "x509.cert:getPublicKey");
@@ -2472,7 +2480,7 @@ static int xc_getPublicKey(lua_State *L) {
 
 static int xc_setPublicKey(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
-	EVP_PKEY *key = checksimple(L, 2, PUBKEY_CLASS);
+	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
 
 	if (!X509_set_pubkey(crt, key))
 		return throwssl(L, "x509.cert:setPublicKey");
@@ -2504,7 +2512,7 @@ static const EVP_MD *xc_signature(lua_State *L, int index, EVP_PKEY *key) {
 
 static int xc_sign(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
-	EVP_PKEY *key = checksimple(L, 2, PUBKEY_CLASS);
+	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
 
 	if (!X509_sign(crt, key, xc_signature(L, 3, key)))
 		return throwssl(L, "x509.cert:sign");
@@ -2708,7 +2716,7 @@ static int xr_setSubject(lua_State *L) {
 
 static int xr_getPublicKey(lua_State *L) {
 	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
-	EVP_PKEY **key = prepsimple(L, PUBKEY_CLASS);
+	EVP_PKEY **key = prepsimple(L, PKEY_CLASS);
 
 	if (!(*key = X509_REQ_get_pubkey(csr)))
 		return throwssl(L, "x509.cert:getPublicKey");
@@ -2719,7 +2727,7 @@ static int xr_getPublicKey(lua_State *L) {
 
 static int xr_setPublicKey(lua_State *L) {
 	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
-	EVP_PKEY *key = checksimple(L, 2, PUBKEY_CLASS);
+	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
 
 	if (!X509_REQ_set_pubkey(csr, key))
 		return throwssl(L, "x509.csr:setPublicKey");
@@ -2732,7 +2740,7 @@ static int xr_setPublicKey(lua_State *L) {
 
 static int xr_sign(lua_State *L) {
 	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
-	EVP_PKEY *key = checksimple(L, 2, PUBKEY_CLASS);
+	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
 
 	if (!X509_REQ_sign(csr, key, xc_signature(L, 3, key)))
 		return throwssl(L, "x509.csr:sign");
@@ -3309,7 +3317,7 @@ static int sx_setCertificate(lua_State *L) {
 
 static int sx_setPrivateKey(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
-	EVP_PKEY *key = checksimple(L, 2, PUBKEY_CLASS);
+	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
 
 	/*
 	 * NOTE: No easy way to dup the key, but a shared reference should
@@ -4214,7 +4222,7 @@ static void initall(lua_State *L) {
 	pthread_mutex_unlock(&mutex);
 
 	addclass(L, BIGNUM_CLASS, bn_methods, bn_metatable);
-	addclass(L, PUBKEY_CLASS, pk_methods, pk_metatable);
+	addclass(L, PKEY_CLASS, pk_methods, pk_metatable);
 	addclass(L, X509_NAME_CLASS, xn_methods, xn_metatable);
 	addclass(L, X509_GENS_CLASS, gn_methods, gn_metatable);
 	addclass(L, X509_CERT_CLASS, xc_methods, xc_metatable);

@@ -1,4 +1,4 @@
-local pubkey = require"_openssl.pubkey"
+local pkey = require"_openssl.pkey"
 
-return pubkey
+return pkey
 
