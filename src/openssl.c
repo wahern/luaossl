@@ -35,7 +35,9 @@
 #include <errno.h>        /* errno */
 
 #include <sys/types.h>    /* ssize_t pid_t */
+#if !defined __sun
 #include <sys/sysctl.h>   /* CTL_KERN KERN_RANDOM RANDOM_UUID KERN_URND KERN_ARND sysctl(2) */
+#endif
 #include <sys/time.h>     /* struct timeval gettimeofday(2) */
 #include <sys/stat.h>     /* struct stat stat(2) */
 #include <sys/socket.h>   /* AF_INET AF_INET6 */
