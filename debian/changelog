@@ -1,3 +1,14 @@
+liblua-openssl (20140328-0) unstable; urgency=low
+
+  * Add DER input/output formats.
+  * Add GEN_DIRNAME alternative names.
+  * Change the return value of several methods from boolean true
+    to the method object, to allow easy call chaining in Lua.
+  * Fix rand.uniform to use lua_Unsigned when it's a 64-bit type (Lua 5.3).
+  * Rename openssl.pubkey to openssl.pkey.
+
+ -- William Ahern <william@25thandClement.com>  Fri, 28 Mar 2014 22:44:31 -0700
+
 liblua-openssl (20140322-0) unstable; urgency=low
 
   * Add Lua 5.3 support.
