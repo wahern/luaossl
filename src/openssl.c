@@ -4063,14 +4063,14 @@ error:;
 		pid_t pid;
 		struct rusage ru;
 		struct utsname un;
-		int (*fn)();
+		uintptr_t aslr;
 	} junk;
 
 	gettimeofday(&junk.tv, NULL);
 	junk.pid = getpid();
 	getrusage(RUSAGE_SELF, &junk.ru);
 	uname(&junk.un);
-	junk.fn = &stir;
+	junk.aslr = (uintptr_t)&strcpy ^ (uintptr_t)&stir;
 
 	RAND_add(&junk, sizeof junk, 0.1);
 
