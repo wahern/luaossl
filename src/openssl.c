@@ -26,23 +26,32 @@
 #ifndef LUAOSSL_H
 #define LUAOSSL_H
 
-#include <limits.h>	/* INT_MAX INT_MIN */
-#include <string.h>	/* memset(3) */
-#include <strings.h>	/* strcasecmp(3) */
-#include <math.h>	/* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
-#include <time.h>	/* struct tm time_t strptime(3) */
-#include <ctype.h>      /* tolower(3) */
+#include <limits.h>       /* INT_MAX INT_MIN */
+#include <string.h>       /* memset(3) strerror_r(3) */
+#include <strings.h>      /* strcasecmp(3) */
+#include <math.h>         /* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
+#include <time.h>         /* struct tm time_t strptime(3) */
+#include <ctype.h>        /* tolower(3) */
+#include <errno.h>        /* errno */
 
-#include <sys/types.h>
-#include <sys/stat.h>	/* struct stat stat(2) */
-#include <sys/socket.h>	/* AF_INET AF_INET6 */
+#include <sys/types.h>    /* ssize_t pid_t */
+#include <sys/sysctl.h>   /* CTL_KERN KERN_RANDOM RANDOM_UUID KERN_URND KERN_ARND sysctl(2) */
+#include <sys/time.h>     /* struct timeval gettimeofday(2) */
+#include <sys/stat.h>     /* struct stat stat(2) */
+#include <sys/socket.h>   /* AF_INET AF_INET6 */
+#include <sys/resource.h> /* RUSAGE_SELF struct rusage getrusage(2) */
+#include <sys/utsname.h>  /* struct utsname uname(3) */
 
-#include <netinet/in.h>	/* struct in_addr struct in6_addr */
-#include <arpa/inet.h>	/* inet_pton(3) */
+#include <fcntl.h>        /* O_RDONLY O_CLOEXEC open(2) */
 
-#include <pthread.h>    /* pthread_mutex_init(3) pthread_mutex_lock(3) pthread_mutex_unlock(3) */
+#include <unistd.h>       /* close(2) getpid(2) */
 
-#include <dlfcn.h>      /* dladdr(3) dlopen(3) */
+#include <netinet/in.h>   /* struct in_addr struct in6_addr */
+#include <arpa/inet.h>    /* inet_pton(3) */
+
+#include <pthread.h>      /* pthread_mutex_init(3) pthread_mutex_lock(3) pthread_mutex_unlock(3) */
+
+#include <dlfcn.h>        /* dladdr(3) dlopen(3) */
 
 #include <openssl/err.h>
 #include <openssl/bn.h>
@@ -105,6 +114,56 @@
 #define SAY(...) SAY_(__FILE__, __func__, __LINE__, __VA_ARGS__, "\n")
 
 #define HAI SAY("hai")
+
+
+#define xitoa_putc(c) do { if (p < lim) dst[p] = (c); p++; } while (0)
+
+static const char *xitoa(char *dst, size_t lim, long i) {
+	size_t p = 0;
+	unsigned long d = 1000000000UL, n = 0, r;
+
+	if (i < 0) {
+		xitoa_putc('-');
+		i *= -1;
+	}
+
+	if ((i = MIN(2147483647L, i))) {
+		do {
+			if ((r = i / d) || n) {
+				i -= r * d;
+				n++;
+				xitoa_putc('0' + r);
+			}
+		} while (d /= 10);
+	} else {
+		xitoa_putc('0');
+	}
+
+	if (lim)
+		dst[MIN(p, lim - 1)] = '\0';
+
+	return dst;
+} /* xitoa() */
+
+
+#define xstrerror(error) xstrerror_r((error), (char[256]){ 0 }, 256)
+
+static const char *xstrerror_r(int error, char *dst, size_t lim) {
+	static const char unknown[] = "Unknown error: ";
+	size_t n;
+
+	if (0 == strerror_r(error, dst, lim) && *dst != '\0')
+		return dst;
+
+	/*
+	 * glibc snprintf can fail on memory pressure, so format our number
+	 * manually.
+	 */
+	n = MIN(sizeof unknown - 1, lim);
+	memcpy(dst, unknown, n);
+
+	return xitoa(&dst[n], lim - n, error);
+} /* xstrerror_r() */
 
 
 static void *prepudata(lua_State *L, size_t size, const char *tname, int (*gc)(lua_State *)) {
@@ -3017,7 +3076,7 @@ static int xs_add(lua_State *L) {
 			int ok;
 
 			if (0 != stat(path, &st))
-				return luaL_error(L, "%s: %s", path, strerror(errno));
+				return luaL_error(L, "%s: %s", path, xstrerror(errno));
 
 			if (S_ISDIR(st.st_mode))
 				ok = X509_STORE_load_locations(store, NULL, path);
@@ -3919,6 +3978,137 @@ int luaopen__openssl_cipher(lua_State *L) {
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+#ifndef HAVE_RANDOM_UUID
+#define HAVE_RANDOM_UUID (defined __linux) /* RANDOM_UUID is an enum, not macro */
+#endif
+
+#ifndef HAVE_KERN_URND
+#define HAVE_KERN_URND (defined KERN_URND)
+#endif
+
+#ifndef HAVE_KERN_ARND
+#define HAVE_KERN_ARND (defined KERN_ARND)
+#endif
+
+static int stir(unsigned rqstd) {
+	unsigned count = 0;
+	int error;
+	unsigned char data[256];
+#if HAVE_RANDOM_UUID || HAVE_KERN_URND || HAVE_KERN_ARND
+#if HAVE_RANDOM_UUID
+	int mib[] = { CTL_KERN, KERN_RANDOM, RANDOM_UUID };
+#elif HAVE_KERN_URND
+	int mib[] = { CTL_KERN, KERN_URND };
+#else
+	int mib[] = { CTL_KERN, KERN_ARND };
+#endif
+
+	while (count < rqstd) {
+		size_t n = MIN(rqstd - count, sizeof data);
+
+		if (0 != sysctl(mib, countof(mib), data, &n, (void *)0, 0))
+			break;
+
+		RAND_add(data, n, n);
+
+		count += n;
+	}
+#endif
+
+	if (count < rqstd) {
+#if defined O_CLOEXEC
+		int fd = open("/dev/urandom", O_RDONLY|O_CLOEXEC);
+#else
+		int fd = open("/dev/urandom", O_RDONLY);
+#endif
+
+		if (fd == -1)
+			goto syserr;
+
+		while (count < rqstd) {
+			ssize_t n = read(fd, data, MIN(rqstd - count, sizeof data));
+
+			switch (n) {
+			case 0:
+				errno = EIO;
+
+				/* FALL THROUGH */
+			case -1:
+				if (errno == EINTR)
+					continue;
+
+				error = errno;
+
+				close(fd);
+
+				goto error;
+			default:
+				RAND_add(data, n, n);
+
+				count += n;
+			}
+		}
+
+		close(fd);
+	}
+
+	return 0;
+syserr:
+	error = errno;
+error:;
+	struct {
+		struct timeval tv;
+		pid_t pid;
+		struct rusage ru;
+		struct utsname un;
+		int (*fn)();
+	} junk;
+
+	gettimeofday(&junk.tv, NULL);
+	junk.pid = getpid();
+	getrusage(RUSAGE_SELF, &junk.ru);
+	uname(&junk.un);
+	junk.fn = &stir;
+
+	RAND_add(&junk, sizeof junk, 0.1);
+
+	return error;
+} /* stir() */
+
+
+static int rand_stir(lua_State *L) {
+	int error = stir(luaL_optunsigned(L, 1, 16));
+
+	if (error) {
+		lua_pushboolean(L, 0);
+		lua_pushstring(L, xstrerror(error));
+		lua_pushinteger(L, error);
+
+		return 3;
+	} else {
+		lua_pushboolean(L, 1);
+
+		return 1;
+	}
+} /* rand_stir() */
+
+
+static int rand_add(lua_State *L) {
+	const void *buf;
+	size_t len;
+	lua_Number entropy;
+
+	buf = luaL_checklstring(L, 1, &len);
+	entropy = luaL_optnumber(L, 2, len);
+
+	RAND_add(buf, len, entropy);
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* rand_add() */
+
+
 static int rand_bytes(lua_State *L) {
 	int size = luaL_checkint(L, 1);
 	luaL_Buffer B;
@@ -4060,6 +4250,8 @@ static int rand_uniform(lua_State *L) {
 
 
 static const luaL_Reg rand_globals[] = {
+	{ "stir",    &rand_stir },
+	{ "add",     &rand_add },
 	{ "bytes",   &rand_bytes },
 	{ "ready",   &rand_ready },
 	{ "uniform", &rand_uniform },
@@ -4194,12 +4386,7 @@ static void initall(lua_State *L) {
 		if (error == -1) {
 			luaL_error(L, "openssl.init: %s", dlerror());
 		} else {
-			char why[256];
-
-			if (0 != strerror_r(error, why, sizeof why) || *why == '\0')
-				luaL_error(L, "openssl.init: Unknown error: %d", error);
-
-			luaL_error(L, "openssl.init: %s", why);
+			luaL_error(L, "openssl.init: %s", xstrerror(error));
 		}
 	}
 
