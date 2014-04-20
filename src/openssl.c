@@ -55,6 +55,10 @@
 
 #include <dlfcn.h>        /* dladdr(3) dlopen(3) */
 
+#if __APPLE__
+#include <mach/mach_time.h> /* mach_absolute_time() */
+#endif
+
 #include <openssl/err.h>
 #include <openssl/bn.h>
 #include <openssl/asn1.h>
@@ -3980,6 +3984,15 @@ int luaopen__openssl_cipher(lua_State *L) {
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+struct randL_state {
+	pid_t pid;
+}; /* struct randL_state */
+
+static struct randL_state *randL_getstate(lua_State *L) {
+	return lua_touserdata(L, lua_upvalueindex(1));
+} /* randL_getstate() */
+
+
 #ifndef HAVE_RANDOM_UUID
 #define HAVE_RANDOM_UUID (defined __linux) /* RANDOM_UUID is an enum, not macro */
 #endif
@@ -3992,7 +4005,7 @@ int luaopen__openssl_cipher(lua_State *L) {
 #define HAVE_KERN_ARND (defined KERN_ARND)
 #endif
 
-static int stir(unsigned rqstd) {
+static int randL_stir(struct randL_state *st, unsigned rqstd) {
 	unsigned count = 0;
 	int error;
 	unsigned char data[256];
@@ -4054,6 +4067,8 @@ static int stir(unsigned rqstd) {
 		close(fd);
 	}
 
+	st->pid = getpid();
+
 	return 0;
 syserr:
 	error = errno;
@@ -4064,22 +4079,47 @@ error:;
 		struct rusage ru;
 		struct utsname un;
 		uintptr_t aslr;
+#if defined __APPLE__
+		uint64_t mt;
+#elif defined __sun
+		struct timespec mt;
+#endif
 	} junk;
 
 	gettimeofday(&junk.tv, NULL);
 	junk.pid = getpid();
 	getrusage(RUSAGE_SELF, &junk.ru);
 	uname(&junk.un);
-	junk.aslr = (uintptr_t)&strcpy ^ (uintptr_t)&stir;
+	junk.aslr = (uintptr_t)&strcpy ^ (uintptr_t)&randL_stir;
+#if defined __APPLE__
+	junk.mt = mach_absolute_time();
+#elif defined __sun
+	/*
+	 * NOTE: Linux requires -lrt for clock_gettime, and in any event
+	 * already has RANDOM_UUID. The BSDs have KERN_URND and KERN_ARND.
+	 * Just do this for Solaris to keep things simple. We've already
+	 * crossed the line of what can be reasonably accomplished on
+	 * unreasonable platforms.
+	 */
+	clock_gettime(CLOCK_MONOTONIC, &junk.mt);
+#endif
 
 	RAND_add(&junk, sizeof junk, 0.1);
 
+	st->pid = getpid();
+
 	return error;
-} /* stir() */
+} /* randL_stir() */
+
+
+static void randL_checkpid(struct randL_state *st) {
+	if (st->pid != getpid())
+		(void)randL_stir(st, 16);
+} /* randL_checkpid() */
 
 
 static int rand_stir(lua_State *L) {
-	int error = stir(luaL_optunsigned(L, 1, 16));
+	int error = randL_stir(randL_getstate(L), luaL_optunsigned(L, 1, 16));
 
 	if (error) {
 		lua_pushboolean(L, 0);
@@ -4115,6 +4155,8 @@ static int rand_bytes(lua_State *L) {
 	int size = luaL_checkint(L, 1);
 	luaL_Buffer B;
 	int count = 0, n;
+
+	randL_checkpid(randL_getstate(L));
 
 	luaL_buffinit(L, &B);
 
@@ -4219,6 +4261,8 @@ static unsigned long long rand_llu(lua_State *L) {
 static int rand_uniform(lua_State *L) {
 	unsigned long long r;
 
+	randL_checkpid(randL_getstate(L));
+
 	if (lua_isnoneornil(L, 1)) {
 		r = rand_llu(L);
 	} else {
@@ -4261,9 +4305,14 @@ static const luaL_Reg rand_globals[] = {
 };
 
 int luaopen__openssl_rand(lua_State *L) {
+	struct randL_state *st;
+
 	initall(L);
 
-	luaL_newlib(L, rand_globals);
+	luaL_newlibtable(L, rand_globals);
+	st = lua_newuserdata(L, sizeof *st);
+	memset(st, 0, sizeof *st);
+	luaL_setfuncs(L, rand_globals, 1);
 
 	return 1;
 } /* luaopen__openssl_rand() */
