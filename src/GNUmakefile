@@ -94,6 +94,7 @@ MODS$(1)_$(d) = \
 	$$(DESTDIR)$(3)/openssl/x509/name.lua \
 	$$(DESTDIR)$(3)/openssl/x509/altname.lua \
 	$$(DESTDIR)$(3)/openssl/x509/chain.lua \
+	$$(DESTDIR)$(3)/openssl/x509/crl.lua \
 	$$(DESTDIR)$(3)/openssl/x509/store.lua \
 	$$(DESTDIR)$(3)/openssl/ssl/context.lua \
 	$$(DESTDIR)$(3)/openssl/ssl.lua \
