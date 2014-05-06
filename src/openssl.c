@@ -2496,6 +2496,50 @@ static int xc_setBasicConstraintsCritical(lua_State *L) {
 } /* xc_setBasicConstraintsCritical() */
 
 
+static int xc_addExtension(lua_State *L) {
+	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
+	char *name = (char *) luaL_checkstring(L, 2);
+	char *value = (char *) luaL_checkstring(L, 3);
+
+	int ok = 1;
+
+	BIO *bio = NULL;
+	CONF *conf = NULL;
+	X509V3_CTX *ctx = NULL;
+	X509_EXTENSION *ext = NULL;
+
+	if (lua_gettop(L) > 3) {
+	  char *cdata = (char *) luaL_checkstring(L, 4);
+
+		bio = BIO_new(BIO_s_mem());
+		if (!bio) goto error;
+		if (BIO_puts(bio, cdata) < 0) goto error;
+
+		conf = NCONF_new(NULL);
+		if (!conf) goto error;
+		if (!NCONF_load_bio(conf, bio, NULL)) goto error;
+
+		ctx = (X509V3_CTX *) malloc(sizeof (X509V3_CTX));
+		X509V3_set_nconf(ctx, conf);
+	}
+
+	ext = X509V3_EXT_nconf(conf, ctx, name, value);
+
+	if (ext && X509_add_ext(crt, ext, -1)) goto done;
+
+	error:
+	ok = 0;
+
+	done:
+	if (ext) X509_EXTENSION_free(ext);
+	if (ctx) free(ctx);
+	if (conf) NCONF_free(conf);
+	if (bio) BIO_free(bio);
+
+	return ok ? 0 : throwssl(L, "x509.cert:addExtension");
+} /* xc_addExtension() */
+
+
 static int xc_isIssuedBy(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	X509 *issuer = checksimple(L, 2, X509_CERT_CLASS);
@@ -2651,6 +2695,7 @@ static const luaL_Reg xc_methods[] = {
 	{ "setBasicConstraint",  &xc_setBasicConstraint },
 	{ "getBasicConstraintsCritical", &xc_getBasicConstraintsCritical },
 	{ "setBasicConstraintsCritical", &xc_setBasicConstraintsCritical },
+	{ "addExtension",  &xc_addExtension },
 	{ "isIssuedBy",    &xc_isIssuedBy },
 	{ "getPublicKey",  &xc_getPublicKey },
 	{ "setPublicKey",  &xc_setPublicKey },
