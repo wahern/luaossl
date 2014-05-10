@@ -2894,7 +2894,9 @@ static int xx_new(lua_State *L) {
 	X509_CRL **ud;
 
 	ud = prepsimple(L, X509_CRL_CLASS);
-	if (!(*ud = X509_CRL_new())) throwssl(L, "x509.crl.new");
+
+	if (!(*ud = X509_CRL_new()))
+		return throwssl(L, "x509.crl.new");
 
 	X509_gmtime_adj(X509_CRL_get_lastUpdate(*ud), 0);
 
@@ -2926,71 +2928,88 @@ static int xx_setVersion(lua_State *L) {
 	lua_pushboolean(L, 1);
 
 	return 1;
-} /* xr_setVersion() */
+} /* xx_setVersion() */
 
 
-static int xx_getUpdateTimes(lua_State *L) {
+static int xx_getLastUpdate(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
-	double begin = INFINITY, end = INFINITY;
+	double updated = INFINITY;
 	ASN1_TIME *time;
 
 	if ((time = X509_CRL_get_lastUpdate(crl)))
-		begin = timeutc(time);
+		updated = timeutc(time);
 
-	if ((time = X509_CRL_get_nextUpdate(crl)))
-		end = timeutc(time);
-
-	if (isfinite(begin))
-		lua_pushnumber(L, begin);
+	if (isfinite(updated))
+		lua_pushnumber(L, 1);
 	else
 		lua_pushnil(L);
 
-	if (isfinite(end))
-		lua_pushnumber(L, end);
-	else
-		lua_pushnil(L);
-
-	if (isfinite(begin) && isfinite(end) && begin <= end)
-		lua_pushnumber(L, fabs(end - begin));
-	else
-		lua_pushnumber(L, 0.0);
-
-	return 3;
-} /* xx_getUpdateTimes() */
+	return 1;
+} /* xx_getLastUpdate() */
 
 
-static int xx_setUpdateTimes(lua_State *L) {
-	int ok = 1;
-
+static int xx_setLastUpdate(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
-	double ut;
+	double updated = luaL_checknumber(L, 2);
 	ASN1_TIME *time = NULL;
 
-	lua_settop(L, 3);
+	/* lastUpdate always present */
+	if (!ASN1_TIME_set(X509_CRL_get_lastUpdate(crl), updated))
+		return throwssl(L, "x509.crl:setLastUpdate");
 
-	if (!lua_isnil(L, 2)) {
-		ut = lua_tonumber(L, 2);
-		if (!ASN1_TIME_set(X509_CRL_get_lastUpdate(crl), ut))
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* xx_setLastUpdate() */
+
+
+static int xx_getNextUpdate(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	double updateby = INFINITY;
+	ASN1_TIME *time;
+
+	if ((time = X509_CRL_get_nextUpdate(crl)))
+		updateby = timeutc(time);
+
+	if (isfinite(updateby))
+		lua_pushnumber(L, 1);
+	else
+		lua_pushnil(L);
+
+	return 1;
+} /* xx_getNextUpdate() */
+
+
+static int xx_setNextUpdate(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	double updateby = luaL_checknumber(L, 2);
+	ASN1_TIME *time = NULL;
+
+	if (X509_CRL_get_nextUpdate(crl)) {
+		if (!ASN1_TIME_set(X509_CRL_get_nextUpdate(crl), updateby))
 			goto error;
+	} else {
+		if (!(time = ASN1_TIME_new()))
+			goto error;
+
+		if (!(ASN1_TIME_set(time, updateby)))
+			goto error;
+
+		if (!X509_CRL_set_nextUpdate(crl, time))
+			goto error;
+
+		time = NULL;
 	}
 
-	if (!lua_isnil(L, 3)) {
-		ut = lua_tonumber(L, 3);
-		if (!(time = ASN1_TIME_new())) goto error;
-		if (!ASN1_TIME_set(time, ut)) goto error;
-		if (!X509_CRL_set_nextUpdate(crl, time)) goto error;
-	}
+	lua_pushboolean(L, 1);
 
-	goto done;
+	return 1;
+error:
+	if (time)
+		ASN1_TIME_free(time);
 
-	error:
-	ok = 0;
-
-	done:
-	if (time) ASN1_TIME_free(time);
-
-	return ok ? 0 : throwssl(L, "x509.crl:setUpdateTimes");
-} /* xx_setUpdateTimes() */
+	return throwssl(L, "x509.crl:setNextUpdate");
+} /* xx_setNextUpdate() */
 
 
 static int xx_getIssuer(lua_State *L) {
@@ -3107,8 +3126,10 @@ static int xx__gc(lua_State *L) {
 static const luaL_Reg xx_methods[] = {
 	{ "getVersion",     &xx_getVersion },
 	{ "setVersion",     &xx_setVersion },
-	{ "getUpdateTimes", &xx_getUpdateTimes },
-	{ "setUpdateTimes", &xx_setUpdateTimes },
+	{ "getLastUpdate",  &xx_getLastUpdate },
+	{ "setLastUpdate",  &xx_setLastUpdate },
+	{ "getNextUpdate",  &xx_getNextUpdate },
+	{ "setNextUpdate",  &xx_setNextUpdate },
 	{ "getIssuer",      &xx_getIssuer },
 	{ "setIssuer",      &xx_setIssuer },
 	{ "add",            &xx_add },
