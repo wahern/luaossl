@@ -195,7 +195,7 @@ static void *prepsimple(lua_State *L, const char *tname, int (*gc)(lua_State *))
 } /* prepsimple() */
 
 #define prepsimple_(a, b, c, ...) prepsimple((a), (b), (c))
-#define prepsimple(...) prepsimple_(__VA_ARGS__, 0)
+#define prepsimple(...) prepsimple_(__VA_ARGS__, 0, 0)
 
 
 static void *checksimple(lua_State *L, int index, const char *tname) {
@@ -404,7 +404,7 @@ static BIGNUM *bn_push(lua_State *L) {
 
 
 #define checkbig_(a, b, c, ...) checkbig((a), (b), (c))
-#define checkbig(...) checkbig_(__VA_ARGS__, &(_Bool){ 0 })
+#define checkbig(...) checkbig_(__VA_ARGS__, &(_Bool){ 0 }, 0)
 
 static BIGNUM *(checkbig)(lua_State *, int, _Bool *);
 
