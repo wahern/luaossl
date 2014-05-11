@@ -30,7 +30,7 @@
 #include <string.h>       /* memset(3) strerror_r(3) */
 #include <strings.h>      /* strcasecmp(3) */
 #include <math.h>         /* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
-#include <time.h>         /* struct tm time_t strptime(3) */
+#include <time.h>         /* struct tm time_t strptime(3) time(2) */
 #include <ctype.h>        /* tolower(3) */
 #include <errno.h>        /* errno */
 
@@ -85,6 +85,7 @@
 #define X509_CERT_CLASS  "X509*"
 #define X509_CHAIN_CLASS "STACK_OF(X509)*"
 #define X509_CSR_CLASS   "X509_REQ*"
+#define X509_CRL_CLASS   "X509_CRL*"
 #define X509_STORE_CLASS "X509_STORE*"
 #define X509_STCTX_CLASS "X509_STORE_CTX*"
 #define SSL_CTX_CLASS    "SSL_CTX*"
@@ -194,7 +195,7 @@ static void *prepsimple(lua_State *L, const char *tname, int (*gc)(lua_State *))
 } /* prepsimple() */
 
 #define prepsimple_(a, b, c, ...) prepsimple((a), (b), (c))
-#define prepsimple(...) prepsimple_(__VA_ARGS__, 0)
+#define prepsimple(...) prepsimple_(__VA_ARGS__, 0, 0)
 
 
 static void *checksimple(lua_State *L, int index, const char *tname) {
@@ -403,7 +404,7 @@ static BIGNUM *bn_push(lua_State *L) {
 
 
 #define checkbig_(a, b, c, ...) checkbig((a), (b), (c))
-#define checkbig(...) checkbig_(__VA_ARGS__, &(_Bool){ 0 })
+#define checkbig(...) checkbig_(__VA_ARGS__, &(_Bool){ 0 }, 0)
 
 static BIGNUM *(checkbig)(lua_State *, int, _Bool *);
 
@@ -2885,6 +2886,294 @@ int luaopen__openssl_x509_csr(lua_State *L) {
 
 
 /*
+ * X509_CRL - openssl.x509.crl
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static int xx_new(lua_State *L) {
+	X509_CRL **ud;
+
+	ud = prepsimple(L, X509_CRL_CLASS);
+
+	if (!(*ud = X509_CRL_new()))
+		return throwssl(L, "x509.crl.new");
+
+	X509_gmtime_adj(X509_CRL_get_lastUpdate(*ud), 0);
+
+	return 1;
+} /* xx_new() */
+
+
+static int xx_interpose(lua_State *L) {
+	return interpose(L, X509_CRL_CLASS);
+} /* xx_interpose() */
+
+
+static int xx_getVersion(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+
+	lua_pushinteger(L, X509_CRL_get_version(crl) + 1);
+
+	return 1;
+} /* xx_getVersion() */
+
+
+static int xx_setVersion(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	int version = luaL_checkint(L, 2);
+
+	if (!X509_CRL_set_version(crl, version - 1))
+		return luaL_error(L, "x509.crl:setVersion: %d: invalid version", version);
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* xx_setVersion() */
+
+
+static int xx_getLastUpdate(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	double updated = INFINITY;
+	ASN1_TIME *time;
+
+	if ((time = X509_CRL_get_lastUpdate(crl)))
+		updated = timeutc(time);
+
+	if (isfinite(updated))
+		lua_pushnumber(L, 1);
+	else
+		lua_pushnil(L);
+
+	return 1;
+} /* xx_getLastUpdate() */
+
+
+static int xx_setLastUpdate(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	double updated = luaL_checknumber(L, 2);
+	ASN1_TIME *time = NULL;
+
+	/* lastUpdate always present */
+	if (!ASN1_TIME_set(X509_CRL_get_lastUpdate(crl), updated))
+		return throwssl(L, "x509.crl:setLastUpdate");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* xx_setLastUpdate() */
+
+
+static int xx_getNextUpdate(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	double updateby = INFINITY;
+	ASN1_TIME *time;
+
+	if ((time = X509_CRL_get_nextUpdate(crl)))
+		updateby = timeutc(time);
+
+	if (isfinite(updateby))
+		lua_pushnumber(L, 1);
+	else
+		lua_pushnil(L);
+
+	return 1;
+} /* xx_getNextUpdate() */
+
+
+static int xx_setNextUpdate(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	double updateby = luaL_checknumber(L, 2);
+	ASN1_TIME *time = NULL;
+
+	if (X509_CRL_get_nextUpdate(crl)) {
+		if (!ASN1_TIME_set(X509_CRL_get_nextUpdate(crl), updateby))
+			goto error;
+	} else {
+		if (!(time = ASN1_TIME_new()))
+			goto error;
+
+		if (!(ASN1_TIME_set(time, updateby)))
+			goto error;
+
+		if (!X509_CRL_set_nextUpdate(crl, time))
+			goto error;
+
+		time = NULL;
+	}
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+error:
+	if (time)
+		ASN1_TIME_free(time);
+
+	return throwssl(L, "x509.crl:setNextUpdate");
+} /* xx_setNextUpdate() */
+
+
+static int xx_getIssuer(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	X509_NAME *name;
+
+	if (!(name = X509_CRL_get_issuer(crl)))
+		return 0;
+
+	xn_dup(L, name);
+
+	return 1;
+} /* xx_getIssuer() */
+
+
+static int xx_setIssuer(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	X509_NAME *name = checksimple(L, 2, X509_NAME_CLASS);
+
+	if (!X509_CRL_set_issuer_name(crl, name))
+		return throwssl(L, "x509.crl:setIssuer");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* xx_setIssuer() */
+
+
+static int xx_add(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	BIGNUM *bn = checkbig(L, 2);
+	double ut = luaL_optnumber(L, 3, time(NULL));
+	X509_REVOKED *rev = NULL;
+	ASN1_INTEGER *serial = NULL;
+	ASN1_TIME *date = NULL;
+
+	if (!(rev = X509_REVOKED_new()))
+		goto error;
+
+	if (!(serial = BN_to_ASN1_INTEGER(bn, NULL)))
+		goto error;
+
+	if (!X509_REVOKED_set_serialNumber(rev, serial)) /* duplicates serial */
+		goto error;
+
+	ASN1_INTEGER_free(serial);
+	serial = NULL;
+
+	if (!(date = ASN1_TIME_new()))
+		goto error;
+
+	if (!ASN1_TIME_set(date, ut))
+		goto error;
+
+	if (!X509_REVOKED_set_revocationDate(rev, date)) /* duplicates date */
+		goto error;
+
+	ASN1_TIME_free(date);
+	date = NULL;
+
+	if (!X509_CRL_add0_revoked(crl, rev)) /* takes ownership of rev */
+		goto error;
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+error:
+	if (date)
+		ASN1_TIME_free(date);
+	if (serial)
+		ASN1_INTEGER_free(serial);
+	if (rev)
+		X509_REVOKED_free(rev);
+
+	return throwssl(L, "x509.crl:add");
+} /* xx_add() */
+
+
+static int xx_sign(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
+
+	if (!X509_CRL_sign(crl, key, xc_signature(L, 3, key)))
+		return throwssl(L, "x509.crl:sign");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* xx_sign() */
+
+
+static int xx__tostring(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	int type = optencoding(L, 2, "pem", X509_PEM|X509_DER);
+	BIO *bio = getbio(L);
+	char *data;
+	long len;
+
+	switch (type) {
+	case X509_PEM:
+		if (!PEM_write_bio_X509_CRL(bio, crl))
+			return throwssl(L, "x509.crl:__tostring");
+		break;
+	case X509_DER:
+		if (!i2d_X509_CRL_bio(bio, crl))
+			return throwssl(L, "x509.crl:__tostring");
+		break;
+	} /* switch() */
+
+	len = BIO_get_mem_data(bio, &data);
+
+	lua_pushlstring(L, data, len);
+
+	return 1;
+} /* xx__tostring() */
+
+
+static int xx__gc(lua_State *L) {
+	X509_CRL **ud = luaL_checkudata(L, 1, X509_CRL_CLASS);
+
+	X509_CRL_free(*ud);
+	*ud = NULL;
+
+	return 0;
+} /* xx__gc() */
+
+static const luaL_Reg xx_methods[] = {
+	{ "getVersion",     &xx_getVersion },
+	{ "setVersion",     &xx_setVersion },
+	{ "getLastUpdate",  &xx_getLastUpdate },
+	{ "setLastUpdate",  &xx_setLastUpdate },
+	{ "getNextUpdate",  &xx_getNextUpdate },
+	{ "setNextUpdate",  &xx_setNextUpdate },
+	{ "getIssuer",      &xx_getIssuer },
+	{ "setIssuer",      &xx_setIssuer },
+	{ "add",            &xx_add },
+	{ "sign",           &xx_sign },
+	{ "tostring",       &xx__tostring },
+	{ NULL,             NULL },
+};
+
+static const luaL_Reg xx_metatable[] = {
+	{ "__tostring", &xx__tostring },
+	{ "__gc",       &xx__gc },
+	{ NULL,         NULL },
+};
+
+
+static const luaL_Reg xx_globals[] = {
+	{ "new",       &xx_new },
+	{ "interpose", &xx_interpose },
+	{ NULL,        NULL },
+};
+
+int luaopen__openssl_x509_crl(lua_State *L) {
+	initall(L);
+
+	luaL_newlib(L, xx_globals);
+
+	return 1;
+} /* luaopen__openssl_x509_crl() */
+
+
+/*
  * STACK_OF(X509) - openssl.x509.chain
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -4465,6 +4754,7 @@ static void initall(lua_State *L) {
 	addclass(L, X509_GENS_CLASS, gn_methods, gn_metatable);
 	addclass(L, X509_CERT_CLASS, xc_methods, xc_metatable);
 	addclass(L, X509_CSR_CLASS, xr_methods, xr_metatable);
+	addclass(L, X509_CRL_CLASS, xx_methods, xx_metatable);
 	addclass(L, X509_CHAIN_CLASS, xl_methods, xl_metatable);
 	addclass(L, X509_STORE_CLASS, xs_methods, xs_metatable);
 	addclass(L, SSL_CTX_CLASS, sx_methods, sx_metatable);
