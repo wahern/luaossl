@@ -30,7 +30,7 @@
 #include <string.h>       /* memset(3) strerror_r(3) */
 #include <strings.h>      /* strcasecmp(3) */
 #include <math.h>         /* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
-#include <time.h>         /* struct tm time_t strptime(3) */
+#include <time.h>         /* struct tm time_t strptime(3) time(2) */
 #include <ctype.h>        /* tolower(3) */
 #include <errno.h>        /* errno */
 
@@ -3039,40 +3039,53 @@ static int xx_setIssuer(lua_State *L) {
 
 
 static int xx_add(lua_State *L) {
-	int ok = 1;
-
-	lua_settop(L, 3);
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
-	BIGNUM *serial = checkbig(L, 2);
-
+	BIGNUM *bn = checkbig(L, 2);
+	double ut = luaL_optnumber(L, 3, time(NULL));
 	X509_REVOKED *rev = NULL;
-	ASN1_INTEGER *aserial = NULL;
+	ASN1_INTEGER *serial = NULL;
 	ASN1_TIME *date = NULL;
 
-	if (!(rev = X509_REVOKED_new())) goto error;
+	if (!(rev = X509_REVOKED_new()))
+		goto error;
 
-	if (!(aserial = BN_to_ASN1_INTEGER(serial, NULL))) goto error;
-	if (!X509_REVOKED_set_serialNumber(rev, aserial)) goto error;
+	if (!(serial = BN_to_ASN1_INTEGER(bn, NULL)))
+		goto error;
 
-	if (!(date = ASN1_TIME_new())) goto error;
-	if (lua_isnil(L, 3)) X509_gmtime_adj(date, 0);
-	else if (!ASN1_TIME_set(date, luaL_checknumber(L, 3))) goto error;
-	if (!X509_REVOKED_set_revocationDate(rev, date)) goto error;
+	if (!X509_REVOKED_set_serialNumber(rev, serial)) /* duplicates serial */
+		goto error;
 
-	if (!X509_CRL_add0_revoked(crl, rev)) goto error;
+	ASN1_INTEGER_free(serial);
+	serial = NULL;
 
-	goto done;
+	if (!(date = ASN1_TIME_new()))
+		goto error;
 
-	error:
-	ok = 0;
+	if (!ASN1_TIME_set(date, ut))
+		goto error;
 
-	done:
-	if (date) ASN1_TIME_free(date);
-	if (serial) ASN1_INTEGER_free(aserial);
-	if (!ok && rev) X509_REVOKED_free(rev);
+	if (!X509_REVOKED_set_revocationDate(rev, date)) /* duplicates date */
+		goto error;
 
-	return ok ? 0 : throwssl(L, "x509.crl:add");
-} /* xx_setIssuer() */
+	ASN1_TIME_free(date);
+	date = NULL;
+
+	if (!X509_CRL_add0_revoked(crl, rev)) /* takes ownership of rev */
+		goto error;
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+error:
+	if (date)
+		ASN1_TIME_free(date);
+	if (serial)
+		ASN1_INTEGER_free(serial);
+	if (rev)
+		X509_REVOKED_free(rev);
+
+	return throwssl(L, "x509.crl:add");
+} /* xx_add() */
 
 
 static int xx_sign(lua_State *L) {
@@ -3134,6 +3147,7 @@ static const luaL_Reg xx_methods[] = {
 	{ "setIssuer",      &xx_setIssuer },
 	{ "add",            &xx_add },
 	{ "sign",           &xx_sign },
+	{ "tostring",       &xx__tostring },
 	{ NULL,             NULL },
 };
 
