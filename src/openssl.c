@@ -27,6 +27,7 @@
 #define LUAOSSL_H
 
 #include <limits.h>       /* INT_MAX INT_MIN */
+#include <stdint.h>       /* uintptr_t */
 #include <string.h>       /* memset(3) strerror_r(3) */
 #include <strings.h>      /* strcasecmp(3) */
 #include <math.h>         /* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
