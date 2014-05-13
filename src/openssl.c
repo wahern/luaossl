@@ -2655,6 +2655,7 @@ static const luaL_Reg xc_methods[] = {
 	{ "getPublicKey",  &xc_getPublicKey },
 	{ "setPublicKey",  &xc_setPublicKey },
 	{ "sign",          &xc_sign },
+	{ "tostring",      &xc__tostring },
 	{ NULL,            NULL },
 };
 
@@ -2860,6 +2861,7 @@ static const luaL_Reg xr_methods[] = {
 	{ "getPublicKey", &xr_getPublicKey },
 	{ "setPublicKey", &xr_setPublicKey },
 	{ "sign",         &xr_sign },
+	{ "tostring",     &xr__tostring },
 	{ NULL,           NULL },
 };
 
