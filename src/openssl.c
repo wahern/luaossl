@@ -64,6 +64,7 @@
 #include <openssl/asn1.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
+#include <openssl/pkcs12.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/ssl.h>
@@ -88,6 +89,7 @@
 #define X509_CRL_CLASS   "X509_CRL*"
 #define X509_STORE_CLASS "X509_STORE*"
 #define X509_STCTX_CLASS "X509_STORE_CTX*"
+#define PKCS12_CLASS     "PKCS12*"
 #define SSL_CTX_CLASS    "SSL_CTX*"
 #define SSL_CLASS        "SSL*"
 #define DIGEST_CLASS     "EVP_MD_CTX"     /* not a pointer */
@@ -361,6 +363,18 @@ static _Bool loadfield(lua_State *L, int index, const char *k, int type, void *p
 
 	return 1;
 } /* loadfield() */
+
+
+static void *loadfield_udata(lua_State *L, int index, const char *k, const char *tname) {
+	if (!getfield(L, index, k))
+		return NULL;
+
+	void **p = luaL_checkudata(L, -1, tname);
+
+	lua_pop(L, 1); /* table keeps reference */
+
+	return *p;
+} /* loadfield_udata() */
 
 
 static const char *pushnid(lua_State *L, int nid) {
@@ -3563,6 +3577,124 @@ int luaopen__openssl_x509_store_context(lua_State *L) {
 
 
 /*
+ * PKCS12 - openssl.pkcs12
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static int p12_new(lua_State *L) {
+	char *pass = NULL;
+	loadfield(L, 1, "password", LUA_TSTRING, &pass);
+
+	EVP_PKEY *key = loadfield_udata(L, 1, "key", PKEY_CLASS);
+	STACK_OF(X509) *certs = loadfield_udata(L, 1, "certs", X509_CHAIN_CLASS);
+
+	PKCS12 **ud = prepsimple(L, PKCS12_CLASS);
+
+	int i;
+	int no_kcert = 0;
+	X509 *cert = NULL;
+	X509 *kcert = NULL;
+	STACK_OF(X509) *ca;
+
+	if (!(ca = sk_X509_new_null()))
+		goto error;
+
+	for (i = 0; i < sk_X509_num(certs); i++) {
+		cert = sk_X509_value(certs, i);
+		if (key && X509_check_private_key(cert, key)) {
+			if (!(kcert = X509_dup(cert)))
+				goto error;
+			X509_keyid_set1(kcert, NULL, 0);
+			X509_alias_set1(kcert, NULL, 0);
+		}
+		else sk_X509_push(ca, cert);
+	}
+	if (key && !kcert) {
+		no_kcert = 1;
+		goto error;
+	}
+
+	if (!(*ud = PKCS12_create(pass, NULL, key, kcert, ca, 0, 0, 0, 0, 0)))
+		goto error;
+
+	if (kcert)
+		X509_free(kcert);
+	sk_X509_free(ca);
+
+	return 1;
+
+error:
+	if (kcert)
+		X509_free(kcert);
+	if (ca)
+		sk_X509_free(ca);
+
+	if (no_kcert)
+		luaL_argerror(L, 1, lua_pushstring(L, "certificate matching the key not found"));
+
+	return throwssl(L, "pkcs12.new");
+} /* p12_new() */
+
+
+static int p12_interpose(lua_State *L) {
+	return interpose(L, PKCS12_CLASS);
+} /* p12_interpose() */
+
+
+static int p12__tostring(lua_State *L) {
+	PKCS12 *p12 = checksimple(L, 1, PKCS12_CLASS);
+	BIO *bio = getbio(L);
+	char *data;
+	long len;
+
+	if (!i2d_PKCS12_bio(bio, p12))
+		return throwssl(L, "pkcs12:__tostring");
+
+	len = BIO_get_mem_data(bio, &data);
+
+	lua_pushlstring(L, data, len);
+
+	return 1;
+} /* p12__tostring() */
+
+
+static int p12__gc(lua_State *L) {
+	PKCS12 **ud = luaL_checkudata(L, 1, PKCS12_CLASS);
+
+	PKCS12_free(*ud);
+	*ud = NULL;
+
+	return 0;
+} /* p12__gc() */
+
+
+static const luaL_Reg p12_methods[] = {
+	{ "tostring", &p12__tostring },
+	{ NULL,         NULL },
+};
+
+static const luaL_Reg p12_metatable[] = {
+	{ "__tostring", &p12__tostring },
+	{ "__gc",       &p12__gc },
+	{ NULL,         NULL },
+};
+
+static const luaL_Reg p12_globals[] = {
+	{ "new",       &p12_new },
+	{ "interpose", &p12_interpose },
+	{ NULL,        NULL },
+};
+
+int luaopen__openssl_pkcs12(lua_State *L) {
+	initall(L);
+
+	luaL_newlib(L, p12_globals);
+
+	return 1;
+} /* luaopen__openssl_pkcs12() */
+
+
+/*
  * SSL_CTX - openssl.ssl.context
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -4759,6 +4891,7 @@ static void initall(lua_State *L) {
 	addclass(L, X509_CRL_CLASS, xx_methods, xx_metatable);
 	addclass(L, X509_CHAIN_CLASS, xl_methods, xl_metatable);
 	addclass(L, X509_STORE_CLASS, xs_methods, xs_metatable);
+	addclass(L, PKCS12_CLASS, p12_methods, p12_metatable);
 	addclass(L, SSL_CTX_CLASS, sx_methods, sx_metatable);
 	addclass(L, SSL_CLASS, ssl_methods, ssl_metatable);
 	addclass(L, DIGEST_CLASS, md_methods, md_metatable);
