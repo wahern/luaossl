@@ -82,6 +82,7 @@
 #define PKEY_CLASS       "EVP_PKEY*"
 #define X509_NAME_CLASS  "X509_NAME*"
 #define X509_GENS_CLASS  "GENERAL_NAMES*"
+#define X509_EXT_CLASS   "X509_EXTENSION*"
 #define X509_CERT_CLASS  "X509*"
 #define X509_CHAIN_CLASS "STACK_OF(X509)*"
 #define X509_CSR_CLASS   "X509_REQ*"
@@ -1804,6 +1805,98 @@ int luaopen__openssl_x509_altname(lua_State *L) {
 
 
 /*
+ * X509_EXTENSION - openssl.x509.extension
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static int xe_new(lua_State *L) {
+	lua_settop(L, 3);
+
+	X509_EXTENSION **ud = prepsimple(L, X509_EXT_CLASS);
+
+	char *name = (char *) luaL_checkstring(L, 1);
+	char *value = (char *) luaL_checkstring(L, 2);
+
+	CONF *conf = NULL;
+	X509V3_CTX *ctx = NULL;
+	X509_EXTENSION *ext = NULL;
+
+	if (!lua_isnil(L, 3)) {
+		char *cdata = (char *) luaL_checkstring(L, 3);
+		BIO *bio = getbio(L);
+		if (BIO_puts(bio, cdata) < 0)
+			goto error;
+
+		if (!(conf = NCONF_new(NULL)))
+			goto error;
+		if (!NCONF_load_bio(conf, bio, NULL))
+			goto error;
+
+		ctx = (X509V3_CTX *) malloc(sizeof (X509V3_CTX));
+		X509V3_set_nconf(ctx, conf);
+	}
+
+	if (!(*ud = X509V3_EXT_nconf(conf, ctx, name, value)))
+		goto error;
+
+	if (conf) {
+		free(ctx);
+		NCONF_free(conf);
+	}
+
+	return 1;
+
+	error:
+	if (ctx)
+		free(ctx);
+	if (conf)
+		NCONF_free(conf);
+
+	return throwssl(L, "x509.extension.new");
+} /* xe_new() */
+
+
+static int xe_interpose(lua_State *L) {
+	return interpose(L, X509_EXT_CLASS);
+} /* xe_interpose() */
+
+
+static int xe__gc(lua_State *L) {
+	X509_EXTENSION **ud = luaL_checkudata(L, 1, X509_EXT_CLASS);
+
+	X509_EXTENSION_free(*ud);
+	*ud = NULL;
+
+	return 0;
+} /* xe__gc() */
+
+
+static const luaL_Reg xe_methods[] = {
+	{ NULL,  NULL },
+};
+
+static const luaL_Reg xe_metatable[] = {
+	{ "__gc", &xe__gc },
+	{ NULL,   NULL },
+};
+
+
+static const luaL_Reg xe_globals[] = {
+	{ "new",       &xe_new },
+	{ "interpose", &xe_interpose },
+	{ NULL,        NULL },
+};
+
+int luaopen__openssl_x509_extension(lua_State *L) {
+	initall(L);
+
+	luaL_newlib(L, xe_globals);
+
+	return 1;
+} /* luaopen__openssl_x509_extension() */
+
+
+/*
  * X509 - openssl.x509.cert
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -2498,45 +2591,14 @@ static int xc_setBasicConstraintsCritical(lua_State *L) {
 
 static int xc_addExtension(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
-	char *name = (char *) luaL_checkstring(L, 2);
-	char *value = (char *) luaL_checkstring(L, 3);
+	X509_EXTENSION *ext = checksimple(L, 2, X509_EXT_CLASS);
 
-	int ok = 1;
+	if (!X509_add_ext(crt, ext, -1))
+		throwssl(L, "x509.cert:addExtension");
 
-	BIO *bio = NULL;
-	CONF *conf = NULL;
-	X509V3_CTX *ctx = NULL;
-	X509_EXTENSION *ext = NULL;
+	lua_pushboolean(L, 1);
 
-	if (lua_gettop(L) > 3) {
-	  char *cdata = (char *) luaL_checkstring(L, 4);
-
-		bio = BIO_new(BIO_s_mem());
-		if (!bio) goto error;
-		if (BIO_puts(bio, cdata) < 0) goto error;
-
-		conf = NCONF_new(NULL);
-		if (!conf) goto error;
-		if (!NCONF_load_bio(conf, bio, NULL)) goto error;
-
-		ctx = (X509V3_CTX *) malloc(sizeof (X509V3_CTX));
-		X509V3_set_nconf(ctx, conf);
-	}
-
-	ext = X509V3_EXT_nconf(conf, ctx, name, value);
-
-	if (ext && X509_add_ext(crt, ext, -1)) goto done;
-
-	error:
-	ok = 0;
-
-	done:
-	if (ext) X509_EXTENSION_free(ext);
-	if (ctx) free(ctx);
-	if (conf) NCONF_free(conf);
-	if (bio) BIO_free(bio);
-
-	return ok ? 0 : throwssl(L, "x509.cert:addExtension");
+	return 1;
 } /* xc_addExtension() */
 
 
@@ -4799,6 +4861,7 @@ static void initall(lua_State *L) {
 	addclass(L, PKEY_CLASS, pk_methods, pk_metatable);
 	addclass(L, X509_NAME_CLASS, xn_methods, xn_metatable);
 	addclass(L, X509_GENS_CLASS, gn_methods, gn_metatable);
+	addclass(L, X509_EXT_CLASS, xe_methods, xe_metatable);
 	addclass(L, X509_CERT_CLASS, xc_methods, xc_metatable);
 	addclass(L, X509_CSR_CLASS, xr_methods, xr_metatable);
 	addclass(L, X509_CRL_CLASS, xx_methods, xx_metatable);
