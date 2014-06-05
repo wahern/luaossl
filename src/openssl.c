@@ -3630,7 +3630,7 @@ error:
 		sk_X509_free(ca);
 
 	if (no_kcert)
-		luaL_argerror(L, 1, lua_pushstring(L, "certificate matching the key not found"));
+		luaL_argerror(L, 1, lua_pushfstring(L, "certificate matching the key not found"));
 
 	return throwssl(L, "pkcs12.new");
 } /* p12_new() */
