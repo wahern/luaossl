@@ -2589,6 +2589,66 @@ static int xc_sign(lua_State *L) {
 } /* xc_sign() */
 
 
+static int xc_text(lua_State *L) {
+	static const struct { const char *kw; unsigned int flag; } map[] = {
+		{ "no_header", X509_FLAG_NO_HEADER },
+		{ "no_version", X509_FLAG_NO_VERSION },
+		{ "no_serial", X509_FLAG_NO_SERIAL },
+		{ "no_signame", X509_FLAG_NO_SIGNAME },
+		{ "no_validity", X509_FLAG_NO_VALIDITY },
+		{ "no_subject", X509_FLAG_NO_SUBJECT },
+		{ "no_issuer", X509_FLAG_NO_ISSUER },
+		{ "no_pubkey", X509_FLAG_NO_PUBKEY },
+		{ "no_extensions", X509_FLAG_NO_EXTENSIONS },
+		{ "no_sigdump", X509_FLAG_NO_SIGDUMP },
+		{ "no_aux", X509_FLAG_NO_AUX },
+		{ "no_attributes", X509_FLAG_NO_ATTRIBUTES },
+		{ "ext_default", X509V3_EXT_DEFAULT },
+		{ "ext_error", X509V3_EXT_ERROR_UNKNOWN },
+		{ "ext_parse", X509V3_EXT_PARSE_UNKNOWN },
+		{ "ext_dump", X509V3_EXT_DUMP_UNKNOWN }
+	};
+
+	lua_settop(L, 2);
+
+	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
+
+	unsigned int flags = 0;
+	const char *kw;
+	int found;
+	unsigned int i;
+
+	BIO *bio = getbio(L);
+	char *data;
+	long len;
+
+	if (!lua_isnil(L, 2)) {
+		lua_pushnil(L);
+		while (lua_next(L, 2)) {
+			kw = luaL_checkstring(L, -1);
+			found = 0;
+			for (i = 0; i < countof(map); i++)
+				if (!strcmp(kw, map[i].kw)) {
+					flags |= map[i].flag;
+					found = 1;
+				}
+			if (!found)
+				luaL_argerror(L, 2, lua_pushfstring(L, "invalid flag: %s", kw));
+			lua_pop(L, 1);
+		}
+	}
+
+	if (!X509_print_ex(bio, crt, 0, flags))
+		return throwssl(L, "x509.cert:text");
+
+	len = BIO_get_mem_data(bio, &data);
+
+	lua_pushlstring(L, data, len);
+
+	return 1;
+} /* xc_text() */
+
+
 static int xc__tostring(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	int type = optencoding(L, 2, "pem", X509_PEM|X509_DER);
@@ -2655,6 +2715,7 @@ static const luaL_Reg xc_methods[] = {
 	{ "getPublicKey",  &xc_getPublicKey },
 	{ "setPublicKey",  &xc_setPublicKey },
 	{ "sign",          &xc_sign },
+	{ "text",          &xc_text },
 	{ "tostring",      &xc__tostring },
 	{ NULL,            NULL },
 };
@@ -3103,6 +3164,24 @@ static int xx_sign(lua_State *L) {
 } /* xx_sign() */
 
 
+static int xx_text(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+
+	BIO *bio = getbio(L);
+	char *data;
+	long len;
+
+	if (!X509_CRL_print(bio, crl))
+		return throwssl(L, "x509.crl:text");
+
+	len = BIO_get_mem_data(bio, &data);
+
+	lua_pushlstring(L, data, len);
+
+	return 1;
+} /* xx_text() */
+
+
 static int xx__tostring(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 	int type = optencoding(L, 2, "pem", X509_PEM|X509_DER);
@@ -3149,6 +3228,7 @@ static const luaL_Reg xx_methods[] = {
 	{ "setIssuer",      &xx_setIssuer },
 	{ "add",            &xx_add },
 	{ "sign",           &xx_sign },
+	{ "text",           &xx_text },
 	{ "tostring",       &xx__tostring },
 	{ NULL,             NULL },
 };
