@@ -1043,7 +1043,7 @@ done:
 
 
 static int pk_interpose(lua_State *L) {
-	return interpose(L, X509_NAME_CLASS);
+	return interpose(L, PKEY_CLASS);
 } /* pk_interpose() */
 
 
@@ -4319,7 +4319,7 @@ static int cipher_new(lua_State *L) {
 
 
 static int cipher_interpose(lua_State *L) {
-	return interpose(L, HMAC_CLASS);
+	return interpose(L, CIPHER_CLASS);
 } /* cipher_interpose() */
 
 
