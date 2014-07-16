@@ -2943,7 +2943,7 @@ static int xx_getLastUpdate(lua_State *L) {
 		updated = timeutc(time);
 
 	if (isfinite(updated))
-		lua_pushnumber(L, 1);
+		lua_pushnumber(L, updated);
 	else
 		lua_pushnil(L);
 
