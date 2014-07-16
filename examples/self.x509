@@ -49,6 +49,4 @@ crt:setBasicConstraintsCritical(true)
 crt:setPublicKey(key)
 crt:sign(key)
 
--- pretty-print using openssl command-line utility.
-io.popen("openssl x509 -text -noout", "w"):write(tostring(crt))
-
+print(crt:text())
