@@ -1829,15 +1829,15 @@ static int xe_new(lua_State *L) {
 
 	X509_EXTENSION **ud = prepsimple(L, X509_EXT_CLASS);
 
-	char *name = (char *) luaL_checkstring(L, 1);
-	char *value = (char *) luaL_checkstring(L, 2);
+	const char *name = luaL_checkstring(L, 1);
+	const char *value = luaL_checkstring(L, 2);
 
 	CONF *conf = NULL;
-	X509V3_CTX *ctx = NULL;
+	X509V3_CTX cbuf = { 0 }, *ctx = NULL;
 	X509_EXTENSION *ext = NULL;
 
 	if (!lua_isnil(L, 3)) {
-		char *cdata = (char *) luaL_checkstring(L, 3);
+		const char *cdata = luaL_checkstring(L, 3);
 		BIO *bio = getbio(L);
 		if (BIO_puts(bio, cdata) < 0)
 			goto error;
@@ -1847,23 +1847,27 @@ static int xe_new(lua_State *L) {
 		if (!NCONF_load_bio(conf, bio, NULL))
 			goto error;
 
-		ctx = (X509V3_CTX *) malloc(sizeof (X509V3_CTX));
+		ctx = &cbuf;
 		X509V3_set_nconf(ctx, conf);
 	}
 
-	if (!(*ud = X509V3_EXT_nconf(conf, ctx, name, value)))
+	/*
+	 * NOTE: AFAICT neither name nor value are modified. The API just
+	 * doesn't have the proper const-qualifiers. See
+	 * crypto/x509v3/v3_conf.c in OpenSSL.
+	 *
+	 * Also seems to be okay to pass NULL conf. Both NCONF_get_section
+	 * and sk_CONF_VALUE_num can handle NULL arguments. See do_ext_nconf
+	 * in v3_conf.c.
+	 */
+	if (!(*ud = X509V3_EXT_nconf(conf, ctx, (char *)name, (char *)value)))
 		goto error;
 
-	if (conf) {
-		free(ctx);
+	if (conf)
 		NCONF_free(conf);
-	}
 
 	return 1;
-
-	error:
-	if (ctx)
-		free(ctx);
+error:
 	if (conf)
 		NCONF_free(conf);
 
