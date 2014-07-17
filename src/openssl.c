@@ -743,7 +743,7 @@ static int bn__tostring(lua_State *L) {
 	char *txt;
 
 	if (!(txt = BN_bn2dec(bn)))
-		throwssl(L, "bignum:__tostring");
+		return throwssl(L, "bignum:__tostring");
 
 	lua_pushstring(L, txt);
 
@@ -1202,7 +1202,7 @@ static int pk_toPEM(lua_State *L) {
 			break;
 		case 2: case 3: /* private, PrivateKey */
 			if (!PEM_write_bio_PrivateKey(bio, key, 0, 0, 0, 0, 0))
-				throwssl(L, "pkey:__tostring");
+				return throwssl(L, "pkey:__tostring");
 
 			len = BIO_get_mem_data(bio, &pem);
 			lua_pushlstring(L, pem, len);
@@ -2613,7 +2613,7 @@ static int xc_addExtension(lua_State *L) {
 	X509_EXTENSION *ext = checksimple(L, 2, X509_EXT_CLASS);
 
 	if (!X509_add_ext(crt, ext, -1))
-		throwssl(L, "x509.cert:addExtension");
+		return throwssl(L, "x509.cert:addExtension");
 
 	lua_pushboolean(L, 1);
 
