@@ -17,7 +17,7 @@ include $(d)/../GNUmakefile
 # C O M P I L A T I O N  F L A G S
 #
 OS_$(d) = $(shell $(d)/../mk/vendor.os)
-CC_$(d) = $(shell $(d)/../mk/vendor.cc)
+CC_$(d) = $(shell env CC="$(CC) "$(d)/../mk/vendor.cc)
 LUAPATH_$(d) = $(shell env CC="$(CC)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" $(<D)/../mk/lua.path -krxm3 -I$(DESTDIR)$(includedir) -I/usr/include -I/usr/local/include -P$(DESTDIR)$(bindir) -P$(bindir) -L$(DESTDIR)$(libdir) -L$(libdir) -v$(1) $(2))
 
 CPPFLAGS_$(d) = $(CPPFLAGS_$(abspath $(@D)/../..))
@@ -29,7 +29,7 @@ ifeq ($(CC_$(d)), sunpro)
 CPPFLAGS_$(d) += -DOPENSSL_NO_EC
 endif
 
-LDFLAGS_$(d) += -lssl -lcrypto -lpthread
+LDFLAGS_$(d) += -lssl -lcrypto -lpthread -lm
 
 # NetBSD, FreeBSD, OpenBSD (and presumably descendants) lack any libdl;
 # dlopen, et al are part of libc.
@@ -109,7 +109,7 @@ MODS$(1)_$(d) = \
 
 $$(DESTDIR)$(2)/_openssl.so: $$(d)/$(1)/openssl.so
 	$$(MKDIR) -p $$(@D)
-	$$(CP) -p $$< $$@
+	$$(CP) -fp $$< $$@
 
 $$(DESTDIR)$(3)/openssl/%.lua: $$(d)/openssl.%.lua
 	$$(LUAC$(1)_$(d)) -p $$<

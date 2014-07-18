@@ -36,7 +36,7 @@
 #include <errno.h>        /* errno */
 
 #include <sys/types.h>    /* ssize_t pid_t */
-#if !defined __sun
+#if !defined __sun && !defined _AIX
 #include <sys/sysctl.h>   /* CTL_KERN KERN_RANDOM RANDOM_UUID KERN_URND KERN_ARND sysctl(2) */
 #endif
 #include <sys/time.h>     /* struct timeval gettimeofday(2) */
@@ -4646,7 +4646,7 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 #endif
 
 	if (count < rqstd) {
-#if defined O_CLOEXEC
+#if defined O_CLOEXEC && (!defined _AIX /* O_CLOEXEC overflows int */)
 		int fd = open("/dev/urandom", O_RDONLY|O_CLOEXEC);
 #else
 		int fd = open("/dev/urandom", O_RDONLY);
@@ -4938,6 +4938,10 @@ int luaopen__openssl_rand(lua_State *L) {
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+#ifndef HAVE_DLADDR
+#define HAVE_DLADDR (!defined _AIX)
+#endif
+
 static struct {
 	pthread_mutex_t *lock;
 	int nlock;
@@ -5022,6 +5026,7 @@ static int mt_init(void) {
 	 * Prevent loader from unlinking us if we've registered a callback
 	 * with OpenSSL by taking another reference to ourselves.
 	 */
+#if HAVE_DLADDR
 	if (bound && !mt_state.dlref) {
 		Dl_info info;
 
@@ -5035,6 +5040,7 @@ static int mt_init(void) {
 			goto leave;
 		}
 	}
+#endif
 
 leave:
 	pthread_mutex_unlock(&mutex);
