@@ -857,8 +857,6 @@ static int pk_new(lua_State *L) {
 			};
 			unsigned i;
 
-			type = OBJ_sn2nid(id);
-
 			if (NID_undef == (type = EVP_PKEY_type(OBJ_sn2nid(id)))) {
 				for (i = 0; i < countof(types); i++) {
 					if (strieq(id, types[i].sn)) {
@@ -1589,13 +1587,6 @@ static int gn_interpose(lua_State *L) {
 } /* gn_interpose() */
 
 
-static int gn_setCritical(lua_State *L) {
-	GENERAL_NAMES *gens = checksimple(L, 1, X509_GENS_CLASS);
-
-	return 0;
-} /* gn_setCritical() */
-
-
 static int gn_checktype(lua_State *L, int index) {
 	static const struct { int type; const char *name; } table[] = {
 		{ GEN_EMAIL,   "RFC822Name" },
@@ -1701,7 +1692,7 @@ static int gn__next(lua_State *L) {
 
 	while (i < n) {
 		GENERAL_NAME *name;
-		const char *tag, *txt;
+		const char *txt;
 		size_t len;
 		union { struct in_addr in; struct in6_addr in6; } ip;
 		char buf[INET6_ADDRSTRLEN + 1];
@@ -1727,7 +1718,6 @@ static int gn__next(lua_State *L) {
 
 			break;
 		case GEN_IPADD:
-			tag = "IP";
 			txt = (char *)M_ASN1_STRING_data(name->d.iPAddress);
 			len = M_ASN1_STRING_length(name->d.iPAddress);
 
@@ -4234,7 +4224,7 @@ static void md_update_(lua_State *L, EVP_MD_CTX *ctx, int from, int to) {
 
 static int md_update(lua_State *L) {
 	EVP_MD_CTX *ctx = luaL_checkudata(L, 1, DIGEST_CLASS);
-	int i, top = lua_gettop(L);
+	int i;
 
 	md_update_(L, ctx, 2, lua_gettop(L));
 
