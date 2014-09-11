@@ -401,6 +401,70 @@ static const char *pushnid(lua_State *L, int nid) {
 } /* pushnid() */
 
 
+/*
+ * Lua 5.3 distinguishes integers and numbers, and by default uses 64-bit
+ * integers. The following routines try to preserve this distinction and
+ * where possible detect range issues.
+ *
+ * The signed range checking assumes two's complement, no padding bits, and
+ * sizeof lua_Integer <= sizeof long long. Which is a safe bet where OpenSSL
+ * is typically used.
+ */
+#define lib_Integer long long
+#define lib_Unsigned unsigned long long
+
+#define lua_IntegerMax ((1ULL << (sizeof (lua_Integer) * 8 - 1)) - 1)
+#define lua_IntegerMin (-lua_IntegerMax - 1)
+
+
+static void lib_pushinteger(lua_State *L, lib_Integer i) {
+	/*
+	 * TODO: Check value explicitly, but will need to silence compiler
+	 * diagnostics about useless comparisons.
+	 */
+	if (sizeof (lua_Integer) >= sizeof i) {
+		lua_pushinteger(L, i);
+	} else {
+		/* TODO: Check overflow. */
+		lua_pushnumber(L, i);
+	}
+} /* lib_pushinteger() */
+
+
+NOTUSED static void lib_pushunsigned(lua_State *L, lib_Unsigned i) {
+	if (i <= lua_IntegerMax) {
+		lua_pushinteger(L, i);
+	} else if (i == (lib_Unsigned)(lua_Number)i) {
+		lua_pushnumber(L, i);
+	} else {
+		luaL_error(L, "unsigned integer value not representable as lua_Integer or lua_Number");
+	}
+} /* lib_pushunsigned() */
+
+
+static lib_Integer lib_checkinteger(lua_State *L, int index) {
+	if (sizeof (lua_Integer) >= sizeof (lib_Integer)) {
+		return luaL_checkinteger(L, index);
+	} else {
+		/* TODO: Check overflow. */
+		return (lib_Integer)luaL_checknumber(L, index);
+	}
+} /* lib_checkinteger() */
+
+
+typedef struct {
+	const char *name;
+	lib_Integer value;
+} integer_Reg;
+
+static void lib_setintegers(lua_State *L, const integer_Reg *l) {
+	for (; l->name; l++) {
+		lib_pushinteger(L, l->value);
+		lua_setfield(L, -2, l->name);
+	}
+} /* lib_setintegers() */
+
+
 static void initall(lua_State *L);
 
 
@@ -3954,6 +4018,35 @@ static int sx_interpose(lua_State *L) {
 } /* sx_interpose() */
 
 
+static int sx_setOptions(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	lib_Integer options = lib_checkinteger(L, 2);
+
+	lib_pushinteger(L, SSL_CTX_set_options(ctx, options));
+
+	return 1;
+} /* sx_setOptions() */
+
+
+static int sx_getOptions(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+
+	lib_pushinteger(L, SSL_CTX_get_options(ctx));
+
+	return 1;
+} /* sx_getOptions() */
+
+
+static int sx_clearOptions(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	lib_Integer options = lib_checkinteger(L, 2);
+
+	lib_pushinteger(L, SSL_CTX_clear_options(ctx, options));
+
+	return 1;
+} /* sx_clearOptions() */
+
+
 static int sx_setStore(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	X509_STORE *store = checksimple(L, 2, X509_STORE_CLASS);
@@ -4052,12 +4145,15 @@ static int sx__gc(lua_State *L) {
 
 
 static const luaL_Reg sx_methods[] = {
-	{ "setStore",  &sx_setStore },
-	{ "setVerify", &sx_setVerify },
-	{ "getVerify", &sx_getVerify },
+	{ "setOptions",     &sx_setOptions },
+	{ "getOptions",     &sx_getOptions },
+	{ "clearOptions",   &sx_clearOptions },
+	{ "setStore",       &sx_setStore },
+	{ "setVerify",      &sx_setVerify },
+	{ "getVerify",      &sx_getVerify },
 	{ "setCertificate", &sx_setCertificate },
-	{ "setPrivateKey", &sx_setPrivateKey },
-	{ "setCipherList", &sx_setCipherList },
+	{ "setPrivateKey",  &sx_setPrivateKey },
+	{ "setCipherList",  &sx_setCipherList },
 	{ NULL, NULL },
 };
 
@@ -4072,22 +4168,66 @@ static const luaL_Reg sx_globals[] = {
 	{ NULL,        NULL },
 };
 
+static const integer_Reg sx_verify[] = {
+	{ "VERIFY_NONE", SSL_VERIFY_NONE },
+	{ "VERIFY_PEER", SSL_VERIFY_PEER },
+	{ "VERIFY_FAIL_IF_NO_PEER_CERT", SSL_VERIFY_FAIL_IF_NO_PEER_CERT },
+	{ "VERIFY_CLIENT_ONCE", SSL_VERIFY_CLIENT_ONCE },
+	{ NULL, 0 },
+};
+
+static const integer_Reg sx_option[] = {
+	{ "OP_MICROSOFT_SESS_ID_BUG", SSL_OP_MICROSOFT_SESS_ID_BUG },
+	{ "OP_NETSCAPE_CHALLENGE_BUG", SSL_OP_NETSCAPE_CHALLENGE_BUG },
+	{ "OP_LEGACY_SERVER_CONNECT", SSL_OP_LEGACY_SERVER_CONNECT },
+	{ "OP_NETSCAPE_REUSE_CIPHER_CHANGE_BUG", SSL_OP_NETSCAPE_REUSE_CIPHER_CHANGE_BUG },
+	{ "OP_SSLREF2_REUSE_CERT_TYPE_BUG", SSL_OP_SSLREF2_REUSE_CERT_TYPE_BUG },
+	{ "OP_MICROSOFT_BIG_SSLV3_BUFFER", SSL_OP_MICROSOFT_BIG_SSLV3_BUFFER },
+	{ "OP_MSIE_SSLV2_RSA_PADDING", SSL_OP_MSIE_SSLV2_RSA_PADDING },
+	{ "OP_SSLEAY_080_CLIENT_DH_BUG", SSL_OP_SSLEAY_080_CLIENT_DH_BUG },
+	{ "OP_TLS_D5_BUG", SSL_OP_TLS_D5_BUG },
+	{ "OP_TLS_BLOCK_PADDING_BUG", SSL_OP_TLS_BLOCK_PADDING_BUG },
+#if defined SSL_OP_NO_TLSv1_1
+	{ "OP_NO_TLSv1_1", SSL_OP_NO_TLSv1_1 },
+#endif
+	{ "OP_DONT_INSERT_EMPTY_FRAGMENTS", SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS },
+	{ "OP_ALL", SSL_OP_ALL },
+	{ "OP_NO_QUERY_MTU", SSL_OP_NO_QUERY_MTU },
+	{ "OP_COOKIE_EXCHANGE", SSL_OP_COOKIE_EXCHANGE },
+	{ "OP_NO_TICKET", SSL_OP_NO_TICKET },
+	{ "OP_CISCO_ANYCONNECT", SSL_OP_CISCO_ANYCONNECT },
+	{ "OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION", SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION },
+#if defined SSL_OP_NO_COMPRESSION
+	{ "OP_NO_COMPRESSION", SSL_OP_NO_COMPRESSION },
+#endif
+	{ "OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION", SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION },
+	{ "OP_SINGLE_ECDH_USE", SSL_OP_SINGLE_ECDH_USE },
+	{ "OP_SINGLE_DH_USE", SSL_OP_SINGLE_DH_USE },
+	{ "OP_EPHEMERAL_RSA", SSL_OP_EPHEMERAL_RSA },
+	{ "OP_CIPHER_SERVER_PREFERENCE", SSL_OP_CIPHER_SERVER_PREFERENCE },
+	{ "OP_TLS_ROLLBACK_BUG", SSL_OP_TLS_ROLLBACK_BUG },
+	{ "OP_NO_SSLv2", SSL_OP_NO_SSLv2 },
+	{ "OP_NO_SSLv3", SSL_OP_NO_SSLv3 },
+	{ "OP_NO_TLSv1", SSL_OP_NO_TLSv1 },
+#if defined SSL_OP_NO_TLSv1_2
+	{ "OP_NO_TLSv1_2", SSL_OP_NO_TLSv1_2 },
+#endif
+	{ "OP_PKCS1_CHECK_1", SSL_OP_PKCS1_CHECK_1 },
+	{ "OP_PKCS1_CHECK_2", SSL_OP_PKCS1_CHECK_2 },
+	{ "OP_NETSCAPE_CA_DN_BUG", SSL_OP_NETSCAPE_CA_DN_BUG },
+	{ "OP_NETSCAPE_DEMO_CIPHER_CHANGE_BUG", SSL_OP_NETSCAPE_DEMO_CIPHER_CHANGE_BUG },
+#if defined SSL_OP_CRYPTOPRO_TLSEXT_BUG
+	{ "OP_CRYPTOPRO_TLSEXT_BUG", SSL_OP_CRYPTOPRO_TLSEXT_BUG },
+#endif
+	{ NULL, 0 },
+};
+
 int luaopen__openssl_ssl_context(lua_State *L) {
 	initall(L);
 
 	luaL_newlib(L, sx_globals);
-
-	lua_pushinteger(L, SSL_VERIFY_NONE);
-	lua_setfield(L, -2, "VERIFY_NONE");
-
-	lua_pushinteger(L, SSL_VERIFY_PEER);
-	lua_setfield(L, -2, "VERIFY_PEER");
-
-	lua_pushinteger(L, SSL_VERIFY_FAIL_IF_NO_PEER_CERT);
-	lua_setfield(L, -2, "VERIFY_FAIL_IF_NO_PEER_CERT");
-
-	lua_pushinteger(L, SSL_VERIFY_CLIENT_ONCE);
-	lua_setfield(L, -2, "VERIFY_CLIENT_ONCE");
+	lib_setintegers(L, sx_verify);
+	lib_setintegers(L, sx_option);
 
 	return 1;
 } /* luaopen__openssl_ssl_context() */
@@ -4108,6 +4248,35 @@ static int ssl_new(lua_State *L) {
 static int ssl_interpose(lua_State *L) {
 	return interpose(L, SSL_CLASS);
 } /* ssl_interpose() */
+
+
+static int ssl_setOptions(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CTX_CLASS);
+	lib_Integer options = lib_checkinteger(L, 2);
+
+	lib_pushinteger(L, SSL_set_options(ssl, options));
+
+	return 1;
+} /* ssl_setOptions() */
+
+
+static int ssl_getOptions(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CTX_CLASS);
+
+	lib_pushinteger(L, SSL_get_options(ssl));
+
+	return 1;
+} /* ssl_getOptions() */
+
+
+static int ssl_clearOptions(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CTX_CLASS);
+	lib_Integer options = lib_checkinteger(L, 2);
+
+	lib_pushinteger(L, SSL_clear_options(ssl, options));
+
+	return 1;
+} /* ssl_clearOptions() */
 
 
 static int ssl_getPeerCertificate(lua_State *L) {
@@ -4171,10 +4340,13 @@ static int ssl__gc(lua_State *L) {
 
 
 static const luaL_Reg ssl_methods[] = {
+	{ "setOptions",    &ssl_setOptions },
+	{ "getOptions",    &ssl_getOptions },
+	{ "clearOptions",  &ssl_clearOptions },
 	{ "getPeerCertificate", &ssl_getPeerCertificate },
-	{ "getPeerChain",       &ssl_getPeerChain },
-	{ "getCipherInfo",      &ssl_getCipherInfo },
-	{ NULL,                 NULL },
+	{ "getPeerChain",  &ssl_getPeerChain },
+	{ "getCipherInfo", &ssl_getCipherInfo },
+	{ NULL,            NULL },
 };
 
 static const luaL_Reg ssl_metatable[] = {
@@ -4192,6 +4364,8 @@ int luaopen__openssl_ssl(lua_State *L) {
 	initall(L);
 
 	luaL_newlib(L, ssl_globals);
+	lib_setintegers(L, sx_verify);
+	lib_setintegers(L, sx_option);
 
 	return 1;
 } /* luaopen__openssl_ssl() */
