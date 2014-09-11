@@ -3098,8 +3098,7 @@ static int xx_new(lua_State *L) {
 
 		if (!ok)
 			return throwssl(L, "x509.crl.new");
-	}
-	else {
+	} else {
 		if (!(*ud = X509_CRL_new()))
 			return throwssl(L, "x509.crl.new");
 
