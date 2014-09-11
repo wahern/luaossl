@@ -465,6 +465,48 @@ static void lib_setintegers(lua_State *L, const integer_Reg *l) {
 } /* lib_setintegers() */
 
 
+
+#if !HAVE_EVP_PKEY_base_id
+#define EVP_PKEY_base_id(key) compat_EVP_PKEY_base_id((key))
+
+static int compat_EVP_PKEY_base_id(EVP_PKEY *key) {
+	return EVP_PKEY_type(key->type);
+} /* compat_EVP_PKEY_base_id() */
+#endif
+
+
+#if !HAVE_EVP_PKEY_get0
+#define EVP_PKEY_get0(key) compat_EVP_PKEY_get0((key))
+
+static void *compat_EVP_PKEY_get0(EVP_PKEY *key) {
+	void *ptr = NULL;
+
+	switch (EVP_PKEY_base_id(key)) {
+	case EVP_PKEY_RSA:
+		if ((ptr = EVP_PKEY_get1_RSA(key)))
+			RSA_free(ptr);
+		break;
+	case EVP_PKEY_DSA:
+		if ((ptr = EVP_PKEY_get1_DSA(key)))
+			DSA_free(ptr);
+		break;
+	case EVP_PKEY_DH:
+		if ((ptr = EVP_PKEY_get1_DH(key)))
+			DH_free(ptr);
+		break;
+	case EVP_PKEY_EC:
+		if ((ptr = EVP_PKEY_get1_EC_KEY(key)))
+			EC_KEY_free(ptr);
+		break;
+	default:
+		break;
+	}
+
+	return ptr;
+} /* compat_EVP_PKEY_get0() */
+#endif
+
+
 static void initall(lua_State *L);
 
 
@@ -4134,6 +4176,51 @@ static int sx_setCipherList(lua_State *L) {
 } /* sx_setCipherList() */
 
 
+static int sx_setEphemeralKey(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
+	void *tmp;
+
+	/*
+	 * NOTE: SSL_CTX_set_tmp duplicates the keys, so we don't need to
+	 * worry about lifetimes. EVP_PKEY_get0 doesn't increment the
+	 * reference count.
+	 */
+	switch (EVP_PKEY_base_id(key)) {
+	case EVP_PKEY_RSA:
+		if (!(tmp = EVP_PKEY_get0(key)))
+			return throwssl(L, "ssl.context:setEphemeralKey");
+
+		if (!SSL_CTX_set_tmp_rsa(ctx, tmp))
+			return throwssl(L, "ssl.context:setEphemeralKey");
+
+		break;
+	case EVP_PKEY_DH:
+		if (!(tmp = EVP_PKEY_get0(key)))
+			return throwssl(L, "ssl.context:setEphemeralKey");
+
+		if (!SSL_CTX_set_tmp_dh(ctx, tmp))
+			return throwssl(L, "ssl.context:setEphemeralKey");
+
+		break;
+	case EVP_PKEY_EC:
+		if (!(tmp = EVP_PKEY_get0(key)))
+			return throwssl(L, "ssl.context:setEphemeralKey");
+
+		if (!SSL_CTX_set_tmp_ecdh(ctx, tmp))
+			return throwssl(L, "ssl.context:setEphemeralKey");
+
+		break;
+	default:
+		return luaL_error(L, "%d: unsupported EVP base type", EVP_PKEY_base_id(key));
+	} /* switch() */
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_setEphemeralKey() */
+
+
 static int sx__gc(lua_State *L) {
 	SSL_CTX **ud = luaL_checkudata(L, 1, SSL_CTX_CLASS);
 
@@ -4145,15 +4232,16 @@ static int sx__gc(lua_State *L) {
 
 
 static const luaL_Reg sx_methods[] = {
-	{ "setOptions",     &sx_setOptions },
-	{ "getOptions",     &sx_getOptions },
-	{ "clearOptions",   &sx_clearOptions },
-	{ "setStore",       &sx_setStore },
-	{ "setVerify",      &sx_setVerify },
-	{ "getVerify",      &sx_getVerify },
-	{ "setCertificate", &sx_setCertificate },
-	{ "setPrivateKey",  &sx_setPrivateKey },
-	{ "setCipherList",  &sx_setCipherList },
+	{ "setOptions",       &sx_setOptions },
+	{ "getOptions",       &sx_getOptions },
+	{ "clearOptions",     &sx_clearOptions },
+	{ "setStore",         &sx_setStore },
+	{ "setVerify",        &sx_setVerify },
+	{ "getVerify",        &sx_getVerify },
+	{ "setCertificate",   &sx_setCertificate },
+	{ "setPrivateKey",    &sx_setPrivateKey },
+	{ "setCipherList",    &sx_setCipherList },
+	{ "setEphemeralKey",  &sx_setEphemeralKey },
 	{ NULL, NULL },
 };
 
