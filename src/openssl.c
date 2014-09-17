@@ -4417,6 +4417,32 @@ static int ssl_getCipherInfo(lua_State *L) {
 } /* ssl_getCipherInfo() */
 
 
+static int ssl_getHostName(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	const char *host;
+
+	if (!(host = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name)))
+		return 0;
+
+	lua_pushstring(L, host);
+
+	return 1;
+} /* ssl_getHostName() */
+
+
+static int ssl_setHostName(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	const char *host = luaL_checkstring(L, 2);
+
+	if (!SSL_set_tlsext_host_name(ssl, host))
+		return throwssl(L, "ssl:setHostName");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setHostName() */
+
+
 static int ssl__gc(lua_State *L) {
 	SSL **ud = luaL_checkudata(L, 1, SSL_CLASS);
 
@@ -4434,6 +4460,8 @@ static const luaL_Reg ssl_methods[] = {
 	{ "getPeerCertificate", &ssl_getPeerCertificate },
 	{ "getPeerChain",  &ssl_getPeerChain },
 	{ "getCipherInfo", &ssl_getCipherInfo },
+	{ "getHostName",   &ssl_getHostName },
+	{ "setHostName",   &ssl_setHostName },
 	{ NULL,            NULL },
 };
 
