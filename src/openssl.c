@@ -236,6 +236,9 @@ static const char *pusherror(lua_State *L, const char *fun) {
 	int line;
 	char txt[256];
 
+	if (!ERR_peek_error())
+		return lua_pushstring(L, "oops: no OpenSSL errors set");
+
 	code = ERR_get_error_line(&path, &line);
 
 	if ((file = strrchr(path, '/')))
@@ -686,8 +689,10 @@ static void bn_prepops(lua_State *L, BIGNUM **r, BIGNUM **a, BIGNUM **b, _Bool c
 static int ctx__gc(lua_State *L) {
 	BN_CTX **ctx = lua_touserdata(L, 1);
 
-	BN_CTX_free(*ctx);
-	*ctx = NULL;
+	if (*ctx) {
+		BN_CTX_free(*ctx);
+		*ctx = NULL;
+	}
 
 	return 0;
 } /* ctx__gc() */
@@ -837,8 +842,10 @@ static int bn__le(lua_State *L) {
 static int bn__gc(lua_State *L) {
 	BIGNUM **ud = luaL_checkudata(L, 1, BIGNUM_CLASS);
 
-	BN_free(*ud);
-	*ud = NULL;
+	if (*ud) {
+		BN_free(*ud);
+		*ud = NULL;
+	}
 
 	return 0;
 } /* bn__gc() */
@@ -901,8 +908,10 @@ int luaopen__openssl_bignum(lua_State *L) {
 static int bio__gc(lua_State *L) {
 	BIO **bio = lua_touserdata(L, 1);
 
-	BIO_free(*bio);
-	*bio = NULL;
+	if (*bio) {
+		BIO_free(*bio);
+		*bio = NULL;
+	}
 
 	return 0;
 } /* bio__gc() */
@@ -1080,18 +1089,19 @@ creat:
 		} /* switch() */
 	} else if (lua_isstring(L, 1)) {
 		int type = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
-		int ispub = -1;
+		int pubonly = 0, prvtonly = 0;
 		const char *opt, *data;
 		size_t len;
 		BIO *bio;
-		int ok = 0;
+		EVP_PKEY *pub = NULL, *prvt = NULL;
+		int goterr = 0;
 
 		/* check if specified publickey or privatekey */
 		if ((opt = luaL_optstring(L, 3, NULL))) {
 			if (xtolower(opt[0]) == 'p' && xtolower(opt[1]) == 'u') {
-				ispub = 1;
+				pubonly = 1;
 			} else if (xtolower(opt[0]) == 'p' && xtolower(opt[1]) == 'r') {
-				ispub = 0;
+				prvtonly = 1;
 			} else {
 				return luaL_argerror(L, 3, lua_pushfstring(L, "invalid option %s", opt));
 			}
@@ -1103,42 +1113,85 @@ creat:
 			return throwssl(L, "pkey.new");
 
 		if (type == X509_PEM || type == X509_ANY) {
-			if (ispub == 1 || ispub == -1) {
-				ok = !!(*ud = PEM_read_bio_PUBKEY(bio, NULL, 0, ""));
+			if (!prvtonly && !pub) {
+				/*
+				 * BIO_reset is a rewind for read-only
+				 * memory buffers. See mem_ctrl in
+				 * crypto/bio/bss_mem.c of OpenSSL source.
+				 */
+				BIO_reset(bio);
 
-				if (ok || (type == X509_PEM && ispub == 1))
-					goto done;
+				if (!(pub = PEM_read_bio_PUBKEY(bio, NULL, 0, "")))
+					goterr = 1;
 			}
 
-			if (ispub == 0 || ispub == -1) {
-				ok = !!(*ud = PEM_read_bio_PrivateKey(bio, NULL, 0, ""));
+			if (!pubonly && !prvt) {
+				BIO_reset(bio);
 
-				if (ok || (type == X509_PEM && ispub == 0))
-					goto done;
+				if (!(prvt = PEM_read_bio_PrivateKey(bio, NULL, 0, "")))
+					goterr = 1;
 			}
 		}
 
 		if (type == X509_DER || type == X509_ANY) {
-			if (ispub == 1 || ispub == -1) {
-				ok = !!(*ud = d2i_PUBKEY_bio(bio, NULL));
+			if (!prvtonly && !pub) {
+				BIO_reset(bio);
 
-				if (ok || (type == X509_DER && ispub == 1))
-					goto done;
+				if (!(pub = d2i_PUBKEY_bio(bio, NULL)))
+					goterr = 1;
 			}
 
-			if (ispub == 0 || ispub == -1) {
-				ok = !!(*ud = d2i_PrivateKey_bio(bio, NULL));
+			if (!pubonly && !prvt) {
+				BIO_reset(bio);
 
-				if (ok || (type == X509_DER && ispub == 0))
-					goto done;
+				if (!(prvt = d2i_PrivateKey_bio(bio, NULL)))
+					goterr = 1;
 			}
 		}
 
+		if (prvt) {
+#if 0
+			/* TODO: Determine if this is necessary. */
+			if (pub && EVP_PKEY_missing_parameters(prvt)) {
+				if (!EVP_PKEY_copy_parameters(prvt, pub)) {
+					/*
+					 * NOTE: It's not necessarily true
+					 * that any internal errors were
+					 * set. But we fixed pusherror() to
+					 * handle that situation.
+					 */
+					goterr = 1;
+
+					goto done;
+				}
+			}
+#endif
+
+			*ud = prvt;
+			prvt = NULL;
+		} else if (pub) {
+			*ud = pub;
+			pub = NULL;
+		}
 done:
 		BIO_free(bio);
 
-		if (!ok)
-			return throwssl(L, "pkey.new");
+		if (pub)
+			EVP_PKEY_free(pub);
+
+		if (prvt)
+			EVP_PKEY_free(prvt);
+
+		if (!*ud) {
+			if (goterr)
+				return throwssl(L, "pkey.new");
+
+			/* we should never get here */
+			return luaL_error(L, "failed to load key for some unexpected reason");
+		} else if (goterr) {
+			/* clean up our mess from testing input formats */
+			ERR_clear_error();
+		}
 	} else {
 		return luaL_error(L, "%s: unknown key initializer", lua_typename(L, lua_type(L, 1)));
 	}
@@ -1223,7 +1276,7 @@ static int pk_setPrivateKey(lua_State *L) {
 	lua_pushboolean(L, 1);
 
 	return 1;
-} /* pk_setPrivateKEY() */
+} /* pk_setPrivateKey() */
 
 
 static int pk_sign(lua_State *L) {
@@ -1408,8 +1461,10 @@ static int pk__tostring(lua_State *L) {
 static int pk__gc(lua_State *L) {
 	EVP_PKEY **ud = luaL_checkudata(L, 1, PKEY_CLASS);
 
-	EVP_PKEY_free(*ud);
-	*ud = NULL;
+	if (*ud) {
+		EVP_PKEY_free(*ud);
+		*ud = NULL;
+	}
 
 	return 0;
 } /* pk__gc() */
@@ -1614,8 +1669,10 @@ static int xn__pairs(lua_State *L) {
 static int xn__gc(lua_State *L) {
 	X509_NAME **ud = luaL_checkudata(L, 1, X509_NAME_CLASS);
 
-	X509_NAME_free(*ud);
-	*ud = NULL;
+	if (*ud) {
+		X509_NAME_free(*ud);
+		*ud = NULL;
+	}
 
 	return 0;
 } /* xn__gc() */
@@ -1881,8 +1938,10 @@ static int gn__pairs(lua_State *L) {
 static int gn__gc(lua_State *L) {
 	GENERAL_NAMES **ud = luaL_checkudata(L, 1, X509_GENS_CLASS);
 
-	sk_GENERAL_NAME_pop_free(*ud, GENERAL_NAME_free);
-	*ud = NULL;
+	if (*ud) {
+		sk_GENERAL_NAME_pop_free(*ud, GENERAL_NAME_free);
+		*ud = NULL;
+	}
 
 	return 0;
 } /* gn__gc() */
@@ -1979,8 +2038,10 @@ static int xe_interpose(lua_State *L) {
 static int xe__gc(lua_State *L) {
 	X509_EXTENSION **ud = luaL_checkudata(L, 1, X509_EXT_CLASS);
 
-	X509_EXTENSION_free(*ud);
-	*ud = NULL;
+	if (*ud) {
+		X509_EXTENSION_free(*ud);
+		*ud = NULL;
+	}
 
 	return 0;
 } /* xe__gc() */
@@ -2899,8 +2960,10 @@ static int xc__tostring(lua_State *L) {
 static int xc__gc(lua_State *L) {
 	X509 **ud = luaL_checkudata(L, 1, X509_CERT_CLASS);
 
-	X509_free(*ud);
-	*ud = NULL;
+	if (*ud) {
+		X509_free(*ud);
+		*ud = NULL;
+	}
 
 	return 0;
 } /* xc__gc() */
@@ -3130,8 +3193,10 @@ static int xr__tostring(lua_State *L) {
 static int xr__gc(lua_State *L) {
 	X509_REQ **ud = luaL_checkudata(L, 1, X509_CSR_CLASS);
 
-	X509_REQ_free(*ud);
-	*ud = NULL;
+	if (*ud) {
+		X509_REQ_free(*ud);
+		*ud = NULL;
+	}
 
 	return 0;
 } /* xr__gc() */
@@ -3459,8 +3524,10 @@ static int xx__tostring(lua_State *L) {
 static int xx__gc(lua_State *L) {
 	X509_CRL **ud = luaL_checkudata(L, 1, X509_CRL_CLASS);
 
-	X509_CRL_free(*ud);
-	*ud = NULL;
+	if (*ud) {
+		X509_CRL_free(*ud);
+		*ud = NULL;
+	}
 
 	return 0;
 } /* xx__gc() */
@@ -3625,8 +3692,10 @@ static int xl__pairs(lua_State *L) {
 static int xl__gc(lua_State *L) {
 	STACK_OF(X509) **chain = luaL_checkudata(L, 1, X509_CHAIN_CLASS);
 
-	sk_X509_pop_free(*chain, X509_free);
-	*chain = NULL;
+	if (*chain) {
+		sk_X509_pop_free(*chain, X509_free);
+		*chain = NULL;
+	}
 
 	return 0;
 } /* xl__gc() */
@@ -3788,8 +3857,10 @@ static int xs_verify(lua_State *L) {
 static int xs__gc(lua_State *L) {
 	X509_STORE **ud = luaL_checkudata(L, 1, X509_STORE_CLASS);
 
-	X509_STORE_free(*ud);
-	*ud = NULL;
+	if (*ud) {
+		X509_STORE_free(*ud);
+		*ud = NULL;
+	}
 
 	return 0;
 } /* xs__gc() */
@@ -3857,8 +3928,10 @@ static int stx_add(lua_State *L) {
 static int stx__gc(lua_State *L) {
 	X509_STORE **ud = luaL_checkudata(L, 1, X509_STORE_CLASS);
 
-	X509_STORE_free(*ud);
-	*ud = NULL;
+	if (*ud) {
+		X509_STORE_free(*ud);
+		*ud = NULL;
+	}
 
 	return 0;
 } /* stx__gc() */
@@ -3975,8 +4048,10 @@ static int p12__tostring(lua_State *L) {
 static int p12__gc(lua_State *L) {
 	PKCS12 **ud = luaL_checkudata(L, 1, PKCS12_CLASS);
 
-	PKCS12_free(*ud);
-	*ud = NULL;
+	if (*ud) {
+		PKCS12_free(*ud);
+		*ud = NULL;
+	}
 
 	return 0;
 } /* p12__gc() */
@@ -4153,6 +4228,11 @@ static int sx_setPrivateKey(lua_State *L) {
 	/*
 	 * NOTE: No easy way to dup the key, but a shared reference should
 	 * be okay as keys are less mutable than certificates.
+	 *
+	 * FIXME: SSL_CTX_use_PrivateKey will return true even if the
+	 * EVP_PKEY object has no private key. Instead, we'll just get a
+	 * segfault during the SSL handshake. We need to check that a
+	 * private key is actually defined in the object.
 	 */
 	if (!SSL_CTX_use_PrivateKey(ctx, key))
 		return throwssl(L, "ssl.context:setPrivateKey");
@@ -4224,8 +4304,10 @@ static int sx_setEphemeralKey(lua_State *L) {
 static int sx__gc(lua_State *L) {
 	SSL_CTX **ud = luaL_checkudata(L, 1, SSL_CTX_CLASS);
 
-	SSL_CTX_free(*ud);
-	*ud = NULL;
+	if (*ud) {
+		SSL_CTX_free(*ud);
+		*ud = NULL;
+	}
 
 	return 0;
 } /* sx__gc() */
@@ -4446,8 +4528,10 @@ static int ssl_setHostName(lua_State *L) {
 static int ssl__gc(lua_State *L) {
 	SSL **ud = luaL_checkudata(L, 1, SSL_CLASS);
 
-	SSL_free(*ud);
-	*ud = NULL;
+	if (*ud) {
+		SSL_free(*ud);
+		*ud = NULL;
+	}
 
 	return 0;
 } /* ssl__gc() */
