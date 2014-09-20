@@ -149,4 +149,12 @@ typedef struct luaL_Stream {
 #define lua_rawlen(...) lua_objlen(__VA_ARGS__)
 
 
+#define lua_pushstring(...) lua52_pushstring(__VA_ARGS__)
+
+static const char *lua52_pushstring(lua_State *L, const char *s) {
+	lua_pushstring(L, s);
+	return lua_tostring(L, -1);
+} /* lua52_pushstring() */
+
+
 #endif /* LUA_VERSION_NUM < 502 */
