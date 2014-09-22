@@ -3,15 +3,30 @@
 -- Example public-key signature verification.
 --
 
+local keytype = ...
+
+local openssl = require"openssl"
 local pkey = require"openssl.pkey"
 local digest = require"openssl.digest"
 
 -- generate a public/private key pair
-local key = pkey.new{ type = "EC", curve = "prime192v1" }
+local function genkey(type)
+	type = string.upper(type or (not openssl.NO_EC and "EC") or "RSA")
+
+	if type == "RSA" then
+		return pkey.new{ type = "RSA", bits = 1024 }, "sha256"
+	elseif type == "DSA" then
+		return pkey.new{ type = "DSA", bits = 1024 }, "dss1"
+	else
+		return pkey.new{ type = "EC", curve = "prime192v1" }, "ecdsa-with-SHA1"
+	end
+end
+
+local key, hash = genkey(keytype)
 
 -- digest our message using an appropriate digest ("ecdsa-with-SHA1" for EC;
 -- "dss1" for DSA; and "sha1", "sha256", etc for RSA).
-local data = digest.new"ecdsa-with-SHA1"
+local data = digest.new(hash)
 data:update(... or "hello world")
 
 -- generate a signature for our data
