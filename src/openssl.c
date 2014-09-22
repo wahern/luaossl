@@ -60,6 +60,8 @@
 #include <mach/mach_time.h> /* mach_absolute_time() */
 #endif
 
+#include <openssl/opensslconf.h>
+#include <openssl/opensslv.h>
 #include <openssl/err.h>
 #include <openssl/bn.h>
 #include <openssl/asn1.h>
@@ -515,6 +517,181 @@ static void *compat_EVP_PKEY_get0(EVP_PKEY *key) {
 
 
 static void initall(lua_State *L);
+
+
+/*
+ * OPENSSL - openssl
+ *
+ * Miscellaneous global interfaces.
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+/*
+ * NOTE: Compile-time cipher exclusions from openssl-1.0.1i/util/mkdef.pl.
+ */
+static const char opensslconf_no[][20] = {
+#ifdef OPENSSL_NO_RC2
+	{ "NO_RC2" },
+#endif
+#ifdef OPENSSL_NO_RC4
+	{ "NO_RC4" },
+#endif
+#ifdef OPENSSL_NO_RC5
+	{ "NO_RC5" },
+#endif
+#ifdef OPENSSL_NO_IDEA
+	{ "NO_IDEA" },
+#endif
+#ifdef OPENSSL_NO_DES
+	{ "NO_DES" },
+#endif
+#ifdef OPENSSL_NO_BF
+	{ "NO_BF" },
+#endif
+#ifdef OPENSSL_NO_CAST
+	{ "NO_CAST" },
+#endif
+#ifdef OPENSSL_NO_WHIRLPOOL
+	{ "NO_WHIRLPOOL" },
+#endif
+#ifdef OPENSSL_NO_CAMELLIA
+	{ "NO_CAMELLIA" },
+#endif
+#ifdef OPENSSL_NO_SEED
+	{ "NO_SEED" },
+#endif
+#ifdef OPENSSL_NO_MD2
+	{ "NO_MD2" },
+#endif
+#ifdef OPENSSL_NO_MD4
+	{ "NO_MD4" },
+#endif
+#ifdef OPENSSL_NO_MD5
+	{ "NO_MD5" },
+#endif
+#ifdef OPENSSL_NO_SHA
+	{ "NO_SHA" },
+#endif
+#ifdef OPENSSL_NO_RIPEMD
+	{ "NO_RIPEMD" },
+#endif
+#ifdef OPENSSL_NO_MDC2
+	{ "NO_MDC2" },
+#endif
+#ifdef OPENSSL_NO_RSA
+	{ "NO_RSA" },
+#endif
+#ifdef OPENSSL_NO_DSA
+	{ "NO_DSA" },
+#endif
+#ifdef OPENSSL_NO_DH
+	{ "NO_DH" },
+#endif
+#ifdef OPENSSL_NO_HMAC
+	{ "NO_HMAC" },
+#endif
+#ifdef OPENSSL_NO_AES
+	{ "NO_AES" },
+#endif
+#ifdef OPENSSL_NO_KRB5
+	{ "NO_KRB5" },
+#endif
+#ifdef OPENSSL_NO_EC
+	{ "NO_EC" },
+#endif
+#ifdef OPENSSL_NO_ECDSA
+	{ "NO_ECDSA" },
+#endif
+#ifdef OPENSSL_NO_ECDH
+	{ "NO_ECDH" },
+#endif
+#ifdef OPENSSL_NO_ENGINE
+	{ "NO_ENGINE" },
+#endif
+#ifdef OPENSSL_NO_HW
+	{ "NO_HW" },
+#endif
+#ifdef OPENSSL_NO_FP_API
+	{ "NO_FP_API" },
+#endif
+#ifdef OPENSSL_NO_STATIC_ENGINE
+	{ "NO_STATIC_ENGINE" },
+#endif
+#ifdef OPENSSL_NO_GMP
+	{ "NO_GMP" },
+#endif
+#ifdef OPENSSL_NO_DEPRECATED
+	{ "NO_DEPRECATED" },
+#endif
+#ifdef OPENSSL_NO_RFC3779
+	{ "NO_RFC3779" },
+#endif
+#ifdef OPENSSL_NO_PSK
+	{ "NO_PSK" },
+#endif
+#ifdef OPENSSL_NO_TLSEXT
+	{ "NO_TLSEXT" },
+#endif
+#ifdef OPENSSL_NO_CMS
+	{ "NO_CMS" },
+#endif
+#ifdef OPENSSL_NO_CAPIENG
+	{ "NO_CAPIENG" },
+#endif
+#ifdef OPENSSL_NO_JPAKE
+	{ "NO_JPAKE" },
+#endif
+#ifdef OPENSSL_NO_SRP
+	{ "NO_SRP" },
+#endif
+#ifdef OPENSSL_NO_SSL2
+	{ "NO_SSL2" },
+#endif
+#ifdef OPENSSL_NO_EC2M
+	{ "NO_EC2M" },
+#endif
+#ifdef OPENSSL_NO_NISTP_GCC
+	{ "NO_NISTP_GCC" },
+#endif
+#ifdef OPENSSL_NO_NEXTPROTONEG
+	{ "NO_NEXTPROTONEG" },
+#endif
+#ifdef OPENSSL_NO_SCTP
+	{ "NO_SCTP" },
+#endif
+#ifdef OPENSSL_NO_UNIT_TEST
+	{ "NO_UNIT_TEST" },
+#endif
+	{ "" } /* in case nothing is defined above */
+}; /* opensslconf_no[] */
+
+
+int luaopen__openssl(lua_State *L) {
+	size_t i;
+
+	lua_newtable(L);
+
+	for (i = 0; i < countof(opensslconf_no); i++) {
+		if (*opensslconf_no[i]) {
+			lua_pushboolean(L, 1);
+			lua_setfield(L, -2, opensslconf_no[i]);
+		}
+	}
+
+	lib_pushinteger(L, OPENSSL_VERSION_NUMBER);
+	lua_setfield(L, -2, "VERSION_NUMBER");
+
+	lua_pushstring(L, OPENSSL_VERSION_TEXT);
+	lua_setfield(L, -2, "VERSION_TEXT");
+
+	lua_pushstring(L, SHLIB_VERSION_HISTORY);
+	lua_setfield(L, -2, "SSHLIB_VERSION_HISTORY");
+
+	lua_pushstring(L, SHLIB_VERSION_NUMBER);
+	lua_setfield(L, -2, "SSHLIB_VERSION_NUMBER");
+
+	return 1;
+} /* luaopen__openssl() */
 
 
 /*
