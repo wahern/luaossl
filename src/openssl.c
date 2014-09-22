@@ -497,11 +497,15 @@ static void *compat_EVP_PKEY_get0(EVP_PKEY *key) {
 		if ((ptr = EVP_PKEY_get1_DH(key)))
 			DH_free(ptr);
 		break;
+#ifndef OPENSSL_NO_EC
 	case EVP_PKEY_EC:
 		if ((ptr = EVP_PKEY_get1_EC_KEY(key)))
 			EC_KEY_free(ptr);
 		break;
+#endif
 	default:
+		/* TODO: Use ERR_put_error */
+
 		break;
 	}
 
