@@ -1,3 +1,9 @@
+liblua-openssl (20140923-0) unstable; urgency=low
+
+  * [FIXME] Lots of changes.
+
+ -- William Ahern <william@25thandClement.com>  Tue, 23 Sep 2014 20:32:32 -0700
+
 liblua-openssl (20140328-0) unstable; urgency=low
 
   * Add DER input/output formats.
