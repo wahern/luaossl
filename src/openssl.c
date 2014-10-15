@@ -4706,6 +4706,56 @@ static int ssl_setHostName(lua_State *L) {
 } /* ssl_setHostName() */
 
 
+static int ssl_getVersion(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	int format = luaL_checkoption(L, 2, "d", (const char *[]){ "d", ".", "f", NULL });
+	int version = SSL_version(ssl);
+	int major, minor;
+
+	switch (format) {
+	case 1: case 2:
+		major = 0xff & ((version >> 8));
+		minor = (0xff & version);
+
+		luaL_argcheck(L, minor < 10, 2, "unable to convert SSL version to float because minor version >= 10");
+		lua_pushnumber(L, major + ((double)minor / 10));
+
+		break;
+	default:
+		lua_pushinteger(L, version);
+
+		break;
+	}
+
+	return 1;
+} /* ssl_getVersion() */
+
+
+static int ssl_getClientVersion(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	int format = luaL_checkoption(L, 2, "d", (const char *[]){ "d", ".", "f", NULL });
+	int version = ssl->client_version;
+	int major, minor;
+
+	switch (format) {
+	case 1: case 2:
+		major = 0xff & ((version >> 8));
+		minor = (0xff & version);
+
+		luaL_argcheck(L, minor < 10, 2, "unable to convert SSL client version to float because minor version >= 10");
+		lua_pushnumber(L, major + ((double)minor / 10));
+
+		break;
+	default:
+		lua_pushinteger(L, version);
+
+		break;
+	}
+
+	return 1;
+} /* ssl_getClientVersion() */
+
+
 static int ssl__gc(lua_State *L) {
 	SSL **ud = luaL_checkudata(L, 1, SSL_CLASS);
 
@@ -4719,14 +4769,16 @@ static int ssl__gc(lua_State *L) {
 
 
 static const luaL_Reg ssl_methods[] = {
-	{ "setOptions",    &ssl_setOptions },
-	{ "getOptions",    &ssl_getOptions },
-	{ "clearOptions",  &ssl_clearOptions },
+	{ "setOptions",       &ssl_setOptions },
+	{ "getOptions",       &ssl_getOptions },
+	{ "clearOptions",     &ssl_clearOptions },
 	{ "getPeerCertificate", &ssl_getPeerCertificate },
-	{ "getPeerChain",  &ssl_getPeerChain },
-	{ "getCipherInfo", &ssl_getCipherInfo },
-	{ "getHostName",   &ssl_getHostName },
-	{ "setHostName",   &ssl_setHostName },
+	{ "getPeerChain",     &ssl_getPeerChain },
+	{ "getCipherInfo",    &ssl_getCipherInfo },
+	{ "getHostName",      &ssl_getHostName },
+	{ "setHostName",      &ssl_setHostName },
+	{ "getVersion",       &ssl_getVersion },
+	{ "getClientVersion", &ssl_getClientVersion },
 	{ NULL,            NULL },
 };
 
@@ -4741,10 +4793,25 @@ static const luaL_Reg ssl_globals[] = {
 	{ NULL,        NULL },
 };
 
+static const integer_Reg ssl_version[] = {
+	{ "SSL2_VERSION", SSL2_VERSION },
+	{ "SSL3_VERSION", SSL3_VERSION },
+	{ "TLS1_VERSION", TLS1_VERSION },
+#if defined TLS1_1_VERSION
+	{ "TLS1_1_VERSION", TLS1_1_VERSION },
+#endif
+#if defined TLS1_2_VERSION
+	{ "TLS1_2_VERSION", TLS1_2_VERSION },
+#endif
+	{ NULL, 0 },
+};
+
+
 int luaopen__openssl_ssl(lua_State *L) {
 	initall(L);
 
 	luaL_newlib(L, ssl_globals);
+	lib_setintegers(L, ssl_version);
 	lib_setintegers(L, sx_verify);
 	lib_setintegers(L, sx_option);
 
