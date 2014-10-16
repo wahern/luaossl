@@ -697,40 +697,40 @@ Add or interpose a context class method. Returns the previous method, if any.
 
 \subsubsection[\fn{context:setOptions}]{\fn{context:setOptions($flags$)}}
 
-Sets the option flags of the context instance. $flags$ is a bit-wise set of option flags to be ORd with the current set. The resultant option flags of the context instance will be the union of the old and new flags.\footnote{This idiosyncratic union behavior is how the OpenSSL routine works.}
+Adds the option flags to the context instance. $flags$ is a bit-wise set of option flags to be ORd with the current set. The resultant option flags of the context instance will be the union of the old and new flags.\footnote{This idiosyncratic union behavior is how the OpenSSL routine works.}
 
 \begin{ctabular}{ c | p{8cm} }
-name & description \\\hline
+name & \href{https://www.openssl.org/docs/ssl/SSL_CTX_set_options.html}{description} \\\hline
 \small{\texttt{OP\_MICROSOFT\_SESS\_ID\_BUG}} & When talking SSLv2, if session-id reuse is performed, the session-id passed back in the server-finished message is different from the one decided upon. \\
-\small{\texttt{OP\_NETSCAPE\_CHALLENGE\_BUG}} & Netscape-Commerce/1.12, when talking SSLv2, accepts a 32 byte challenge but then appears to only use 16 bytes when generating the encryption keys. According to the SSLv3 spec, one should use 32 bytes for the challenge when operating in SSLv2/v3 compatibility mode, but as mentioned above, this breaks this server so 16 bytes is the way to go. \\
+\small{\texttt{OP\_NETSCAPE\_CHALLENGE\_BUG}} & Workaround for Netscape-Commerce/1.12 servers. \\
 \small{\texttt{OP\_LEGACY\_SERVER\_CONNECT}} & $\ldots$ \\
 \small{\texttt{OP\_NETSCAPE\_REUSE\_CIPHER\_CHANGE\_BUG}} & As of OpenSSL 0.9.8q and 1.0.0c, this option has no effect. \\
 \small{\texttt{OP\_MICROSOFT\_BIG\_SSLV3\_BUFFER}} & $\ldots$ \\
 \small{\texttt{OP\_SSLEAY\_080\_CLIENT\_DH\_BUG}} & $\ldots$ \\
 \small{\texttt{OP\_TLS\_D5\_BUG}} & $\ldots$ \\
 \small{\texttt{OP\_TLS\_BLOCK\_PADDING\_BUG}} & $\ldots$ \\
-\small{\texttt{OP\_DONT\_INSERT\_EMPTY\_FRAGMENTS}} & $\ldots$ \\
+\small{\texttt{OP\_DONT\_INSERT\_EMPTY\_FRAGMENTS}} & Disables a countermeasure against a SSL 3.0/TLS 1.0 protocol vulnerability affecting CBC ciphers, which cannot be handled by some broken SSL implementations. This option has no effect for connections using other ciphers. \\
 \small{\texttt{OP\_NO\_QUERY\_MTU}} & $\ldots$ \\
 \small{\texttt{OP\_COOKIE\_EXCHANGE}} & $\ldots$ \\
-\small{\texttt{OP\_NO\_TICKET}} & $\ldots$ \\
+\small{\texttt{OP\_NO\_TICKET}} & Disable RFC4507bis ticket stateless session resumption. \\
 \small{\texttt{OP\_CISCO\_ANYCONNECT}} & $\ldots$ \\
-\small{\texttt{OP\_NO\_SESSION\_RESUMPTION\_ON\_RENEGOTIATION}} & $\ldots$ \\
+\small{\texttt{OP\_NO\_SESSION\_RESUMPTION\_ON\_RENEGOTIATION}} & When performing renegotiation as a server, always start a new session (i.e., session resumption requests are only accepted in the initial handshake). This option is not needed for clients. \\
 \small{\texttt{OP\_NO\_COMPRESSION}} & $\ldots$ \\
 \small{\texttt{OP\_ALLOW\_UNSAFE\_LEGACY\_RENEGOTIATION}} & $\ldots$ \\
-\small{\texttt{OP\_SINGLE\_ECDH\_USE}} & $\ldots$ \\
-\small{\texttt{OP\_SINGLE\_DH\_USE}} & $\ldots$ \\
-\small{\texttt{OP\_EPHEMERAL\_RSA}} & $\ldots$ \\
-\small{\texttt{OP\_CIPHER\_SERVER\_PREFERENCE}} & $\ldots$ \\
-\small{\texttt{OP\_TLS\_ROLLBACK\_BUG}} & $\ldots$ \\
-\small{\texttt{OP\_NO\_SSLv2}} & $\ldots$ \\
-\small{\texttt{OP\_NO\_SSLv3}} & $\ldots$ \\
-\small{\texttt{OP\_NO\_TLSv1}} & $\ldots$ \\
-\small{\texttt{OP\_NO\_TLSv1\_2}} & $\ldots$ \\
-\small{\texttt{OP\_NO\_TLSv1\_1}} & $\ldots$ \\
+\small{\texttt{OP\_SINGLE\_ECDH\_USE}} & Always create a new key when using temporary/ephemeral ECDH parameters. \\
+\small{\texttt{OP\_SINGLE\_DH\_USE}} & Always create a new key when using temporary/ephemeral DH parameters. \\
+\small{\texttt{OP\_EPHEMERAL\_RSA}} & Always use ephemeral (temporary) RSA key when doing RSA operations. \\
+\small{\texttt{OP\_CIPHER\_SERVER\_PREFERENCE}} & When choosing a cipher, use the server's preferences instead of the client preferences. \\
+\small{\texttt{OP\_TLS\_ROLLBACK\_BUG}} & Disable version rollback attack detection. \\
+\small{\texttt{OP\_NO\_SSLv2}} & Do not use the SSLv2 protocol. \\
+\small{\texttt{OP\_NO\_SSLv3}} & Do not use the SSLv3 protocol. \\
+\small{\texttt{OP\_NO\_TLSv1}} & Do not use the TLSv1.0 protocol. \\
+\small{\texttt{OP\_NO\_TLSv1\_2}} & Do not use the TLSv1.1 protocol. \\
+\small{\texttt{OP\_NO\_TLSv1\_1}} & Do not use the TLSv1.2 protocol. \\
 \small{\texttt{OP\_NETSCAPE\_CA\_DN\_BUG}} & $\ldots$ \\
 \small{\texttt{OP\_NETSCAPE\_DEMO\_CIPHER\_CHANGE\_BUG}} & $\ldots$ \\
 \small{\texttt{OP\_CRYPTOPRO\_TLSEXT\_BUG}} & $\ldots$ \\
-\small{\texttt{OP\_ALL}} & $\ldots$ \\
+\small{\texttt{OP\_ALL}} & All of the bug workarounds. \\
 \end{ctabular}
 
 \subsubsection[\fn{context:getOptions}]{\fn{context:getOptions()}}
@@ -784,15 +784,30 @@ Sets \module{openssl.pkey} object $key$ as the ephemeral key during key exchange
 
 \begin{Module}{openssl.ssl}
 
-Binds the ``SSL'' OpenSSL object, which represents an SSL connection instance. See \method{socket.checktls}.
+Binds the ``SSL'' OpenSSL object, which represents an SSL connection instance. See \method{cqueues.socket:checktls}.
+
+\subsubsection[\fn{ssl[]}]{\fn{ssl[]}}
+
+A table mapping OpenSSL named constants. Includes all constants provided by \module{openssl.ssl.context}. Additional constants are documented with the relevant method.
 
 \subsubsection[\fn{ssl.interpose}]{\fn{ssl.interpose($name$, $function$)}}
-
 Add or interpose an ssl class method. Returns the previous method, if any.
+
+\subsubsection[\fn{ssl:setOptions}]{\fn{ssl:setOptions($flags$)}}
+
+Adds the option flags of the SSL connection instance. See \fn{openssl.ssl.context:setOptions}.
+
+\subsubsection[\fn{ssl:getOptions}]{\fn{ssl:getOptions()}}
+
+Returns the option flags of the SSL connection instance. See \fn{openssl.ssl.context:getOptions}.
+
+\subsubsection[\fn{ssl:clearOptions}]{\fn{ssl:clearOptions()}}
+
+Clears the option flags of the SSL connection instance. See \fn{openssl.ssl.context:clearOptions}.
 
 \subsubsection[\fn{ssl:getPeerCertificate}]{\fn{ssl:getPeerCertificate()}}
 
-Returns the X.509 peer certificate as an \module{openssl.x509} object. If no peer certificate is available, returns nil.
+Returns the X.509 peer certificate as an \module{openssl.x509} object. If no peer certificate is available, returns $nil$.
 
 \subsubsection[\fn{ssl:getPeerChain}]{\fn{ssl:getPeerChain()}}
 
@@ -809,6 +824,35 @@ field & description\\\hline
 .version & SSL/TLS version string returned by \fn{SSL\_CIPHER\_get\_version}\\
 .description & key:value cipher description returned by \fn{SSL\_CIPHER\_description}
 \end{tabular}
+
+\subsubsection[\fn{ssl:setHostName}]{\fn{ssl:setHostName($host$)}}
+
+Sets the Server Name Indication (SNI) host name. Using the SNI TLS extension, clients tells the server which domain they're contacting so the server can select the proper certificate and key. This permits SSL virtual hosting. This routine is only relevant for clients.
+
+\subsubsection[\fn{ssl:getHostName}]{\fn{ssl:getHostName()}}
+
+Returns the Server Name Indication (SNI) host name sent by the client. If no host name was sent, returns $nil$. This routine is only relevant for servers.
+
+\subsubsection[\fn{ssl:getVersion}]{\fn{ssl:getVersion([$format$])}}
+
+Returns the SSL/TLS version of the negotiated SSL connection. By default returns a 16-bit integer where the top 8 bits are the major version number and the bottom 8 bits the minor version number. For example, SSL 3.0 is 0x0300 and TLS 1.1 is 0x0302. SSL 2.0 is 0x0002.
+
+If $format$ is ``.'' returns a floating point number. 0x0300 becomes 3.0, and 0x0302 becomes 3.2. If the minor version is $\geq$ 10 an error is thrown.\footnote{This condition shouldn't be possible.}
+
+The following OpenSSL named constants can be used.
+
+\begin{tabular}{ c | l }
+name & description \\\hline
+SSL2\_VERSION & 16-bit SSLv2 identifier (0x0002).  \\
+SSL3\_VERSION & 16-bit SSLv3 identifier (0x0300).  \\
+TLS1\_VERSION & 16-bit TLSv1.0 identifier (0x0301).  \\
+TLS1\_1\_VERSION & 16-bit TLSv1.1 identifier (0x0302).  \\
+TLS1\_2\_VERSION & 16-bit TLSv1.2 identifier (0x0303).  \\
+\end{tabular}
+
+\subsubsection[\fn{ssl:getVersion}]{\fn{ssl:getClientVersion([$format$])}}
+
+Returns the SSL/TLS version supported by the client, which should be greater than or equal to the negotiated version. See \fn{ssl:getVersion}.
 
 \end{Module}
 
