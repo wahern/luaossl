@@ -1,8 +1,33 @@
+liblua-openssl (20141028-0) unstable; urgency=low
+
+  * Add ssl:getVersion and ssl:getClientVersion.
+  * Fix "TLS" and "SSL" method names for context.new. OpenSSL TLSv1_method()
+    literally only speaks 1.0, not 1.0 and above. "TLS" now uses
+    SSLv23_method and disables SSLv2 and SSLv3. "SSL" uses SSLv23_method and
+    disables SSLv2.
+
+ -- William Ahern <william@25thandClement.com>  Tue, 28 Oct 2014 21:03:23 -0700
+
 liblua-openssl (20140923-0) unstable; urgency=low
 
-  * [FIXME] Lots of changes.
+  * Add more CRL support from Kaarle Ritvanen.
+  * Add prelimiary 5.3 support.
+  * Add SSL_CTX and SSL option support.
+  * Add ephemeral key support.
+  * Add Server Name Indication (SNI) support.
+  * Fix issue which prevented loading public and private keys together.
+  * Add bindings to opensslv.h and opensslconf.h.
 
  -- William Ahern <william@25thandClement.com>  Tue, 23 Sep 2014 20:32:32 -0700
+
+liblua-openssl (20140718-0) unstable; urgency=low
+
+  * Add CRL spport from Kaarle Ritvanen.
+  * Add PKCS1 support from Kaarle Ritvanen.
+  * Add AIX platform support.
+  * Add rand.stir.
+
+ -- William Ahern <william@25thandClement.com>  Fri, 18 Jul 2014 22:44:31 -0700
 
 liblua-openssl (20140328-0) unstable; urgency=low
 
