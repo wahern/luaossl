@@ -4269,14 +4269,29 @@ int luaopen__openssl_pkcs12(lua_State *L) {
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+/*
+ * NOTE: TLS methods and flags were added in tandem. For example, if the
+ * macro SSL_OP_NO_TLSv1_1 is defined we know TLSv1_1_server_method is also
+ * declared and defined.
+ */
 static int sx_new(lua_State *L) {
 	static const char *const opts[] = {
-		"SSLv2", "SSLv3", "SSLv23", "SSL", "TLSv1", "TLS", NULL
+		"SSLv2", "SSLv3", "SSLv23",
+		"TLSv1", "TLSv1.0",
+#if defined SSL_OP_NO_TLSv1_1
+		"TLSv1_1", "TLSv1.1",
+#endif
+#if defined SSL_OP_NO_TLSv1_2
+		"TLSv1_2", "TLSv1.2",
+#endif
+		"SSL", "TLS",
+		NULL
 	};
 	/* later versions of SSL declare a const qualifier on the return type */
 	__typeof__(&TLSv1_client_method) method = &TLSv1_client_method;
 	_Bool srv;
 	SSL_CTX **ud;
+	int options = 0;
 
 	lua_settop(L, 2);
 	srv = lua_toboolean(L, 2);
@@ -4291,14 +4306,31 @@ static int sx_new(lua_State *L) {
 		method = (srv)? &SSLv3_server_method : &SSLv3_client_method;
 		break;
 	case 2: /* SSLv23 */
-		/* FALL THROUGH */
-	case 3: /* SSL */
 		method = (srv)? &SSLv23_server_method : &SSLv23_client_method;
 		break;
-	case 4: /* TLSv1 */
-		/* FALL THROUGH */
-	case 5: /* TLS */
+	case 3: /* TLSv1 */
+	case 4: /* TLSv1.0 */
 		method = (srv)? &TLSv1_server_method : &TLSv1_client_method;
+		break;
+#if defined SSL_OP_NO_TLSv1_1
+	case 5: /* TLSv1_1 */
+	case 6: /* TLSv1.1 */
+		method = (srv)? &TLSv1_1_server_method : &TLSv1_1_client_method;
+		break;
+#endif
+#if defined SSL_OP_NO_TLSv1_2
+	case 7: /* TLSv1_2 */
+	case 8: /* TLSv1.2 */
+		method = (srv)? &TLSv1_2_server_method : &TLSv1_2_client_method;
+		break;
+#endif
+	case 9: /* SSL */
+		method = (srv)? &SSLv23_server_method : &SSLv23_client_method;
+		options = SSL_OP_NO_SSLv2;
+		break;
+	case 10: /* TLS */
+		method = (srv)? &SSLv23_server_method : &SSLv23_client_method;
+		options = SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3;
 		break;
 	}
 
@@ -4306,6 +4338,8 @@ static int sx_new(lua_State *L) {
 
 	if (!(*ud = SSL_CTX_new(method())))
 		return throwssl(L, "ssl.context.new");
+
+	SSL_CTX_set_options(*ud, options);
 
 	return 1;
 } /* sx_new() */
