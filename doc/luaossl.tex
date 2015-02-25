@@ -985,11 +985,17 @@ The routine operates internally on 64-bit unsigned integers.\footnote{Actually, 
 
 \begin{Module}{openssl.des}
 
-Binds OpenSSL's DES interfaces. These bindings are incomplete. No modern protocol would ever need to use these directly. However, legacy protocols like Windows NTLM authentication require some of these low-level interfaces.
+Binds OpenSSL's DES interfaces. These bindings are incomplete. No modern protocol would ever need to use these directly. However, legacy protocols like Windows LAN Manager authentication require some of these low-level interfaces.
 
 \subsubsection[\fn{des.string\_to\_key}]{\fn{des.string\_to\_key($password$)}}
 
-Converts an arbitrary length string, $password$, to a DES key. Returns an 8-byte string.
+Converts an arbitrary length string, $password$, to a DES key using DES\_string\_to\_key. Returns an 8-byte string.
+
+Note that OpenSSL's DES\_string\_to\_key is not compatible with Windows LAN Manager hashing scheme. Use \fn{des.set\_odd\_parity} instead. See examples/lm.hash.
+
+\subsubsection[\fn{des.set\_odd\_parity}]{\fn{des.set\_odd\_parity($key$)}}
+
+Applies DES\_set\_odd\_parity to the string $key$. Only the first 8 bytes of $key$ are processed. Returns an 8-byte string.
 
 \end{Module}
 

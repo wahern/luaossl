@@ -1,0 +1,71 @@
+#!/bin/sh
+_=[[
+	: ${LUA:=$(command -v lua-5.2)}
+	: ${LUA:=$(command -v lua5.2)}
+	: ${LUA:=$(command -v lua-52)}
+	: ${LUA:=$(command -v lua52)}
+	: ${LUA:=$(command -v luajit)}
+	: ${LUA:=$(command -v lua)}
+
+	exec ${LUA} "$0" "$@"
+]]
+
+local des = require"openssl.des"
+local cipher = require"openssl.cipher"
+local bit32 = require"bit32"
+
+local function lm_encrypt(key)
+	return cipher.new"DES-ECB":encrypt(key, nil, false):final"KGS!@#$%"
+end -- lm_encrypt
+
+local lshift = bit32.lshift
+local band = bit32.band
+local rshift = bit32.rshift
+local bor = bit32.bor
+
+local function lm_string_to_key(s)
+	local s0, s1, s2, s3, s4, s5, s6 = string.byte(s, 1, 7)
+	local k0, k1, k2, k3, k4, k5, k6, k7
+
+	s0 = s0 or 0
+	s1 = s1 or 0
+	s2 = s2 or 0
+	s3 = s3 or 0
+	s4 = s4 or 0
+	s5 = s5 or 0
+	s6 = s6 or 0
+
+	k0 = s0
+	k1 = bor(band(lshift(s0, 7), 255), rshift(s1, 1))
+	k2 = bor(band(lshift(s1, 6), 255), rshift(s2, 2))
+	k3 = bor(band(lshift(s2, 5), 255), rshift(s3, 3))
+	k4 = bor(band(lshift(s3, 4), 255), rshift(s4, 4))
+	k5 = bor(band(lshift(s4, 3), 255), rshift(s5, 5))
+	k6 = bor(band(lshift(s5, 2), 255), rshift(s6, 6))
+	k7 = band(lshift(s6, 1), 255)
+
+	return des.set_odd_parity(string.char(k0, k1, k2, k3, k4, k5, k6, k7))
+end -- lm_string_to_key
+
+local function lm_hash(pass)
+	pass = string.upper(pass)
+
+	if #pass < 14 then
+		pass = pass .. string.rep(string.char(0), 14 - #pass)
+	end
+
+	local key1 = lm_string_to_key(string.sub(pass, 1, 7))
+	local key2 = lm_string_to_key(string.sub(pass, 8, 14))
+
+	return lm_encrypt(key1) .. lm_encrypt(key2)
+end -- lm_hash
+
+local function tohex(s)
+	return (string.gsub(s, ".", function (c)
+		return string.format("%.2x", string.byte(c))
+	end))
+end -- tohex
+
+local pass = ... or "passphrase"
+
+print(pass, tohex(lm_hash(... or "passphrase")))
