@@ -1,3 +1,9 @@
+liblua-openssl (20150225-0) unstable; urgency=low
+
+  * Add DES module to help implement NTLM authenticatin protocol.
+
+ -- William Ahern <william@25thandClement.com>  Wed, 25 Feb 2015 12:46:41 -0800
+
 liblua-openssl (20141028-0) unstable; urgency=low
 
   * Add ssl:getVersion and ssl:getClientVersion.
