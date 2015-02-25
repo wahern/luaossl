@@ -73,6 +73,7 @@
 #include <openssl/ssl.h>
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
+#include <openssl/des.h>
 
 #include <lua.h>
 #include <lualib.h>
@@ -5603,6 +5604,35 @@ int luaopen__openssl_rand(lua_State *L) {
 
 	return 1;
 } /* luaopen__openssl_rand() */
+
+
+/*
+ * DES - openssl.des
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static int de5_string_to_key(lua_State *L) {
+	DES_cblock key;
+
+	DES_string_to_key(luaL_checkstring(L, 1), &key);
+	lua_pushlstring(L, (char *)key, sizeof key);
+
+	return 1;
+} /* de5_string_to_key() */
+
+
+static const luaL_Reg des_globals[] = {
+	{ "string_to_key", &de5_string_to_key },
+	{ NULL,            NULL },
+};
+
+int luaopen__openssl_des(lua_State *L) {
+	initall(L);
+
+	luaL_newlib(L, des_globals);
+
+	return 1;
+} /* luaopen__openssl_des() */
 
 
 /*
