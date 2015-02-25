@@ -5620,9 +5620,24 @@ static int de5_string_to_key(lua_State *L) {
 	return 1;
 } /* de5_string_to_key() */
 
+static int de5_set_odd_parity(lua_State *L) {
+	const char *src;
+	size_t len;
+	DES_cblock key;
+
+	src = luaL_checklstring(L, 1, &len);
+	memset(&key, 0, sizeof key);
+	memcpy(&key, src, MIN(len, sizeof key));
+
+	DES_set_odd_parity(&key);
+	lua_pushlstring(L, (char *)key, sizeof key);
+
+	return 1;
+} /* de5_set_odd_parity() */
 
 static const luaL_Reg des_globals[] = {
-	{ "string_to_key", &de5_string_to_key },
+	{ "string_to_key",  &de5_string_to_key },
+	{ "set_odd_parity", &de5_set_odd_parity },
 	{ NULL,            NULL },
 };
 
