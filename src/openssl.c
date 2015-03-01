@@ -4537,7 +4537,7 @@ static int sx_setAlpnProtos(lua_State *L) {
 				return luaL_argerror(L, 2, "array of strings expected");
 		}
 		tmp = luaL_checklstring(L, -1, &len);
-		luaL_argcheck(L, len <= UCHAR_MAX, 2, "proto string too long");
+		luaL_argcheck(L, len > 0 && len <= UCHAR_MAX, 2, "proto string length invalid");
 		luaL_addchar(&B, (unsigned char)len);
 		luaL_addlstring(&B, tmp, len);
 		lua_pop(L, 1);
