@@ -4544,8 +4544,8 @@ static int sx_setAlpnProtos(lua_State *L) {
 	}
 done:
 	luaL_pushresult(&B);
-
-	if (0 != SSL_CTX_set_alpn_protos(ctx, (const unsigned char*)lua_tostring(L, -1), protos_len)) {
+	tmp = lua_tolstring(L, -1, &len);
+	if (0 != SSL_CTX_set_alpn_protos(ctx, (const unsigned char*)tmp, len)) {
 		lua_pushnil(L);
 		return 1;
 	}
