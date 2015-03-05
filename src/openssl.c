@@ -83,6 +83,14 @@
 #include "compat52.h"
 #endif
 
+#ifndef HAVE_SSL_CTX_SET_ALPN_PROTOS
+#define HAVE_SSL_CTX_SET_ALPN_PROTOS (OPENSSL_VERSION_NUMBER >= 0x1000200fL)
+#endif
+
+#ifndef HAVE_SSL_GET0_ALPN_SELECTED
+#define HAVE_SSL_GET0_ALPN_SELECTED HAVE_SSL_CTX_SET_ALPN_PROTOS
+#endif
+
 #define BIGNUM_CLASS     "BIGNUM*"
 #define PKEY_CLASS       "EVP_PKEY*"
 #define X509_NAME_CLASS  "X509_NAME*"
@@ -4516,6 +4524,7 @@ static int sx_setEphemeralKey(lua_State *L) {
 	return 1;
 } /* sx_setEphemeralKey() */
 
+#if HAVE_SSL_CTX_SET_ALPN_PROTOS
 static int sx_setAlpnProtos(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	size_t len;
@@ -4553,7 +4562,8 @@ done:
 	lua_pushboolean(L, 1);
 
 	return 1;
-} /* sx_setAlpnprotos */
+} /* sx_setAlpnProtos() */
+#endif
 
 static int sx__gc(lua_State *L) {
 	SSL_CTX **ud = luaL_checkudata(L, 1, SSL_CTX_CLASS);
@@ -4578,7 +4588,9 @@ static const luaL_Reg sx_methods[] = {
 	{ "setPrivateKey",    &sx_setPrivateKey },
 	{ "setCipherList",    &sx_setCipherList },
 	{ "setEphemeralKey",  &sx_setEphemeralKey },
+#if HAVE_SSL_CTX_SET_ALPN_PROTOS
 	{ "setAlpnProtos",    &sx_setAlpnProtos },
+#endif
 	{ NULL, NULL },
 };
 
@@ -4829,6 +4841,7 @@ static int ssl_getClientVersion(lua_State *L) {
 	return 1;
 } /* ssl_getClientVersion() */
 
+#if HAVE_SSL_GET0_ALPN_SELECTED
 static int ssl_getAlpnSelected(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	const unsigned char *data;
@@ -4840,7 +4853,8 @@ static int ssl_getAlpnSelected(lua_State *L) {
 		lua_pushlstring(L, (const char *)data, len);
 	}
 	return 1;
-} /*ssl_getAlpnSelected */
+} /* ssl_getAlpnSelected() */
+#endif
 
 static int ssl__gc(lua_State *L) {
 	SSL **ud = luaL_checkudata(L, 1, SSL_CLASS);
@@ -4865,7 +4879,9 @@ static const luaL_Reg ssl_methods[] = {
 	{ "setHostName",      &ssl_setHostName },
 	{ "getVersion",       &ssl_getVersion },
 	{ "getClientVersion", &ssl_getClientVersion },
+#if HAVE_SSL_GET0_ALPN_SELECTED
 	{ "getAlpnSelected",  &ssl_getAlpnSelected },
+#endif
 	{ NULL,            NULL },
 };
 
