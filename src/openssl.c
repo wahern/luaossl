@@ -4837,7 +4837,7 @@ static int ssl_getAlpnSelected(lua_State *L) {
 	if (0 == len) {
 		lua_pushnil(L);
 	} else {
-		lua_pushlstring(L, data, len);
+		lua_pushlstring(L, (const char *)data, len);
 	}
 	return 1;
 } /*ssl_getAlpnSelected */
