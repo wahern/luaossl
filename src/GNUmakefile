@@ -123,8 +123,15 @@ $$(DESTDIR)$(3)/openssl/%.lua: $$(d)/openssl.%.lua
 	$$(MKDIR) -p $$(@D)
 	$$(CP) -p $$< $$@
 
-$$(DESTDIR)$(3)/openssl/pubkey.lua: $$(DESTDIR)$(3)/openssl/pkey.lua
-	cd $$(@D) && $(LN_S) -f $$(<F) $$(@F)
+# pubkey.lua used to be symbolic link to pkey.lua, but that caused packaging
+# headaches. Now it's a stub, but the cp -p in the inference rule will copy
+# to the target of the symbolic link, so we need a special install rule to
+# clean up the mess.
+$$(DESTDIR)$(3)/openssl/pubkey.lua: $$(d)/openssl.pubkey.lua
+	$$(LUAC$(1)_$(d)) -p $$<
+	$$(MKDIR) -p $$(@D)
+	$$(RM) -f $$@
+	$$(CP) -p $$< $$@
 
 $$(DESTDIR)$(3)/openssl/x509/%.lua: $$(d)/openssl.x509.%.lua
 	$$(LUAC$(1)_$(d)) -p $$<
