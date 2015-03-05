@@ -747,8 +747,8 @@ name & \href{https://www.openssl.org/docs/ssl/SSL_CTX_set_options.html}{descript
 \small{\texttt{OP\_NO\_SSLv2}} & Do not use the SSLv2 protocol. \\
 \small{\texttt{OP\_NO\_SSLv3}} & Do not use the SSLv3 protocol. \\
 \small{\texttt{OP\_NO\_TLSv1}} & Do not use the TLSv1.0 protocol. \\
-\small{\texttt{OP\_NO\_TLSv1\_2}} & Do not use the TLSv1.1 protocol. \\
-\small{\texttt{OP\_NO\_TLSv1\_1}} & Do not use the TLSv1.2 protocol. \\
+\small{\texttt{OP\_NO\_TLSv1\_2}} & Do not use the TLSv1.2 protocol. \\
+\small{\texttt{OP\_NO\_TLSv1\_1}} & Do not use the TLSv1.1 protocol. \\
 \small{\texttt{OP\_NETSCAPE\_CA\_DN\_BUG}} & $\ldots$ \\
 \small{\texttt{OP\_NETSCAPE\_DEMO\_CIPHER\_CHANGE\_BUG}} & $\ldots$ \\
 \small{\texttt{OP\_CRYPTOPRO\_TLSEXT\_BUG}} & $\ldots$ \\
@@ -800,6 +800,12 @@ Sets \module{openssl.pkey} object $key$ as the ephemeral key during key exchange
 \emph{In order to configure an SSL server to support an ephemeral key exchange cipher suite (i.e. DHE-* and ECDHE-*), the application must explicitly set the ephemeral keys. Simply enabling the cipher suite is not sufficient. The application can statically generate Diffie-Hellman public key parameters, and many servers ship with such a key compiled into the software. Elliptic curve keys are necessarily static, and instantiated by curve name\footnote{\href{http://en.wikipedia.org/w/index.php?title=Comparison\_of\_TLS\_implementations&oldid=629779090\#Supported\_elliptic\_curves}{According to Wikipedia} the most widely supported curve is prime256v1, so to enable ECDHE-* applications can simply do \texttt{ctx:setEphemeralKey(pkey.new\{ type = ``EC'', curve = ``prime256v1'' \})}. To achieve Perfect Forward Secrecy for ECDHE-*, applications must also do \texttt{ctx:setOptions(context.OP\_SINGLE\_ECDH\_USE)}. The \texttt{ctx} object must then be used to configure each SSL session, such as by passing it to \fn{cqueues.socket:starttls()}.}.}
 
 \emph{In addition, to attain Perfect Forward Secrecy the options \texttt{OP\_SINGLE\_DH\_USE} and \texttt{OP\_SINGLE\_ECDH\_USE} must be set so that OpenSSL discards and regenerates the secret keying parameters for each key exchange.}
+
+\subsubsection[\fn{context:setAlpnProtos}]{\fn{context:setAlpnProtos($table$)}}
+
+Sets the advertised ALPN protocols. $table$ is an array of protocol string identifiers.
+
+\emph{Only supported since OpenSSL 1.0.2.}
 
 \end{Module}
 
@@ -875,6 +881,12 @@ TLS1\_2\_VERSION & 16-bit TLSv1.2 identifier (0x0303).  \\
 \subsubsection[\fn{ssl:getClientVersion}]{\fn{ssl:getClientVersion([$format$])}}
 
 Returns the SSL/TLS version supported by the client, which should be greater than or equal to the negotiated version. See \fn{ssl:getVersion}.
+
+\subsubsection[\fn{ssl:getAlpnSelected}]{\fn{ssl:getAlpnSelected()}}
+
+Returns the negotiated ALPN protocol as a string.
+
+\emph{Only supported since OpenSSL 1.0.2.}
 
 \end{Module}
 
