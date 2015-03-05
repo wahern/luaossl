@@ -4516,6 +4516,44 @@ static int sx_setEphemeralKey(lua_State *L) {
 	return 1;
 } /* sx_setEphemeralKey() */
 
+static int sx_setAlpnProtos(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	size_t len;
+	const char *tmp;
+	unsigned protos_len = 0;
+	luaL_Buffer B;
+	luaL_checktype(L, 2, LUA_TTABLE);
+	luaL_buffinit(L, &B);
+
+	while (1) {
+		protos_len++;
+		lua_rawgeti(L, 2, protos_len);
+		switch (lua_type(L, -1)) {
+			case LUA_TNIL:
+				goto done;
+			case LUA_TSTRING:
+				break;
+			default:
+				return luaL_argerror(L, 2, "array of strings expected");
+		}
+		tmp = luaL_checklstring(L, -1, &len);
+		luaL_argcheck(L, len > 0 && len <= UCHAR_MAX, 2, "proto string length invalid");
+		luaL_addchar(&B, (unsigned char)len);
+		luaL_addlstring(&B, tmp, len);
+		lua_pop(L, 1);
+	}
+done:
+	luaL_pushresult(&B);
+	tmp = lua_tolstring(L, -1, &len);
+	if (0 != SSL_CTX_set_alpn_protos(ctx, (const unsigned char*)tmp, len)) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_setAlpnprotos */
 
 static int sx__gc(lua_State *L) {
 	SSL_CTX **ud = luaL_checkudata(L, 1, SSL_CTX_CLASS);
@@ -4540,6 +4578,7 @@ static const luaL_Reg sx_methods[] = {
 	{ "setPrivateKey",    &sx_setPrivateKey },
 	{ "setCipherList",    &sx_setCipherList },
 	{ "setEphemeralKey",  &sx_setEphemeralKey },
+	{ "setAlpnProtos",    &sx_setAlpnProtos },
 	{ NULL, NULL },
 };
 
@@ -4790,6 +4829,18 @@ static int ssl_getClientVersion(lua_State *L) {
 	return 1;
 } /* ssl_getClientVersion() */
 
+static int ssl_getAlpnSelected(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	const unsigned char *data;
+	unsigned len;
+	SSL_get0_alpn_selected(ssl, &data, &len);
+	if (0 == len) {
+		lua_pushnil(L);
+	} else {
+		lua_pushlstring(L, data, len);
+	}
+	return 1;
+} /*ssl_getAlpnSelected */
 
 static int ssl__gc(lua_State *L) {
 	SSL **ud = luaL_checkudata(L, 1, SSL_CLASS);
@@ -4814,6 +4865,7 @@ static const luaL_Reg ssl_methods[] = {
 	{ "setHostName",      &ssl_setHostName },
 	{ "getVersion",       &ssl_getVersion },
 	{ "getClientVersion", &ssl_getClientVersion },
+	{ "getAlpnSelected",  &ssl_getAlpnSelected },
 	{ NULL,            NULL },
 };
 
