@@ -33,7 +33,7 @@
 #include <math.h>         /* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
 #include <time.h>         /* struct tm time_t strptime(3) time(2) */
 #include <ctype.h>        /* tolower(3) */
-#include <errno.h>        /* errno */
+#include <errno.h>        /* ENOMEM errno */
 
 #include <sys/types.h>    /* ssize_t pid_t */
 #if !defined __sun && !defined _AIX
@@ -4554,9 +4554,15 @@ static int sx_setAlpnProtos(lua_State *L) {
 done:
 	luaL_pushresult(&B);
 	tmp = lua_tolstring(L, -1, &len);
+
+	/* OpenSSL 1.0.2 doesn't update the error stack on failure. */
+	ERR_clear_error();
 	if (0 != SSL_CTX_set_alpn_protos(ctx, (const unsigned char*)tmp, len)) {
-		lua_pushnil(L);
-		return 1;
+		if (!ERR_peek_error()) {
+			return luaL_error(L, "unable to set ALPN protocols: %s", xstrerror(ENOMEM));
+		} else {
+			return throwssl(L, "ssl.context:setAlpnProtos");
+		}
 	}
 
 	lua_pushboolean(L, 1);
