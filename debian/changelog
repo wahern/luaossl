@@ -1,6 +1,12 @@
+liblua-openssl (20150304-0) unstable; urgency=low
+
+  * Merge ALPN support from quae@daurnimator.com.
+
+ -- William Ahern <william@25thandClement.com>  Wed, 04 Mar 2015 18:11:13 -0800
+
 liblua-openssl (20150225-0) unstable; urgency=low
 
-  * Add DES module to help implement NTLM authenticatin protocol.
+  * Add DES module to help implement NTLM authentication protocol.
 
  -- William Ahern <william@25thandClement.com>  Wed, 25 Feb 2015 12:46:41 -0800
 
