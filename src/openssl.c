@@ -95,6 +95,10 @@
 #define HAVE_SSL_GET0_ALPN_SELECTED HAVE_SSL_CTX_SET_ALPN_PROTOS
 #endif
 
+#ifndef STRERROR_R_CHAR_P
+#define STRERROR_R_CHAR_P (defined __GLIBC__ && (_GNU_SOURCE || !(_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600)))
+#endif
+
 #define BIGNUM_CLASS     "BIGNUM*"
 #define PKEY_CLASS       "EVP_PKEY*"
 #define X509_NAME_CLASS  "X509_NAME*"
@@ -178,8 +182,17 @@ static const char *xstrerror_r(int error, char *dst, size_t lim) {
 	static const char unknown[] = "Unknown error: ";
 	size_t n;
 
-	if (0 == strerror_r(error, dst, lim) && *dst != '\0')
+#if STRERROR_R_CHAR_P
+	char *rv = strerror_r(error, dst, lim);
+
+	if (rv != NULL)
 		return dst;
+#else
+	int rv = strerror_r(error, dst, lim);
+
+	if (0 == rv)
+		return dst;
+#endif
 
 	/*
 	 * glibc snprintf can fail on memory pressure, so format our number
