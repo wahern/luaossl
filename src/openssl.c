@@ -87,6 +87,10 @@
 #define HAVE_SSL_CTX_SET_ALPN_PROTOS (OPENSSL_VERSION_NUMBER >= 0x1000200fL)
 #endif
 
+#ifndef HAVE_SSL_CTX_SET_ALPN_SELECT_CB
+#define HAVE_SSL_CTX_SET_ALPN_SELECT_CB HAVE_SSL_CTX_SET_ALPN_PROTOS
+#endif
+
 #ifndef HAVE_SSL_SET_ALPN_PROTOS
 #define HAVE_SSL_SET_ALPN_PROTOS HAVE_SSL_CTX_SET_ALPN_PROTOS
 #endif
@@ -97,6 +101,25 @@
 
 #ifndef STRERROR_R_CHAR_P
 #define STRERROR_R_CHAR_P (defined __GLIBC__ && (_GNU_SOURCE || !(_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600)))
+#endif
+
+#ifndef LIST_HEAD
+#define LIST_HEAD(name, type) struct name { struct type *lh_first; }
+#define LIST_ENTRY(type) struct { struct type *le_next, **le_prev; }
+#define LIST_INIT(head) do { LIST_FIRST((head)) = NULL; } while (0)
+#define LIST_FIRST(head) ((head)->lh_first)
+#define LIST_NEXT(elm, field) ((elm)->field.le_next)
+#define LIST_REMOVE(elm, field) do { \
+	if (LIST_NEXT((elm), field) != NULL) \
+		LIST_NEXT((elm), field)->field.le_prev = (elm)->field.le_prev; \
+	*(elm)->field.le_prev = LIST_NEXT((elm), field); \
+} while (0)
+#define LIST_INSERT_HEAD(head, elm, field) do {
+	if ((LIST_NEXT((elm), field) = LIST_FIRST((head))) != NULL) \
+		LIST_FIRST((head))->field.le_prev = &LIST_NEXT((elm), field); \
+	LIST_FIRST((head)) = (elm); \
+	(elm)->field.le_prev = &LIST_FIRST((head)); \
+} while (0)
 #endif
 
 #define BIGNUM_CLASS     "BIGNUM*"
@@ -580,6 +603,173 @@ static void *compat_EVP_PKEY_get0(EVP_PKEY *key) {
 } /* compat_EVP_PKEY_get0() */
 #endif
 
+
+struct ex_state {
+	lua_State *mainthread;
+	LIST_HEAD(, ex_data) data;
+}; /* struct ex_state */
+
+struct ex_data {
+	struct ex_state *state;
+	int refs;
+	int arg[4];
+	LIST_ENTRY(ex_data) le;
+}; /* struct ex_data */
+
+enum {
+	EX_SSL_CTX_ALPN_SELECT_CB,
+};
+
+static struct ex_type {
+	int class_index;
+	int index;
+	void *(*get_ex_data)();
+	int (*set_ex_data)();
+} ex_type[] = {
+	[EX_SSL_CTX_ALPN_SELECT_CB] = { CRYPTO_EX_INDEX_SSL_CTX, -1, &SSL_CTX_get_ex_data, &SSL_CTX_set_ex_data },
+};
+
+static int ex_data_dup(CRYPTO_EX_DATA *to NOTUSED, CRYPTO_EX_DATA *from NOTUSED, void *from_d, int idx NOTUSED, long argl NOTUSED, void *argp NOTUSED) {
+	struct ex_data **data = from_d;
+
+	if (*data)
+		(*data)->refs++;
+
+	return 1;
+} /* ex_data_dup() */
+
+static void ex_data_free(void *parent NOTUSED, void *_data, CRYPTO_EX_DATA *ad NOTUSED, int idx NOTUSED, long argl NOTUSED, void *argp NOTUSED) {
+	struct ex_data *data = _data;
+
+	if (!data || --data->refs > 0)
+		return;
+
+	if (data->state)
+		LIST_REMOVE(data, le);
+
+	free(data);
+} /* ex_data_free() */
+
+static int ex_initonce(void) {
+	struct ex_type *type;
+
+	for (type = ex_type; type < endof(ex_type); type++) {
+		if (-1 == (type->index = CRYPTO_get_ex_new_index(type->class_index, 0, NULL, NULL, &ex_data_dup, &ex_data_free)))
+			return -1;
+	};
+
+	return 0;
+} /* ex_initonce() */
+
+static int ex__gc(lua_State *L) {
+	struct ex_state *state = lua_touserdata(L, 1);
+	struct ex_data *data;
+
+	if (!state)
+		return 0;
+
+	/* invalidate back references to Lua state */
+	for (data = LIST_FIRST(&state->data); data; data = LIST_NEXT(data, le)) {
+		data->state = NULL;
+	}
+
+	return 0;
+} /* ex__gc() */
+
+static void ex_init(lua_State *L) {
+	struct ex_state *state;
+	struct lua_State *thr;
+
+	state = prepudata(L, sizeof *state, NULL, &ex__gc);
+	LIST_INIT(&state->data);
+
+#if defined LUA_RIDX_MAINTHREAD
+	lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
+	state->mainthread = lua_tothread(L, -1);
+	lua_pop(L, 1);
+#else
+	lua_pushvalue(L, -1);
+	thr = lua_newthread(L);
+	lua_settable(L, LUA_REGISTRYINDEX);
+	state->mainthread = thr;
+#endif
+
+	lua_pushcfunction(L, &ex__gc);
+	lua_pushvalue(L, -2);
+	lua_settable(L, LUA_REGISTRYINDEX);
+
+	lua_pop(L, 1);
+} /* ex_init() */
+
+static struct ex_state *ex_get(lua_State *L) {
+	struct ex_state *state;
+
+	lua_pushcfunction(L, &ex__gc);
+	lua_gettable(L, LUA_REGISTRYINDEX);
+
+	luaL_checktype(L, -1, LUA_TUSERDATA);
+	state = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	return state;
+} /* ex_get() */
+
+static int ex_data_get(lua_State **L, int _type, void *obj) {
+	struct ex_type *type = &ex_type[_type];
+	struct ex_data *data;
+	int i;
+
+	if (!(data = type->get_ex_data(obj, type->index)))
+		return 0;
+	if (!data->state)
+		return 0;
+
+	if (!*L)
+		*L = data->state->mainthread;
+
+	for (i = 0; i < (int)countof(data->arg); i++) {
+		lua_rawgeti(*L, LUA_REGISTRYINDEX, data->arg[i]);
+	}
+
+	return i;
+} /* ex_data_get() */
+
+static int ex_data_set(lua_State *L, int _type, void *obj, int n) {
+	struct ex_type *type = &ex_type[_type];
+	struct ex_state *state;
+	struct ex_data *data;
+	int i, j;
+
+	if ((data = type->get_ex_data(obj, type->index)) && data->state) {
+		for (i = 0; i < (int)countof(data->arg); i++) {
+			luaL_unref(L, LUA_REGISTRYINDEX, data->arg[i]);
+			data->arg[i] = LUA_NOREF;
+		}
+	} else {
+		state = ex_get(L);
+
+		if (!(data = malloc(sizeof *data)))
+			return errno;
+
+		if (!type->set_ex_data(obj, type->index, data))
+			return -1;
+
+		data->state = state;
+		data->refs = 1;
+		for (i = 0; i < (int)countof(data->arg); i++)
+			data->arg[i] = LUA_NOREF;
+		LIST_INSERT_HEAD(&state->data, data, le);
+	}
+
+	for (i = n, j = 0; i > 0 && j < (int)countof(data->arg); i--, j++) {
+		lua_pushvalue(L, -i);
+		data->arg[j] = luaL_ref(L, LUA_REGISTRYINDEX);
+	}
+
+	lua_pop(L, n);
+
+	return 0;
+} /* ex_data_set() */
 
 static void initall(lua_State *L);
 
@@ -4609,6 +4799,32 @@ static int sx_setAlpnProtos(lua_State *L) {
 } /* sx_setAlpnProtos() */
 #endif
 
+#if HAVE_SSL_CTX_SET_ALPN_SELECT_CB
+static int sx_setAlpnSelect_cb(SSL *ssl, const unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *arg) {
+	lua_State *L = NULL;
+	int n;
+
+	n = ex_data_get(&L, EX_SSL_CTX_ALPN_SELECT_CB, ssl);
+
+	return 0;
+} /* sx_setAlpnSelect_cb() */
+
+static int sx_setAlpnSelect(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	struct ex_data *data;
+	int error;
+
+	luaL_checktype(L, 2, LUA_TFUNCTION);
+	error = ex_data_set(L, EX_SSL_CTX_ALPN_SELECT_CB, ctx, 1);
+
+	SSL_CTX_set_alpn_select_cb(ctx, &sx_setAlpnSelect_cb, NULL);
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_setAlpnSelect() */
+#endif
+
 
 static int sx__gc(lua_State *L) {
 	SSL_CTX **ud = luaL_checkudata(L, 1, SSL_CTX_CLASS);
@@ -5803,7 +6019,7 @@ int luaopen__openssl_des(lua_State *L) {
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #ifndef HAVE_DLADDR
-#define HAVE_DLADDR (!defined _AIX)
+#define HAVE_DLADDR (!defined _AIX) /* TODO: https://root.cern.ch/drupal/content/aix-and-dladdr */
 #endif
 
 static struct {
@@ -5847,8 +6063,8 @@ static unsigned long mt_gettid(void) {
 	return _lwp_self();
 #else
 	/*
-	 * pthread_t is an integer on Solaris and Linux, and a unique pointer
-	 * on OpenBSD.
+	 * pthread_t is an integer on Solaris and Linux, an unsigned integer
+	 * on AIX, and a unique pointer on OpenBSD.
 	 */
 	return (unsigned long)pthread_self();
 #endif
@@ -5940,9 +6156,19 @@ static void initall(lua_State *L) {
 		 * already been configured.
 		 */
 		OPENSSL_config(NULL);
+
+		if ((error = ex_initonce())) {
+			if (error == -1) {
+				throwssl(L, "openssl.init");
+			} else {
+				luaL_error(L, "openssl.init: %s", xstrerror(error));
+			}
+		}
 	}
 
 	pthread_mutex_unlock(&mutex);
+
+	ex_init(L);
 
 	addclass(L, BIGNUM_CLASS, bn_methods, bn_metatable);
 	addclass(L, PKEY_CLASS, pk_methods, pk_metatable);
