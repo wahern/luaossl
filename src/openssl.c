@@ -23,9 +23,6 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.
  * ==========================================================================
  */
-#ifndef LUAOSSL_H
-#define LUAOSSL_H
-
 #include <limits.h>       /* INT_MAX INT_MIN UCHAR_MAX */
 #include <stdint.h>       /* uintptr_t */
 #include <string.h>       /* memset(3) strerror_r(3) */
@@ -33,8 +30,7 @@
 #include <math.h>         /* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
 #include <time.h>         /* struct tm time_t strptime(3) time(2) */
 #include <ctype.h>        /* tolower(3) */
-#include <signal.h>       /* sig_atomic_t */
-#include <errno.h>        /* ENOMEM errno */
+#include <errno.h>        /* ENOMEM ENOTSUP errno */
 #include <assert.h>       /* assert */
 
 #include <sys/types.h>    /* ssize_t pid_t */
@@ -78,6 +74,10 @@
 
 #if LUA_VERSION_NUM < 502
 #include "compat52.h"
+#endif
+
+#ifndef HAVE_DLADDR
+#define HAVE_DLADDR (!defined _AIX) /* TODO: https://root.cern.ch/drupal/content/aix-and-dladdr */
 #endif
 
 #ifndef HAVE_SSL_CTX_SET_ALPN_PROTOS
@@ -573,6 +573,83 @@ static void lib_setintegers(lua_State *L, const integer_Reg *l) {
 } /* lib_setintegers() */
 
 
+/*
+ * Auxiliary Lua API routines
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+typedef int auxref_t;
+typedef int auxtype_t;
+
+static void auxL_unref(lua_State *L, auxref_t *ref) {
+	luaL_unref(L, LUA_REGISTRYINDEX, *ref);
+	*ref = LUA_NOREF;
+} /* auxL_unref() */
+
+static void auxL_ref(lua_State *L, int index, auxref_t *ref) {
+	auxL_unref(L, ref);
+	lua_pushvalue(L, index);
+	*ref = luaL_ref(L, LUA_REGISTRYINDEX);
+} /* auxL_ref() */
+
+static auxtype_t auxL_getref(lua_State *L, auxref_t ref) {
+	if (ref == LUA_NOREF || ref == LUA_REFNIL) {
+		lua_pushnil(L);
+	} else {
+		lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+	}
+
+	return lua_type(L, -1);
+} /* auxL_getref() */
+
+
+/*
+ * dl - dynamically loaded module management
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+/*
+ * Prevent loader from unlinking us if we've registered a callback with
+ * OpenSSL by taking another reference to ourselves.
+ */
+static int dl_anchor(void) {
+#if HAVE_DLADDR
+	extern int luaopen__openssl(lua_State *);
+	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	static void *anchor;
+	Dl_info info;
+	int error = 0;
+
+	if ((error = pthread_mutex_lock(&mutex)))
+		return error;
+
+	if (anchor)
+		goto epilog;
+
+	if (!dladdr((void *)&luaopen__openssl, &info))
+		goto dlerr;
+
+	if (!(anchor = dlopen(info.dli_fname, RTLD_NOW|RTLD_LOCAL)))
+		goto dlerr;
+epilog:
+	(void)pthread_mutex_unlock(&mutex);
+
+	return error;
+dlerr:
+	error = -2;
+
+	goto epilog;
+#else
+	return 0;//ENOTSUP;
+#endif
+} /* dl_anchor() */
+
+
+/*
+ * compat - OpenSSL API compatibility and bug workarounds
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
 #define COMPAT_X509_STORE_FREE_BUG 0x01
 
 static struct {
@@ -632,7 +709,9 @@ static void *compat_EVP_PKEY_get0(EVP_PKEY *key) {
 } /* compat_EVP_PKEY_get0() */
 #endif
 
-/* X509_STORE_free in OpenSSL versions < 1.0.2 doesn't obey reference count */
+/*
+ * X509_STORE_free in OpenSSL versions < 1.0.2 doesn't obey reference count
+ */
 #define X509_STORE_free(store) \
 	(compat.X509_STORE_free)((store))
 
@@ -672,14 +751,14 @@ static void compat_SSL_CTX_set1_cert_store(SSL_CTX *ctx, X509_STORE *store) {
 } /* compat_SSL_CTX_set1_cert_store() */
 #endif
 
-static void compat_SSL_CTX_onfree(void *_ctx, void *data NOTUSED, CRYPTO_EX_DATA *ad NOTUSED, int idx NOTUSED, long argl NOTUSED, void *argp NOTUSED) {
+static void compat_init_SSL_CTX_onfree(void *_ctx, void *data NOTUSED, CRYPTO_EX_DATA *ad NOTUSED, int idx NOTUSED, long argl NOTUSED, void *argp NOTUSED) {
 	SSL_CTX *ctx = _ctx;
 
 	if (ctx->cert_store) {
 		X509_STORE_free(ctx->cert_store);
 		ctx->cert_store = NULL;
 	}
-} /* compat_SSL_CTX_onfree() */
+} /* compat_init_SSL_CTX_onfree() */
 
 /* helper routine to determine if X509_STORE_free obeys reference count */
 static void compat_init_X509_STORE_onfree(void *store, void *data NOTUSED, CRYPTO_EX_DATA *ad NOTUSED, int idx NOTUSED, long argl NOTUSED, void *argp NOTUSED) {
@@ -693,90 +772,89 @@ static void compat_init_X509_STORE_onfree(void *store, void *data NOTUSED, CRYPT
 
 static int compat_init(void) {
 	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-	static volatile sig_atomic_t done;
-	int error;
+	static int store_index = -1, ssl_ctx_index = -1, done;
+	X509_STORE *store;
+	int error = 0;
 
 	if ((error = pthread_mutex_lock(&mutex)))
 		return error;
 
-	if (!done) {
+	if (done)
+		goto epilog;
+
+	/*
+	 * We need to unconditionally install at least one external
+	 * application data callback. Because these can never be
+	 * uninstalled, we can never be unloaded.
+	 */
+	if ((error = dl_anchor()))
+		goto epilog;
+
+	/*
+	 * Test if X509_STORE_free obeys reference counts by installing an
+	 * onfree callback.
+	 */
+	if (store_index == -1
+	&&  -1 == (store_index = CRYPTO_get_ex_new_index(CRYPTO_EX_INDEX_X509_STORE, 0, NULL, NULL, NULL, &compat_init_X509_STORE_onfree)))
+		goto sslerr;
+
+	if (!(compat.tmp.store = X509_STORE_new()))
+		goto sslerr;
+
+	CRYPTO_add(&compat.tmp.store->references, 1, CRYPTO_LOCK_X509_STORE);
+	X509_STORE_free(compat.tmp.store);
+
+	if (compat.tmp.store) {
 		/*
-		 * Test if X509_STORE_free obeys reference counts.
+		 * Because our onfree callback didn't execute, we assume
+		 * X509_STORE_free obeys reference counts. Alternatively,
+		 * our callback might not have executed for some other
+		 * reason. We assert the truth of our assumption by checking
+		 * again after calling X509_STORE_free once more.
 		 */
-		if (-1 == CRYPTO_get_ex_new_index(CRYPTO_EX_INDEX_X509_STORE, 0, NULL, NULL, NULL, &compat_init_X509_STORE_onfree))
-			goto sslerr;
-
-		if (!(compat.tmp.store = X509_STORE_new()))
-			goto sslerr;
-
-		CRYPTO_add(&compat.tmp.store->references, 1, CRYPTO_LOCK_X509_STORE);
 		X509_STORE_free(compat.tmp.store);
+		assert(compat.tmp.store == NULL);
+		compat.tmp.store = NULL; /* in case assertions disabled */
+	} else {
+		/*
+		 * Because our onfree callback was invoked, X509_STORE_free
+		 * appears not to obey reference counts. Ensure that our
+		 * fixed version is called on SSL_CTX destruction.
+		 *
+		 * NB: We depend on the coincidental order of operations in
+		 * SSL_CTX_free that user data destruction occurs before
+		 * free'ing the cert_store member. Ruby's OpenSSL bindings
+		 * also depend on this order as we both use the onfree
+		 * callback to clear the member.
+		 */
+		if (ssl_ctx_index == -1
+		&&  -1 == (ssl_ctx_index = CRYPTO_get_ex_new_index(CRYPTO_EX_INDEX_SSL_CTX, 0, NULL, NULL, NULL, &compat_init_SSL_CTX_onfree)))
+			goto sslerr;
 
-		if (compat.tmp.store) {
-			X509_STORE_free(compat.tmp.store);
-			assert(compat.tmp.store == NULL);
-			compat.tmp.store = NULL;
-		} else {
-			/*
-			 * If X509_STORE_free does NOT obey reference
-			 * counts, then make sure that our fixed version is
-			 * called on SSL_CTX destruction. Note that this
-			 * won't fix code which doesn't properly obey the
-			 * reference counts when setting the cert_store
-			 * member.
-			 */
-			if (-1 == CRYPTO_get_ex_new_index(CRYPTO_EX_INDEX_SSL_CTX, 0, NULL, NULL, NULL, &compat_SSL_CTX_onfree))
-				goto sslerr;
-
-			compat.flags |= COMPAT_X509_STORE_FREE_BUG;
-		}
-
-		done = 1;
+		compat.flags |= COMPAT_X509_STORE_FREE_BUG;
 	}
+
+	done = 1;
 epilog:
 	if (compat.tmp.store) {
 		X509_STORE_free(compat.tmp.store);
 		compat.tmp.store = NULL;
 	}
 
-	pthread_mutex_unlock(&mutex);
+	(void)pthread_mutex_unlock(&mutex);
 
-	return 0;
+	return error;
 sslerr:
 	error = -1;
-
-	goto epilog;
-syserr:
-	error = errno;
 
 	goto epilog;
 } /* compat_init() */
 
 
-typedef int auxref_t;
-typedef int auxtype_t;
-
-static void auxL_unref(lua_State *L, auxref_t *ref) {
-	luaL_unref(L, LUA_REGISTRYINDEX, *ref);
-	*ref = LUA_NOREF;
-} /* auxL_unref() */
-
-static void auxL_ref(lua_State *L, int index, auxref_t *ref) {
-	auxL_unref(L, ref);
-	lua_pushvalue(L, index);
-	*ref = luaL_ref(L, LUA_REGISTRYINDEX);
-} /* auxL_ref() */
-
-static auxtype_t auxL_getref(lua_State *L, auxref_t ref) {
-	if (ref == LUA_NOREF || ref == LUA_REFNIL) {
-		lua_pushnil(L);
-	} else {
-		lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
-	}
-
-	return lua_type(L, -1);
-} /* auxL_getref() */
-
+/*
+ * External Application Data Hooks
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 struct ex_state {
 	lua_State *L;
@@ -835,16 +913,43 @@ static void ex_onfree(void *parent NOTUSED, void *_data, CRYPTO_EX_DATA *ad NOTU
 	free(data);
 } /* ex_onfree() */
 
-static int ex_initonce(void) {
+static int ex_init(void) {
+	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	static int done;
 	struct ex_type *type;
+	int error = 0;
+
+	if ((error = pthread_mutex_lock(&mutex)))
+		return error;
+
+	if (done)
+		goto epilog;
+
+	/*
+	 * Our callbacks can never be uninstalled, so ensure we're never
+	 * unloaded.
+	 */
+	if ((error = dl_anchor()))
+		goto epilog;
 
 	for (type = ex_type; type < endof(ex_type); type++) {
+		if (type->index != -1)
+			continue;
+
 		if (-1 == (type->index = CRYPTO_get_ex_new_index(type->class_index, 0, NULL, NULL, &ex_ondup, &ex_onfree)))
-			return -1;
+			goto sslerr;
 	};
 
-	return 0;
-} /* ex_initonce() */
+	done = 1;
+epilog:
+	(void)pthread_mutex_unlock(&mutex);
+
+	return error;
+sslerr:
+	error = -1;
+
+	goto epilog;
+} /* ex_init() */
 
 static int ex__gc(lua_State *L) {
 	struct ex_state *state = lua_touserdata(L, 1);
@@ -964,6 +1069,25 @@ static int ex_setdata(lua_State *L, int _type, void *obj, size_t n) {
 } /* ex_setdata() */
 
 static void initall(lua_State *L);
+
+
+/*
+ * compat - Lua OpenSSL
+ *
+ * Bindings to our internal feature detection, compatability, and workaround
+ * code.
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+int luaopen__openssl_compat(lua_State *L) {
+	initall(L);
+
+	lua_newtable(L);
+	lua_pushboolean(L, !!(compat.flags & COMPAT_X509_STORE_FREE_BUG));
+	lua_setfield(L, -2, "X509_STORE_FREE_BUG");
+
+	return 1;
+} /* luaopen__openssl_compat() */
 
 
 /*
@@ -6257,17 +6381,10 @@ int luaopen__openssl_des(lua_State *L) {
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-#ifndef HAVE_DLADDR
-#define HAVE_DLADDR (!defined _AIX) /* TODO: https://root.cern.ch/drupal/content/aix-and-dladdr */
-#endif
-
 static struct {
 	pthread_mutex_t *lock;
 	int nlock;
-
-	void *dlref;
 } mt_state;
-
 
 static void mt_lock(int mode, int type, const char *file NOTUSED, int line NOTUSED) {
 	if (mode & CRYPTO_LOCK)
@@ -6275,7 +6392,6 @@ static void mt_lock(int mode, int type, const char *file NOTUSED, int line NOTUS
 	else
 		pthread_mutex_unlock(&mt_state.lock[type]);
 } /* mt_lock() */
-
 
 /*
  * Sources include Google and especially the Wine Project. See get_unix_tid
@@ -6309,12 +6425,16 @@ static unsigned long mt_gettid(void) {
 #endif
 } /* mt_gettid() */
 
-
 static int mt_init(void) {
 	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-	int bound = 0, error = 0;
+	static int done, bound;
+	int error = 0;
 
-	pthread_mutex_lock(&mutex);
+	if ((error = pthread_mutex_lock(&mutex)))
+		return error;
+
+	if (done)
+		goto epilog;
 
 	if (!CRYPTO_get_locking_callback()) {
 		if (!mt_state.lock) {
@@ -6324,11 +6444,20 @@ static int mt_init(void) {
 		
 			if (!(mt_state.lock = malloc(mt_state.nlock * sizeof *mt_state.lock))) {
 				error = errno;
-				goto leave;
+				goto epilog;
 			}
 
 			for (i = 0; i < mt_state.nlock; i++) {
-				pthread_mutex_init(&mt_state.lock[i], NULL);
+				if ((error = pthread_mutex_init(&mt_state.lock[i], NULL))) {
+					while (i > 0) {
+						pthread_mutex_destroy(&mt_state.lock[--i]);
+					}
+
+					free(mt_state.lock);
+					mt_state.lock = NULL;
+
+					goto epilog;
+				}
 			}
 		}
 
@@ -6341,27 +6470,11 @@ static int mt_init(void) {
 		bound = 1;
 	}
 
-	/*
-	 * Prevent loader from unlinking us if we've registered a callback
-	 * with OpenSSL by taking another reference to ourselves.
-	 */
-#if HAVE_DLADDR
-	if (bound && !mt_state.dlref) {
-		Dl_info info;
+	if (bound && (error = dl_anchor()))
+		goto epilog;
 
-		if (!dladdr((void *)&luaopen__openssl_rand, &info)) {
-			error = -1;
-			goto leave;
-		}
-
-		if (!(mt_state.dlref = dlopen(info.dli_fname, RTLD_NOW|RTLD_LOCAL))) {
-			error = -1;
-			goto leave;
-		}
-	}
-#endif
-
-leave:
+	done = 1;
+epilog:
 	pthread_mutex_unlock(&mutex);
 
 	return error;
@@ -6381,15 +6494,6 @@ static void initall(lua_State *L) {
 		}
 	}
 
-	/* TODO: Move down to after SSL_load_error_strings */
-	if ((error = compat_init())) {
-		if (error == -1) {
-			throwssl(L, "openssl.init");
-		} else {
-			luaL_error(L, "openssl.init: %s", xstrerror(error));
-		}
-	}
-
 	pthread_mutex_lock(&mutex);
 
 	if (!initssl) {
@@ -6404,17 +6508,25 @@ static void initall(lua_State *L) {
 		 * already been configured.
 		 */
 		OPENSSL_config(NULL);
-
-		if ((error = ex_initonce())) {
-			if (error == -1) {
-				throwssl(L, "openssl.init");
-			} else {
-				luaL_error(L, "openssl.init: %s", xstrerror(error));
-			}
-		}
 	}
 
 	pthread_mutex_unlock(&mutex);
+
+	if ((error = compat_init())) {
+		if (error == -1) {
+			throwssl(L, "openssl.init");
+		} else {
+			luaL_error(L, "openssl.init: %s", xstrerror(error));
+		}
+	}
+
+	if ((error = ex_init())) {
+		if (error == -1) {
+			throwssl(L, "openssl.init");
+		} else {
+			luaL_error(L, "openssl.init: %s", xstrerror(error));
+		}
+	}
 
 	ex_newstate(L);
 
@@ -6436,5 +6548,3 @@ static void initall(lua_State *L) {
 	addclass(L, CIPHER_CLASS, cipher_methods, cipher_metatable);
 } /* initall() */
 
-
-#endif /* LUAOSSL_H */
