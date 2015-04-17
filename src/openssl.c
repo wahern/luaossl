@@ -196,35 +196,6 @@ static const char *xitoa(char *dst, size_t lim, long i) {
 } /* xitoa() */
 
 
-#define xstrerror(error) xstrerror_r((error), (char[256]){ 0 }, 256)
-
-static const char *xstrerror_r(int error, char *dst, size_t lim) {
-	static const char unknown[] = "Unknown error: ";
-	size_t n;
-
-#if STRERROR_R_CHAR_P
-	char *rv = strerror_r(error, dst, lim);
-
-	if (rv != NULL)
-		return dst;
-#else
-	int rv = strerror_r(error, dst, lim);
-
-	if (0 == rv)
-		return dst;
-#endif
-
-	/*
-	 * glibc snprintf can fail on memory pressure, so format our number
-	 * manually.
-	 */
-	n = MIN(sizeof unknown - 1, lim);
-	memcpy(dst, unknown, n);
-
-	return xitoa(&dst[n], lim - n, error);
-} /* xstrerror_r() */
-
-
 static void *prepudata(lua_State *L, size_t size, const char *tname, int (*gc)(lua_State *)) {
 	void *p = memset(lua_newuserdata(L, size), 0, size);
 
@@ -276,40 +247,6 @@ static void *testsimple(lua_State *L, int index, const char *tname) {
 
 	return (p)? *p : (void *)0;
 } /* testsimple() */
-
-
-static const char *pusherror(lua_State *L, const char *fun) {
-	unsigned long code;
-	const char *path, *file;
-	int line;
-	char txt[256];
-
-	if (!ERR_peek_error())
-		return lua_pushstring(L, "oops: no OpenSSL errors set");
-
-	code = ERR_get_error_line(&path, &line);
-
-	if ((file = strrchr(path, '/')))
-		++file;
-	else
-		file = path;
-
-	ERR_clear_error();
-
-	ERR_error_string_n(code, txt, sizeof txt);
-
-	if (fun)
-		return lua_pushfstring(L, "%s: %s:%d:%s", fun, file, line, txt);
-	else
-		return lua_pushfstring(L, "%s:%d:%s", file, line, txt);
-} /* pusherror() */
-
-
-static int throwssl(lua_State *L, const char *fun) {
-	pusherror(L, fun);
-
-	return lua_error(L);
-} /* throwssl() */
 
 
 static int interpose(lua_State *L, const char *mt) {
@@ -510,67 +447,37 @@ static const char *pushnid(lua_State *L, int nid) {
 
 
 /*
- * Lua 5.3 distinguishes integers and numbers, and by default uses 64-bit
- * integers. The following routines try to preserve this distinction and
- * where possible detect range issues.
+ * Auxiliary C routines
  *
- * The signed range checking assumes two's complement, no padding bits, and
- * sizeof lua_Integer <= sizeof long long. Which is a safe bet where OpenSSL
- * is typically used.
- */
-#define lib_Integer long long
-#define lib_Unsigned unsigned long long
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-#define lua_IntegerMax ((1ULL << (sizeof (lua_Integer) * 8 - 1)) - 1)
-#define lua_IntegerMin (-lua_IntegerMax - 1)
+#define aux_strerror(error) aux_strerror_r((error), (char[256]){ 0 }, 256)
 
+static const char *aux_strerror_r(int error, char *dst, size_t lim) {
+	static const char unknown[] = "Unknown error: ";
+	size_t n;
 
-static void lib_pushinteger(lua_State *L, lib_Integer i) {
+#if STRERROR_R_CHAR_P
+	char *rv = strerror_r(error, dst, lim);
+
+	if (rv != NULL)
+		return dst;
+#else
+	int rv = strerror_r(error, dst, lim);
+
+	if (0 == rv)
+		return dst;
+#endif
+
 	/*
-	 * TODO: Check value explicitly, but will need to silence compiler
-	 * diagnostics about useless comparisons.
+	 * glibc snprintf can fail on memory pressure, so format our number
+	 * manually.
 	 */
-	if (sizeof (lua_Integer) >= sizeof i) {
-		lua_pushinteger(L, i);
-	} else {
-		/* TODO: Check overflow. */
-		lua_pushnumber(L, i);
-	}
-} /* lib_pushinteger() */
+	n = MIN(sizeof unknown - 1, lim);
+	memcpy(dst, unknown, n);
 
-
-NOTUSED static void lib_pushunsigned(lua_State *L, lib_Unsigned i) {
-	if (i <= lua_IntegerMax) {
-		lua_pushinteger(L, i);
-	} else if (i == (lib_Unsigned)(lua_Number)i) {
-		lua_pushnumber(L, i);
-	} else {
-		luaL_error(L, "unsigned integer value not representable as lua_Integer or lua_Number");
-	}
-} /* lib_pushunsigned() */
-
-
-static lib_Integer lib_checkinteger(lua_State *L, int index) {
-	if (sizeof (lua_Integer) >= sizeof (lib_Integer)) {
-		return luaL_checkinteger(L, index);
-	} else {
-		/* TODO: Check overflow. */
-		return (lib_Integer)luaL_checknumber(L, index);
-	}
-} /* lib_checkinteger() */
-
-
-typedef struct {
-	const char *name;
-	lib_Integer value;
-} integer_Reg;
-
-static void lib_setintegers(lua_State *L, const integer_Reg *l) {
-	for (; l->name; l++) {
-		lib_pushinteger(L, l->value);
-		lua_setfield(L, -2, l->name);
-	}
-} /* lib_setintegers() */
+	return xitoa(&dst[n], lim - n, error);
+} /* aux_strerror_r() */
 
 
 /*
@@ -601,6 +508,112 @@ static auxtype_t auxL_getref(lua_State *L, auxref_t ref) {
 
 	return lua_type(L, -1);
 } /* auxL_getref() */
+
+/*
+ * Lua 5.3 distinguishes integers and numbers, and by default uses 64-bit
+ * integers. The following routines try to preserve this distinction and
+ * where possible detect range issues.
+ *
+ * The signed range checking assumes two's complement, no padding bits, and
+ * sizeof lua_Integer <= sizeof long long. Which is a safe bet where OpenSSL
+ * is typically used.
+ */
+#define auxL_Integer long long
+#define auxL_Unsigned unsigned long long
+
+#define lua_IntegerMax ((1ULL << (sizeof (lua_Integer) * 8 - 1)) - 1)
+#define lua_IntegerMin (-lua_IntegerMax - 1)
+
+static void auxL_pushinteger(lua_State *L, auxL_Integer i) {
+	/*
+	 * TODO: Check value explicitly, but will need to silence compiler
+	 * diagnostics about useless comparisons.
+	 */
+	if (sizeof (lua_Integer) >= sizeof i) {
+		lua_pushinteger(L, i);
+	} else {
+		/* TODO: Check overflow. */
+		lua_pushnumber(L, i);
+	}
+} /* auxL_pushinteger() */
+
+NOTUSED static void auxL_pushunsigned(lua_State *L, auxL_Unsigned i) {
+	if (i <= lua_IntegerMax) {
+		lua_pushinteger(L, i);
+	} else if (i == (auxL_Unsigned)(lua_Number)i) {
+		lua_pushnumber(L, i);
+	} else {
+		luaL_error(L, "unsigned integer value not representable as lua_Integer or lua_Number");
+	}
+} /* auxL_pushunsigned() */
+
+static auxL_Integer auxL_checkinteger(lua_State *L, int index) {
+	if (sizeof (lua_Integer) >= sizeof (auxL_Integer)) {
+		return luaL_checkinteger(L, index);
+	} else {
+		/* TODO: Check overflow. */
+		return (auxL_Integer)luaL_checknumber(L, index);
+	}
+} /* auxL_checkinteger() */
+
+typedef struct {
+	const char *name;
+	auxL_Integer value;
+} auxL_IntegerReg;
+
+static void auxL_setintegers(lua_State *L, const auxL_IntegerReg *l) {
+	for (; l->name; l++) {
+		auxL_pushinteger(L, l->value);
+		lua_setfield(L, -2, l->name);
+	}
+} /* auxL_setintegers() */
+
+#define auxL_EDYLD -2
+#define auxL_EOPENSSL -1
+
+static const char *auxL_pusherror(lua_State *L, int error, const char *fun) {
+	if (error == auxL_EOPENSSL) {
+		unsigned long code;
+		const char *path, *file;
+		int line;
+		char txt[256];
+
+		if (!ERR_peek_error())
+			return lua_pushstring(L, "oops: no OpenSSL errors set");
+
+		code = ERR_get_error_line(&path, &line);
+
+		if ((file = strrchr(path, '/'))) {
+			++file;
+		} else {
+			file = path;
+		}
+
+		ERR_clear_error();
+
+		ERR_error_string_n(code, txt, sizeof txt);
+
+		if (fun) {
+			return lua_pushfstring(L, "%s: %s:%d:%s", fun, file, line, txt);
+		} else {
+			return lua_pushfstring(L, "%s:%d:%s", file, line, txt);
+		}
+	} else if (error == auxL_EDYLD) {
+		const char *const fmt = (fun)? "%s: %s" : "%.0s%s";
+
+		return lua_pushfstring(L, fmt, (fun)? fun : "", dlerror());
+	} else {
+		const char *const fmt = (fun)? "%s: %s" : "%.0s%s";
+
+		return lua_pushfstring(L, fmt, (fun)? fun : "", aux_strerror(error));
+	}
+} /* auxL_pusherror() */
+
+static int auxL_error(lua_State *L, int error, const char *fun) {
+	auxL_pusherror(L, error, fun);
+
+	return lua_error(L);
+} /* auxL_error() */
 
 
 /*
@@ -636,7 +649,7 @@ epilog:
 
 	return error;
 dlerr:
-	error = -2;
+	error = auxL_EDYLD;
 
 	goto epilog;
 #else
@@ -845,7 +858,7 @@ epilog:
 
 	return error;
 sslerr:
-	error = -1;
+	error = auxL_EOPENSSL;
 
 	goto epilog;
 } /* compat_init() */
@@ -946,7 +959,7 @@ epilog:
 
 	return error;
 sslerr:
-	error = -1;
+	error = auxL_EOPENSSL;
 
 	goto epilog;
 } /* ex_init() */
@@ -1249,7 +1262,7 @@ int luaopen__openssl(lua_State *L) {
 		}
 	}
 
-	lib_pushinteger(L, OPENSSL_VERSION_NUMBER);
+	auxL_pushinteger(L, OPENSSL_VERSION_NUMBER);
 	lua_setfield(L, -2, "VERSION_NUMBER");
 
 	lua_pushstring(L, OPENSSL_VERSION_TEXT);
@@ -1274,7 +1287,7 @@ static BIGNUM *bn_push(lua_State *L) {
 	BIGNUM **ud = prepsimple(L, BIGNUM_CLASS);
 
 	if (!(*ud = BN_new()))
-		throwssl(L, "bignum.new");
+		auxL_error(L, auxL_EOPENSSL, "bignum.new");
 
 	return *ud;
 } /* bn_push() */
@@ -1392,7 +1405,7 @@ static BIGNUM *(checkbig)(lua_State *L, int index, _Bool *lvalue) {
 		bn = prepsimple(L, BIGNUM_CLASS);
 
 		if (!BN_dec2bn(bn, dec))
-			throwssl(L, "bignum");
+			auxL_error(L, auxL_EOPENSSL, "bignum");
 
 		lua_replace(L, index);
 
@@ -1403,7 +1416,7 @@ static BIGNUM *(checkbig)(lua_State *L, int index, _Bool *lvalue) {
 		bn = prepsimple(L, BIGNUM_CLASS);
 
 		if (!f2bn(bn, lua_tonumber(L, index)))
-			throwssl(L, "bignum");
+			auxL_error(L, auxL_EOPENSSL, "bignum");
 
 		lua_replace(L, index);
 
@@ -1461,7 +1474,7 @@ static BN_CTX *getctx(lua_State *L) {
 		ctx = prepsimple(L, NULL, &ctx__gc);
 
 		if (!(*ctx = BN_CTX_new()))
-			throwssl(L, "bignum");
+			auxL_error(L, auxL_EOPENSSL, "bignum");
 
 		lua_pushcfunction(L, &ctx__gc);
 		lua_pushvalue(L, -2);
@@ -1481,7 +1494,7 @@ static int bn__add(lua_State *L) {
 	bn_prepops(L, &r, &a, &b, 1);
 
 	if (!BN_add(r, a, b))
-		return throwssl(L, "bignum:__add");
+		return auxL_error(L, auxL_EOPENSSL, "bignum:__add");
 
 	return 1;
 } /* bn__add() */
@@ -1493,7 +1506,7 @@ static int bn__sub(lua_State *L) {
 	bn_prepops(L, &r, &a, &b, 0);
 
 	if (!BN_sub(r, a, b))
-		return throwssl(L, "bignum:__sub");
+		return auxL_error(L, auxL_EOPENSSL, "bignum:__sub");
 
 	return 1;
 } /* bn__sub() */
@@ -1505,7 +1518,7 @@ static int bn__mul(lua_State *L) {
 	bn_prepops(L, &r, &a, &b, 1);
 
 	if (!BN_mul(r, a, b, getctx(L)))
-		return throwssl(L, "bignum:__mul");
+		return auxL_error(L, auxL_EOPENSSL, "bignum:__mul");
 
 	return 1;
 } /* bn__mul() */
@@ -1518,7 +1531,7 @@ static int bn__div(lua_State *L) {
 	bn_prepops(L, &r, &a, &b, 0);
 
 	if (!BN_div(r, NULL, a, b, getctx(L)))
-		return throwssl(L, "bignum:__div");
+		return auxL_error(L, auxL_EOPENSSL, "bignum:__div");
 
 	return 1;
 } /* bn__div() */
@@ -1531,7 +1544,7 @@ static int bn__mod(lua_State *L) {
 	bn_prepops(L, &r, &a, &b, 0);
 
 	if (!BN_mod(r, a, b, getctx(L)))
-		return throwssl(L, "bignum:__mod");
+		return auxL_error(L, auxL_EOPENSSL, "bignum:__mod");
 
 	return 1;
 } /* bn__mod() */
@@ -1544,7 +1557,7 @@ static int bn__pow(lua_State *L) {
 	bn_prepops(L, &r, &a, &b, 0);
 
 	if (!BN_exp(r, a, b, getctx(L)))
-		return throwssl(L, "bignum:__pow");
+		return auxL_error(L, auxL_EOPENSSL, "bignum:__pow");
 
 	return 1;
 } /* bn__pow() */
@@ -1608,7 +1621,7 @@ static int bn__tostring(lua_State *L) {
 	char *txt;
 
 	if (!(txt = BN_bn2dec(bn)))
-		return throwssl(L, "bignum:__tostring");
+		return auxL_error(L, auxL_EOPENSSL, "bignum:__tostring");
 
 	lua_pushstring(L, txt);
 
@@ -1680,7 +1693,7 @@ static BIO *getbio(lua_State *L) {
 		bio = prepsimple(L, NULL, &bio__gc);
 
 		if (!(*bio = BIO_new(BIO_s_mem())))
-			throwssl(L, "BIO_new");
+			auxL_error(L, auxL_EOPENSSL, "BIO_new");
 
 		lua_pushcfunction(L, &bio__gc);
 		lua_pushvalue(L, -2);
@@ -1753,14 +1766,14 @@ static int pk_new(lua_State *L) {
 
 creat:
 		if (!(*ud = EVP_PKEY_new()))
-			return throwssl(L, "pkey.new");
+			return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 		switch (EVP_PKEY_type(type)) {
 		case EVP_PKEY_RSA: {
 			RSA *rsa;
 
 			if (!(rsa = RSA_generate_key(bits, exp, 0, 0)))
-				return throwssl(L, "pkey.new");
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 			EVP_PKEY_set1_RSA(*ud, rsa);
 
@@ -1772,11 +1785,11 @@ creat:
 			DSA *dsa;
 
 			if (!(dsa = DSA_generate_parameters(bits, 0, 0, 0, 0, 0, 0)))
-				return throwssl(L, "pkey.new");
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 			if (!DSA_generate_key(dsa)) {
 				DSA_free(dsa);
-				return throwssl(L, "pkey.new");
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 			}
 
 			EVP_PKEY_set1_DSA(*ud, dsa);
@@ -1789,11 +1802,11 @@ creat:
 			DH *dh;
 
 			if (!(dh = DH_generate_parameters(bits, exp, 0, 0)))
-				return throwssl(L, "pkey.new");
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 			if (!DH_generate_key(dh)) {
 				DH_free(dh);
-				return throwssl(L, "pkey.new");
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 			}
 
 			EVP_PKEY_set1_DH(*ud, dh);
@@ -1808,7 +1821,7 @@ creat:
 			EC_KEY *key;
 
 			if (!(grp = EC_GROUP_new_by_curve_name(curve)))
-				return throwssl(L, "pkey.new");
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 			EC_GROUP_set_asn1_flag(grp, OPENSSL_EC_NAMED_CURVE);
 
@@ -1817,7 +1830,7 @@ creat:
 
 			if (!(key = EC_KEY_new())) {
 				EC_GROUP_free(grp);
-				return throwssl(L, "pkey.new");
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 			}
 
 			EC_KEY_set_group(key, grp);
@@ -1826,7 +1839,7 @@ creat:
 
 			if (!EC_KEY_generate_key(key)) {
 				EC_KEY_free(key);
-				return throwssl(L, "pkey.new");
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 			}
 
 			EVP_PKEY_set1_EC_KEY(*ud, key);
@@ -1862,7 +1875,7 @@ creat:
 		data = luaL_checklstring(L, 1, &len);
 
 		if (!(bio = BIO_new_mem_buf((void *)data, len)))
-			return throwssl(L, "pkey.new");
+			return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 		if (type == X509_PEM || type == X509_ANY) {
 			if (!prvtonly && !pub) {
@@ -1936,7 +1949,7 @@ done:
 
 		if (!*ud) {
 			if (goterr)
-				return throwssl(L, "pkey.new");
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 			/* we should never get here */
 			return luaL_error(L, "failed to load key for some unexpected reason");
@@ -1978,7 +1991,7 @@ static int pk_setPublicKey(lua_State *L) {
 	type = optencoding(L, 3, "*", X509_ANY|X509_PEM|X509_DER);
 
 	if (!(bio = BIO_new_mem_buf((void *)data, len)))
-		return throwssl(L, "pkey.new");
+		return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 	if (type == X509_ANY || type == X509_PEM) {
 		ok = !!PEM_read_bio_PUBKEY(bio, key, 0, "");
@@ -1991,7 +2004,7 @@ static int pk_setPublicKey(lua_State *L) {
 	BIO_free(bio);
 
 	if (!ok)
-		return throwssl(L, "pkey.new");
+		return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 	lua_pushboolean(L, 1);
 
@@ -2010,7 +2023,7 @@ static int pk_setPrivateKey(lua_State *L) {
 	type = optencoding(L, 3, "*", X509_ANY|X509_PEM|X509_DER);
 
 	if (!(bio = BIO_new_mem_buf((void *)data, len)))
-		return throwssl(L, "pkey.new");
+		return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 	if (type == X509_ANY || type == X509_PEM) {
 		ok = !!PEM_read_bio_PrivateKey(bio, key, 0, "");
@@ -2023,7 +2036,7 @@ static int pk_setPrivateKey(lua_State *L) {
 	BIO_free(bio);
 
 	if (!ok)
-		return throwssl(L, "pkey.new");
+		return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 	lua_pushboolean(L, 1);
 
@@ -2044,7 +2057,7 @@ static int pk_sign(lua_State *L) {
 	n = LUAL_BUFFERSIZE;
 
 	if (!EVP_SignFinal(md, (void *)luaL_prepbuffer(&B), &n, key))
-		return throwssl(L, "pkey:sign");
+		return auxL_error(L, auxL_EOPENSSL, "pkey:sign");
 
 	luaL_addsize(&B, n);
 	luaL_pushresult(&B);
@@ -2070,7 +2083,7 @@ static int pk_verify(lua_State *L) {
 
 		break;
 	default:
-		return throwssl(L, "pkey:verify");
+		return auxL_error(L, auxL_EOPENSSL, "pkey:verify");
 	}
 
 	return 1;
@@ -2102,7 +2115,7 @@ static int pk_toPEM(lua_State *L) {
 		switch (checkoption(L, i, NULL, opts)) {
 		case 0: case 1: /* public, PublicKey */
 			if (!PEM_write_bio_PUBKEY(bio, key))
-				return throwssl(L, "pkey:__tostring");
+				return auxL_error(L, auxL_EOPENSSL, "pkey:__tostring");
 
 			len = BIO_get_mem_data(bio, &pem);
 			lua_pushlstring(L, pem, len);
@@ -2111,7 +2124,7 @@ static int pk_toPEM(lua_State *L) {
 			break;
 		case 2: case 3: /* private, PrivateKey */
 			if (!PEM_write_bio_PrivateKey(bio, key, 0, 0, 0, 0, 0))
-				return throwssl(L, "pkey:__tostring");
+				return auxL_error(L, auxL_EOPENSSL, "pkey:__tostring");
 
 			len = BIO_get_mem_data(bio, &pem);
 			lua_pushlstring(L, pem, len);
@@ -2131,7 +2144,7 @@ static int pk_toPEM(lua_State *L) {
 				DSA_free(dsa);
 
 				if (!ok)
-					return throwssl(L, "pkey:__tostring");
+					return auxL_error(L, auxL_EOPENSSL, "pkey:__tostring");
 
 				break;
 			}
@@ -2143,7 +2156,7 @@ static int pk_toPEM(lua_State *L) {
 				DH_free(dh);
 
 				if (!ok)
-					return throwssl(L, "pkey:__tostring");
+					return auxL_error(L, auxL_EOPENSSL, "pkey:__tostring");
 
 				break;
 			}
@@ -2157,7 +2170,7 @@ static int pk_toPEM(lua_State *L) {
 				EC_KEY_free(ec);
 
 				if (!ok)
-					return throwssl(L, "pkey:__tostring");
+					return auxL_error(L, auxL_EOPENSSL, "pkey:__tostring");
 
 				break;
 			}
@@ -2194,11 +2207,11 @@ static int pk__tostring(lua_State *L) {
 	switch (type) {
 	case X509_PEM:
 		if (!PEM_write_bio_PUBKEY(bio, key))
-			return throwssl(L, "pkey:__tostring");
+			return auxL_error(L, auxL_EOPENSSL, "pkey:__tostring");
 		break;
 	case X509_DER:
 		if (!i2d_PUBKEY_bio(bio, key))
-			return throwssl(L, "pkey:__tostring");
+			return auxL_error(L, auxL_EOPENSSL, "pkey:__tostring");
 		break;
 	} /* switch() */
 
@@ -2271,7 +2284,7 @@ static X509_NAME *xn_dup(lua_State *L, X509_NAME *name) {
 	X509_NAME **ud = prepsimple(L, X509_NAME_CLASS);
 
 	if (!(*ud = X509_NAME_dup(name)))
-		throwssl(L, "x509.name.dup");
+		auxL_error(L, auxL_EOPENSSL, "x509.name.dup");
 
 	return *ud;
 } /* xn_dup() */
@@ -2281,7 +2294,7 @@ static int xn_new(lua_State *L) {
 	X509_NAME **ud = prepsimple(L, X509_NAME_CLASS);
 
 	if (!(*ud = X509_NAME_new()))
-		return throwssl(L, "x509.name.new");
+		return auxL_error(L, auxL_EOPENSSL, "x509.name.new");
 
 	return 1;
 } /* xn_new() */
@@ -2308,7 +2321,7 @@ static int xn_add(lua_State *L) {
 	ASN1_OBJECT_free(obj);
 
 	if (!ok)
-		return throwssl(L, "x509.name:add");
+		return auxL_error(L, auxL_EOPENSSL, "x509.name:add");
 
 	lua_pushvalue(L, 1);
 
@@ -2337,7 +2350,7 @@ static int xn_all(lua_State *L) {
 		nid = OBJ_obj2nid(obj);
 
 		if (0 > (len = OBJ_obj2txt(txt, sizeof txt, obj, 1)))
-			return throwssl(L, "x509.name:all");
+			return auxL_error(L, auxL_EOPENSSL, "x509.name:all");
 
 		lua_pushlstring(L, txt, len);
 
@@ -2391,7 +2404,7 @@ static int xn__next(lua_State *L) {
 			lua_pushstring(L, id);
 		} else {
 			if (0 > (len = OBJ_obj2txt(txt, sizeof txt, obj, 1)))
-				return throwssl(L, "x509.name:__pairs");
+				return auxL_error(L, auxL_EOPENSSL, "x509.name:__pairs");
 
 			lua_pushlstring(L, txt, len);
 		}
@@ -2481,7 +2494,7 @@ static GENERAL_NAMES *gn_dup(lua_State *L, GENERAL_NAMES *gens) {
 	GENERAL_NAMES **ud = prepsimple(L, X509_GENS_CLASS);
 
 	if (!(*ud = sk_GENERAL_NAME_dup(gens)))
-		throwssl(L, "x509.altname.dup");
+		auxL_error(L, auxL_EOPENSSL, "x509.altname.dup");
 
 	return *ud;
 } /* gn_dup() */
@@ -2491,7 +2504,7 @@ static int gn_new(lua_State *L) {
 	GENERAL_NAMES **ud = prepsimple(L, X509_GENS_CLASS);
 
 	if (!(*ud = sk_GENERAL_NAME_new_null()))
-		return throwssl(L, "x509.altname.new");
+		return auxL_error(L, auxL_EOPENSSL, "x509.altname.new");
 
 	return 1;
 } /* gn_new() */
@@ -2591,7 +2604,7 @@ text:
 error:
 	GENERAL_NAME_free(gen);
 
-	return throwssl(L, "x509.altname:add");
+	return auxL_error(L, auxL_EOPENSSL, "x509.altname:add");
 } /* gn_add() */
 
 
@@ -2778,7 +2791,7 @@ error:
 	if (conf)
 		NCONF_free(conf);
 
-	return throwssl(L, "x509.extension.new");
+	return auxL_error(L, auxL_EOPENSSL, "x509.extension.new");
 } /* xe_new() */
 
 
@@ -2844,7 +2857,7 @@ static int xc_new(lua_State *L) {
 		int ok = 0;
 
 		if (!(tmp = BIO_new_mem_buf((char *)data, len)))
-			return throwssl(L, "x509.cert.new");
+			return auxL_error(L, auxL_EOPENSSL, "x509.cert.new");
 
 		if (type == X509_PEM || type == X509_ANY) {
 			ok = !!(*ud = PEM_read_bio_X509(tmp, NULL, 0, "")); /* no password */
@@ -2857,10 +2870,10 @@ static int xc_new(lua_State *L) {
 		BIO_free(tmp);
 
 		if (!ok)
-			return throwssl(L, "x509.cert.new");
+			return auxL_error(L, auxL_EOPENSSL, "x509.cert.new");
 	} else {
 		if (!(*ud = X509_new()))
-			return throwssl(L, "x509.cert.new");
+			return auxL_error(L, auxL_EOPENSSL, "x509.cert.new");
 
 		X509_gmtime_adj(X509_get_notBefore(*ud), 0);
 		X509_gmtime_adj(X509_get_notAfter(*ud), 0);
@@ -2904,7 +2917,7 @@ static int xc_getSerial(lua_State *L) {
 
 	if ((i = X509_get_serialNumber(crt))) {
 		if (!ASN1_INTEGER_to_BN(i, serial))
-			return throwssl(L, "x509.cert:getSerial");
+			return auxL_error(L, auxL_EOPENSSL, "x509.cert:getSerial");
 	}
 
 	return 1;
@@ -2929,7 +2942,7 @@ static int xc_setSerial(lua_State *L) {
 error:
 	ASN1_INTEGER_free(serial);
 
-	return throwssl(L, "x509.cert:setSerial");
+	return auxL_error(L, auxL_EOPENSSL, "x509.cert:setSerial");
 } /* xc_setSerial() */
 
 
@@ -2953,7 +2966,7 @@ static int xc_digest(lua_State *L) {
 		BIGNUM *bn = bn_push(L);
 
 		if (!BN_bin2bn(md, len, bn))
-			return throwssl(L, "x509.cert:digest");
+			return auxL_error(L, auxL_EOPENSSL, "x509.cert:digest");
 
 		break;
 	}
@@ -3172,11 +3185,11 @@ static int xc_setLifetime(lua_State *L) {
 		ut = lua_tonumber(L, 2);
 
 		if (!ASN1_TIME_set(X509_get_notBefore(crt), ut))
-			return throwssl(L, "x509.cert:setLifetime");
+			return auxL_error(L, auxL_EOPENSSL, "x509.cert:setLifetime");
 #if 0
 	} else if ((dt = luaL_optstring(L, 2, 0))) {
 		if (!ASN1_TIME_set_string(X509_get_notBefore(crt), dt))
-			return throwssl(L, "x509.cert:setLifetime");
+			return auxL_error(L, auxL_EOPENSSL, "x509.cert:setLifetime");
 #endif
 	}
 
@@ -3184,11 +3197,11 @@ static int xc_setLifetime(lua_State *L) {
 		ut = lua_tonumber(L, 3);
 
 		if (!ASN1_TIME_set(X509_get_notAfter(crt), ut))
-			return throwssl(L, "x509.cert:setLifetime");
+			return auxL_error(L, auxL_EOPENSSL, "x509.cert:setLifetime");
 #if 0
 	} else if ((dt = luaL_optstring(L, 3, 0))) {
 		if (!ASN1_TIME_set_string(X509_get_notAfter(crt), dt))
-			return throwssl(L, "x509.cert:setLifetime");
+			return auxL_error(L, auxL_EOPENSSL, "x509.cert:setLifetime");
 #endif
 	}
 
@@ -3216,7 +3229,7 @@ static int xc_setIssuer(lua_State *L) {
 	X509_NAME *name = checksimple(L, 2, X509_NAME_CLASS);
 
 	if (!X509_set_issuer_name(crt, name))
-		return throwssl(L, "x509.cert:setIssuer");
+		return auxL_error(L, auxL_EOPENSSL, "x509.cert:setIssuer");
 
 	lua_pushboolean(L, 1);
 
@@ -3242,7 +3255,7 @@ static int xc_setSubject(lua_State *L) {
 	X509_NAME *name = checksimple(L, 2, X509_NAME_CLASS);
 
 	if (!X509_set_subject_name(crt, name))
-		return throwssl(L, "x509.cert:setSubject");
+		return auxL_error(L, auxL_EOPENSSL, "x509.cert:setSubject");
 
 	lua_pushboolean(L, 1);
 
@@ -3290,7 +3303,7 @@ static int xc_setIssuerAlt(lua_State *L) {
 	GENERAL_NAMES *gens = checksimple(L, 2, X509_GENS_CLASS);
 
 	if (!X509_add1_ext_i2d(crt, NID_issuer_alt_name, gens, 0, X509V3_ADD_REPLACE))
-		return throwssl(L, "x509.altname:setIssuerAlt");
+		return auxL_error(L, auxL_EOPENSSL, "x509.altname:setIssuerAlt");
 
 	lua_pushboolean(L, 1);
 
@@ -3316,7 +3329,7 @@ static int xc_setSubjectAlt(lua_State *L) {
 	GENERAL_NAMES *gens = checksimple(L, 2, X509_GENS_CLASS);
 
 	if (!X509_add1_ext_i2d(crt, NID_subject_alt_name, gens, 0, X509V3_ADD_REPLACE))
-		return throwssl(L, "x509.altname:setSubjectAlt");
+		return auxL_error(L, auxL_EOPENSSL, "x509.altname:setSubjectAlt");
 
 	lua_pushboolean(L, 1);
 
@@ -3492,7 +3505,7 @@ static int xc_setBasicConstraint(lua_State *L) {
 error:
 	BASIC_CONSTRAINTS_free(bs);
 
-	return throwssl(L, "x509.cert:setBasicConstraint");
+	return auxL_error(L, auxL_EOPENSSL, "x509.cert:setBasicConstraint");
 } /* xc_setBasicConstraint() */
 
 
@@ -3522,7 +3535,7 @@ static int xc_addExtension(lua_State *L) {
 	X509_EXTENSION *ext = checksimple(L, 2, X509_EXT_CLASS);
 
 	if (!X509_add_ext(crt, ext, -1))
-		return throwssl(L, "x509.cert:addExtension");
+		return auxL_error(L, auxL_EOPENSSL, "x509.cert:addExtension");
 
 	lua_pushboolean(L, 1);
 
@@ -3572,7 +3585,7 @@ static int xc_getPublicKey(lua_State *L) {
 	EVP_PKEY **key = prepsimple(L, PKEY_CLASS);
 
 	if (!(*key = X509_get_pubkey(crt)))
-		return throwssl(L, "x509.cert:getPublicKey");
+		return auxL_error(L, auxL_EOPENSSL, "x509.cert:getPublicKey");
 
 	return 1;
 } /* xc_getPublicKey() */
@@ -3583,7 +3596,7 @@ static int xc_setPublicKey(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
 
 	if (!X509_set_pubkey(crt, key))
-		return throwssl(L, "x509.cert:setPublicKey");
+		return auxL_error(L, auxL_EOPENSSL, "x509.cert:setPublicKey");
 
 	lua_pushboolean(L, 1);
 
@@ -3615,7 +3628,7 @@ static int xc_sign(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
 
 	if (!X509_sign(crt, key, xc_signature(L, 3, key)))
-		return throwssl(L, "x509.cert:sign");
+		return auxL_error(L, auxL_EOPENSSL, "x509.cert:sign");
 
 	lua_pushboolean(L, 1);
 
@@ -3673,7 +3686,7 @@ static int xc_text(lua_State *L) {
 	}
 
 	if (!X509_print_ex(bio, crt, 0, flags))
-		return throwssl(L, "x509.cert:text");
+		return auxL_error(L, auxL_EOPENSSL, "x509.cert:text");
 
 	len = BIO_get_mem_data(bio, &data);
 
@@ -3693,11 +3706,11 @@ static int xc__tostring(lua_State *L) {
 	switch (type) {
 	case X509_PEM:
 		if (!PEM_write_bio_X509(bio, crt))
-			return throwssl(L, "x509.cert:__tostring");
+			return auxL_error(L, auxL_EOPENSSL, "x509.cert:__tostring");
 		break;
 	case X509_DER:
 		if (!i2d_X509_bio(bio, crt))
-			return throwssl(L, "x509.cert:__tostring");
+			return auxL_error(L, auxL_EOPENSSL, "x509.cert:__tostring");
 		break;
 	} /* switch() */
 
@@ -3796,14 +3809,14 @@ static int xr_new(lua_State *L) {
 
 	if ((crt = testsimple(L, 1, X509_CERT_CLASS))) {
 		if (!(*ud = X509_to_X509_REQ(crt, 0, 0)))
-			return throwssl(L, "x509.csr.new");
+			return auxL_error(L, auxL_EOPENSSL, "x509.csr.new");
 	} else if ((data = luaL_optlstring(L, 1, NULL, &len))) {
 		int type = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
 		BIO *tmp;
 		int ok = 0;
 
 		if (!(tmp = BIO_new_mem_buf((char *)data, len)))
-			return throwssl(L, "x509.csr.new");
+			return auxL_error(L, auxL_EOPENSSL, "x509.csr.new");
 
 		if (type == X509_PEM || type == X509_ANY) {
 			ok = !!(*ud = PEM_read_bio_X509_REQ(tmp, NULL, 0, "")); /* no password */
@@ -3816,10 +3829,10 @@ static int xr_new(lua_State *L) {
 		BIO_free(tmp);
 
 		if (!ok)
-			return throwssl(L, "x509.csr.new");
+			return auxL_error(L, auxL_EOPENSSL, "x509.csr.new");
 	} else {
 		if (!(*ud = X509_REQ_new()))
-			return throwssl(L, "x509.csr.new");
+			return auxL_error(L, auxL_EOPENSSL, "x509.csr.new");
 	}
 
 	return 1;
@@ -3871,7 +3884,7 @@ static int xr_setSubject(lua_State *L) {
 	X509_NAME *name = checksimple(L, 2, X509_NAME_CLASS);
 
 	if (!X509_REQ_set_subject_name(csr, name))
-		return throwssl(L, "x509.csr:setSubject");
+		return auxL_error(L, auxL_EOPENSSL, "x509.csr:setSubject");
 
 	lua_pushboolean(L, 1);
 
@@ -3884,7 +3897,7 @@ static int xr_getPublicKey(lua_State *L) {
 	EVP_PKEY **key = prepsimple(L, PKEY_CLASS);
 
 	if (!(*key = X509_REQ_get_pubkey(csr)))
-		return throwssl(L, "x509.cert:getPublicKey");
+		return auxL_error(L, auxL_EOPENSSL, "x509.cert:getPublicKey");
 
 	return 1;
 } /* xr_getPublicKey() */
@@ -3895,7 +3908,7 @@ static int xr_setPublicKey(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
 
 	if (!X509_REQ_set_pubkey(csr, key))
-		return throwssl(L, "x509.csr:setPublicKey");
+		return auxL_error(L, auxL_EOPENSSL, "x509.csr:setPublicKey");
 
 	lua_pushboolean(L, 1);
 
@@ -3908,7 +3921,7 @@ static int xr_sign(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
 
 	if (!X509_REQ_sign(csr, key, xc_signature(L, 3, key)))
-		return throwssl(L, "x509.csr:sign");
+		return auxL_error(L, auxL_EOPENSSL, "x509.csr:sign");
 
 	lua_pushboolean(L, 1);
 
@@ -3926,11 +3939,11 @@ static int xr__tostring(lua_State *L) {
 	switch (type) {
 	case X509_PEM:
 		if (!PEM_write_bio_X509_REQ(bio, csr))
-			return throwssl(L, "x509.csr:__tostring");
+			return auxL_error(L, auxL_EOPENSSL, "x509.csr:__tostring");
 		break;
 	case X509_DER:
 		if (!i2d_X509_REQ_bio(bio, csr))
-			return throwssl(L, "x509.csr:__tostring");
+			return auxL_error(L, auxL_EOPENSSL, "x509.csr:__tostring");
 		break;
 	} /* switch() */
 
@@ -4007,7 +4020,7 @@ static int xx_new(lua_State *L) {
 		int ok = 0;
 
 		if (!(tmp = BIO_new_mem_buf((char *)data, len)))
-			return throwssl(L, "x509.crl.new");
+			return auxL_error(L, auxL_EOPENSSL, "x509.crl.new");
 
 		if (type == X509_PEM || type == X509_ANY) {
 			ok = !!(*ud = PEM_read_bio_X509_CRL(tmp, NULL, 0, "")); /* no password */
@@ -4020,10 +4033,10 @@ static int xx_new(lua_State *L) {
 		BIO_free(tmp);
 
 		if (!ok)
-			return throwssl(L, "x509.crl.new");
+			return auxL_error(L, auxL_EOPENSSL, "x509.crl.new");
 	} else {
 		if (!(*ud = X509_CRL_new()))
-			return throwssl(L, "x509.crl.new");
+			return auxL_error(L, auxL_EOPENSSL, "x509.crl.new");
 
 		X509_gmtime_adj(X509_CRL_get_lastUpdate(*ud), 0);
 	}
@@ -4083,7 +4096,7 @@ static int xx_setLastUpdate(lua_State *L) {
 
 	/* lastUpdate always present */
 	if (!ASN1_TIME_set(X509_CRL_get_lastUpdate(crl), updated))
-		return throwssl(L, "x509.crl:setLastUpdate");
+		return auxL_error(L, auxL_EOPENSSL, "x509.crl:setLastUpdate");
 
 	lua_pushboolean(L, 1);
 
@@ -4136,7 +4149,7 @@ error:
 	if (time)
 		ASN1_TIME_free(time);
 
-	return throwssl(L, "x509.crl:setNextUpdate");
+	return auxL_error(L, auxL_EOPENSSL, "x509.crl:setNextUpdate");
 } /* xx_setNextUpdate() */
 
 
@@ -4158,7 +4171,7 @@ static int xx_setIssuer(lua_State *L) {
 	X509_NAME *name = checksimple(L, 2, X509_NAME_CLASS);
 
 	if (!X509_CRL_set_issuer_name(crl, name))
-		return throwssl(L, "x509.crl:setIssuer");
+		return auxL_error(L, auxL_EOPENSSL, "x509.crl:setIssuer");
 
 	lua_pushboolean(L, 1);
 
@@ -4212,7 +4225,7 @@ error:
 	if (rev)
 		X509_REVOKED_free(rev);
 
-	return throwssl(L, "x509.crl:add");
+	return auxL_error(L, auxL_EOPENSSL, "x509.crl:add");
 } /* xx_add() */
 
 
@@ -4221,7 +4234,7 @@ static int xx_sign(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
 
 	if (!X509_CRL_sign(crl, key, xc_signature(L, 3, key)))
-		return throwssl(L, "x509.crl:sign");
+		return auxL_error(L, auxL_EOPENSSL, "x509.crl:sign");
 
 	lua_pushboolean(L, 1);
 
@@ -4237,7 +4250,7 @@ static int xx_text(lua_State *L) {
 	long len;
 
 	if (!X509_CRL_print(bio, crl))
-		return throwssl(L, "x509.crl:text");
+		return auxL_error(L, auxL_EOPENSSL, "x509.crl:text");
 
 	len = BIO_get_mem_data(bio, &data);
 
@@ -4257,11 +4270,11 @@ static int xx__tostring(lua_State *L) {
 	switch (type) {
 	case X509_PEM:
 		if (!PEM_write_bio_X509_CRL(bio, crl))
-			return throwssl(L, "x509.crl:__tostring");
+			return auxL_error(L, auxL_EOPENSSL, "x509.crl:__tostring");
 		break;
 	case X509_DER:
 		if (!i2d_X509_CRL_bio(bio, crl))
-			return throwssl(L, "x509.crl:__tostring");
+			return auxL_error(L, auxL_EOPENSSL, "x509.crl:__tostring");
 		break;
 	} /* switch() */
 
@@ -4365,7 +4378,7 @@ static void xl_dup(lua_State *L, STACK_OF(X509) *src, _Bool copy) {
 
 	return;
 error:
-	throwssl(L, "sk_X509_dup");
+	auxL_error(L, auxL_EOPENSSL, "sk_X509_dup");
 } /* xl_dup() */
 
 
@@ -4373,7 +4386,7 @@ static int xl_new(lua_State *L) {
 	STACK_OF(X509) **chain = prepsimple(L, X509_CHAIN_CLASS);
 
 	if (!(*chain = sk_X509_new_null()))
-		return throwssl(L, "x509.chain.new");
+		return auxL_error(L, auxL_EOPENSSL, "x509.chain.new");
 
 	return 1;
 } /* xl_new() */
@@ -4390,11 +4403,11 @@ static int xl_add(lua_State *L) {
 	X509 *dup;
 
 	if (!(dup = X509_dup(crt)))
-		return throwssl(L, "x509.chain:add");
+		return auxL_error(L, auxL_EOPENSSL, "x509.chain:add");
 
 	if (!sk_X509_push(chain, dup)) {
 		X509_free(dup);
-		return throwssl(L, "x509.chain:add");
+		return auxL_error(L, auxL_EOPENSSL, "x509.chain:add");
 	}
 
 	lua_pushvalue(L, 1);
@@ -4421,7 +4434,7 @@ static int xl__next(lua_State *L) {
 		ret = prepsimple(L, X509_CERT_CLASS);
 
 		if (!(*ret = X509_dup(crt)))
-			return throwssl(L, "x509.chain:__next");
+			return auxL_error(L, auxL_EOPENSSL, "x509.chain:__next");
 
 		break;
 	}
@@ -4489,7 +4502,7 @@ static int xs_new(lua_State *L) {
 	X509_STORE **ud = prepsimple(L, X509_STORE_CLASS);
 
 	if (!(*ud = X509_STORE_new()))
-		return throwssl(L, "x509.store");
+		return auxL_error(L, auxL_EOPENSSL, "x509.store");
 
 	return 1;
 } /* xs_new() */
@@ -4510,11 +4523,11 @@ static int xs_add(lua_State *L) {
 			X509 *dup;
 
 			if (!(dup = X509_dup(crt)))
-				return throwssl(L, "x509.store:add");
+				return auxL_error(L, auxL_EOPENSSL, "x509.store:add");
 
 			if (!X509_STORE_add_cert(store, dup)) {
 				X509_free(dup);
-				return throwssl(L, "x509.store:add");
+				return auxL_error(L, auxL_EOPENSSL, "x509.store:add");
 			}
 		} else {
 			const char *path = luaL_checkstring(L, i);
@@ -4522,7 +4535,7 @@ static int xs_add(lua_State *L) {
 			int ok;
 
 			if (0 != stat(path, &st))
-				return luaL_error(L, "%s: %s", path, xstrerror(errno));
+				return luaL_error(L, "%s: %s", path, aux_strerror(errno));
 
 			if (S_ISDIR(st.st_mode))
 				ok = X509_STORE_load_locations(store, NULL, path);
@@ -4530,7 +4543,7 @@ static int xs_add(lua_State *L) {
 				ok = X509_STORE_load_locations(store, path, NULL);
 
 			if (!ok)
-				return throwssl(L, "x509.store:add");
+				return auxL_error(L, auxL_EOPENSSL, "x509.store:add");
 		}
 	}
 
@@ -4556,7 +4569,7 @@ static int xs_verify(lua_State *L) {
 		int i, n;
 
 		if (!(chain = sk_X509_dup(checksimple(L, 3, X509_CHAIN_CLASS))))
-			return throwssl(L, "x509.store:verify");
+			return auxL_error(L, auxL_EOPENSSL, "x509.store:verify");
 
 		n = sk_X509_num(chain);
 
@@ -4569,7 +4582,7 @@ static int xs_verify(lua_State *L) {
 
 	if (!X509_STORE_CTX_init(&ctx, store, crt, chain)) {
 		sk_X509_pop_free(chain, X509_free);
-		return throwssl(L, "x509.store:verify");
+		return auxL_error(L, auxL_EOPENSSL, "x509.store:verify");
 	}
 
 	ERR_clear_error();
@@ -4583,7 +4596,7 @@ static int xs_verify(lua_State *L) {
 		X509_STORE_CTX_cleanup(&ctx);
 
 		if (!*proof)
-			return throwssl(L, "x509.store:verify");
+			return auxL_error(L, auxL_EOPENSSL, "x509.store:verify");
 
 		lua_pushboolean(L, 1);
 		lua_pushvalue(L, -2);
@@ -4601,7 +4614,7 @@ static int xs_verify(lua_State *L) {
 	default:
 		X509_STORE_CTX_cleanup(&ctx);
 
-		return throwssl(L, "x509.store:verify");
+		return auxL_error(L, auxL_EOPENSSL, "x509.store:verify");
 	}
 } /* xs_verify() */
 
@@ -4659,7 +4672,7 @@ static int stx_new(lua_State *L) {
 	STACK_OF(X509) *chain;
 
 	if (!(*ud = X509_STORE_CTX_new()))
-		return throwssl(L, "x509.store.context");
+		return auxL_error(L, auxL_EOPENSSL, "x509.store.context");
 
 	return 1;
 } /* stx_new() */
@@ -4771,7 +4784,7 @@ error:
 	if (no_kcert)
 		luaL_argerror(L, 1, lua_pushfstring(L, "certificate matching the key not found"));
 
-	return throwssl(L, "pkcs12.new");
+	return auxL_error(L, auxL_EOPENSSL, "pkcs12.new");
 } /* p12_new() */
 
 
@@ -4787,7 +4800,7 @@ static int p12__tostring(lua_State *L) {
 	long len;
 
 	if (!i2d_PKCS12_bio(bio, p12))
-		return throwssl(L, "pkcs12:__tostring");
+		return auxL_error(L, auxL_EOPENSSL, "pkcs12:__tostring");
 
 	len = BIO_get_mem_data(bio, &data);
 
@@ -4908,7 +4921,7 @@ static int sx_new(lua_State *L) {
 	ud = prepsimple(L, SSL_CTX_CLASS);
 
 	if (!(*ud = SSL_CTX_new(method())))
-		return throwssl(L, "ssl.context.new");
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context.new");
 
 	SSL_CTX_set_options(*ud, options);
 
@@ -4923,9 +4936,9 @@ static int sx_interpose(lua_State *L) {
 
 static int sx_setOptions(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
-	lib_Integer options = lib_checkinteger(L, 2);
+	auxL_Integer options = auxL_checkinteger(L, 2);
 
-	lib_pushinteger(L, SSL_CTX_set_options(ctx, options));
+	auxL_pushinteger(L, SSL_CTX_set_options(ctx, options));
 
 	return 1;
 } /* sx_setOptions() */
@@ -4934,7 +4947,7 @@ static int sx_setOptions(lua_State *L) {
 static int sx_getOptions(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 
-	lib_pushinteger(L, SSL_CTX_get_options(ctx));
+	auxL_pushinteger(L, SSL_CTX_get_options(ctx));
 
 	return 1;
 } /* sx_getOptions() */
@@ -4942,9 +4955,9 @@ static int sx_getOptions(lua_State *L) {
 
 static int sx_clearOptions(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
-	lib_Integer options = lib_checkinteger(L, 2);
+	auxL_Integer options = auxL_checkinteger(L, 2);
 
-	lib_pushinteger(L, SSL_CTX_clear_options(ctx, options));
+	auxL_pushinteger(L, SSL_CTX_clear_options(ctx, options));
 
 	return 1;
 } /* sx_clearOptions() */
@@ -4998,7 +5011,7 @@ static int sx_setCertificate(lua_State *L) {
 	X509_free(crt);
 
 	if (!ok)
-		return throwssl(L, "ssl.context:setCertificate");
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setCertificate");
 
 	lua_pushboolean(L, 1);
 
@@ -5020,7 +5033,7 @@ static int sx_setPrivateKey(lua_State *L) {
 	 * private key is actually defined in the object.
 	 */
 	if (!SSL_CTX_use_PrivateKey(ctx, key))
-		return throwssl(L, "ssl.context:setPrivateKey");
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setPrivateKey");
 
 	lua_pushboolean(L, 1);
 
@@ -5033,7 +5046,7 @@ static int sx_setCipherList(lua_State *L) {
 	const char *ciphers = luaL_checkstring(L, 2);
 
 	if (!SSL_CTX_set_cipher_list(ctx, ciphers))
-		return throwssl(L, "ssl.context:setCipherList");
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setCipherList");
 
 	lua_pushboolean(L, 1);
 
@@ -5054,26 +5067,26 @@ static int sx_setEphemeralKey(lua_State *L) {
 	switch (EVP_PKEY_base_id(key)) {
 	case EVP_PKEY_RSA:
 		if (!(tmp = EVP_PKEY_get0(key)))
-			return throwssl(L, "ssl.context:setEphemeralKey");
+			return auxL_error(L, auxL_EOPENSSL, "ssl.context:setEphemeralKey");
 
 		if (!SSL_CTX_set_tmp_rsa(ctx, tmp))
-			return throwssl(L, "ssl.context:setEphemeralKey");
+			return auxL_error(L, auxL_EOPENSSL, "ssl.context:setEphemeralKey");
 
 		break;
 	case EVP_PKEY_DH:
 		if (!(tmp = EVP_PKEY_get0(key)))
-			return throwssl(L, "ssl.context:setEphemeralKey");
+			return auxL_error(L, auxL_EOPENSSL, "ssl.context:setEphemeralKey");
 
 		if (!SSL_CTX_set_tmp_dh(ctx, tmp))
-			return throwssl(L, "ssl.context:setEphemeralKey");
+			return auxL_error(L, auxL_EOPENSSL, "ssl.context:setEphemeralKey");
 
 		break;
 	case EVP_PKEY_EC:
 		if (!(tmp = EVP_PKEY_get0(key)))
-			return throwssl(L, "ssl.context:setEphemeralKey");
+			return auxL_error(L, auxL_EOPENSSL, "ssl.context:setEphemeralKey");
 
 		if (!SSL_CTX_set_tmp_ecdh(ctx, tmp))
-			return throwssl(L, "ssl.context:setEphemeralKey");
+			return auxL_error(L, auxL_EOPENSSL, "ssl.context:setEphemeralKey");
 
 		break;
 	default:
@@ -5102,9 +5115,9 @@ static int sx_setAlpnProtos(lua_State *L) {
 	ERR_clear_error();
 	if (0 != SSL_CTX_set_alpn_protos(ctx, (const unsigned char*)tmp, len)) {
 		if (!ERR_peek_error()) {
-			return luaL_error(L, "unable to set ALPN protocols: %s", xstrerror(ENOMEM));
+			return luaL_error(L, "unable to set ALPN protocols: %s", aux_strerror(ENOMEM));
 		} else {
-			return throwssl(L, "ssl.context:setAlpnProtos");
+			return auxL_error(L, auxL_EOPENSSL, "ssl.context:setAlpnProtos");
 		}
 	}
 
@@ -5163,11 +5176,11 @@ static int sx_setAlpnSelect(lua_State *L) {
 	luaL_checktype(L, 2, LUA_TFUNCTION);
 	if ((error = ex_setdata(L, EX_SSL_CTX_ALPN_SELECT_CB, ctx, 1))) {
 		if (error > 0) {
-			return luaL_error(L, "unable to set ALPN protocol selection callback: %s", xstrerror(error));
+			return luaL_error(L, "unable to set ALPN protocol selection callback: %s", aux_strerror(error));
 		} else if (!ERR_peek_error()) {
 			return luaL_error(L, "unable to set ALPN protocol selection callback: Unknown internal error");
 		} else {
-			return throwssl(L, "ssl.context:setAlpnSelect");
+			return auxL_error(L, auxL_EOPENSSL, "ssl.context:setAlpnSelect");
 		}
 	}
 
@@ -5220,7 +5233,7 @@ static const luaL_Reg sx_globals[] = {
 	{ NULL,        NULL },
 };
 
-static const integer_Reg sx_verify[] = {
+static const auxL_IntegerReg sx_verify[] = {
 	{ "VERIFY_NONE", SSL_VERIFY_NONE },
 	{ "VERIFY_PEER", SSL_VERIFY_PEER },
 	{ "VERIFY_FAIL_IF_NO_PEER_CERT", SSL_VERIFY_FAIL_IF_NO_PEER_CERT },
@@ -5228,7 +5241,7 @@ static const integer_Reg sx_verify[] = {
 	{ NULL, 0 },
 };
 
-static const integer_Reg sx_option[] = {
+static const auxL_IntegerReg sx_option[] = {
 	{ "OP_MICROSOFT_SESS_ID_BUG", SSL_OP_MICROSOFT_SESS_ID_BUG },
 	{ "OP_NETSCAPE_CHALLENGE_BUG", SSL_OP_NETSCAPE_CHALLENGE_BUG },
 	{ "OP_LEGACY_SERVER_CONNECT", SSL_OP_LEGACY_SERVER_CONNECT },
@@ -5278,8 +5291,8 @@ int luaopen__openssl_ssl_context(lua_State *L) {
 	initall(L);
 
 	luaL_newlib(L, sx_globals);
-	lib_setintegers(L, sx_verify);
-	lib_setintegers(L, sx_option);
+	auxL_setintegers(L, sx_verify);
+	auxL_setintegers(L, sx_option);
 
 	return 1;
 } /* luaopen__openssl_ssl_context() */
@@ -5313,9 +5326,9 @@ static int ssl_interpose(lua_State *L) {
 
 static int ssl_setOptions(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CTX_CLASS);
-	lib_Integer options = lib_checkinteger(L, 2);
+	auxL_Integer options = auxL_checkinteger(L, 2);
 
-	lib_pushinteger(L, SSL_set_options(ssl, options));
+	auxL_pushinteger(L, SSL_set_options(ssl, options));
 
 	return 1;
 } /* ssl_setOptions() */
@@ -5324,7 +5337,7 @@ static int ssl_setOptions(lua_State *L) {
 static int ssl_getOptions(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CTX_CLASS);
 
-	lib_pushinteger(L, SSL_get_options(ssl));
+	auxL_pushinteger(L, SSL_get_options(ssl));
 
 	return 1;
 } /* ssl_getOptions() */
@@ -5332,9 +5345,9 @@ static int ssl_getOptions(lua_State *L) {
 
 static int ssl_clearOptions(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CTX_CLASS);
-	lib_Integer options = lib_checkinteger(L, 2);
+	auxL_Integer options = auxL_checkinteger(L, 2);
 
-	lib_pushinteger(L, SSL_clear_options(ssl, options));
+	auxL_pushinteger(L, SSL_clear_options(ssl, options));
 
 	return 1;
 } /* ssl_clearOptions() */
@@ -5408,7 +5421,7 @@ static int ssl_setHostName(lua_State *L) {
 	const char *host = luaL_checkstring(L, 2);
 
 	if (!SSL_set_tlsext_host_name(ssl, host))
-		return throwssl(L, "ssl:setHostName");
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setHostName");
 
 	lua_pushboolean(L, 1);
 
@@ -5498,9 +5511,9 @@ static int ssl_setAlpnProtos(lua_State *L) {
 	ERR_clear_error();
 	if (0 != SSL_set_alpn_protos(ssl, (const unsigned char*)tmp, len)) {
 		if (!ERR_peek_error()) {
-			return luaL_error(L, "unable to set ALPN protocols: %s", xstrerror(ENOMEM));
+			return luaL_error(L, "unable to set ALPN protocols: %s", aux_strerror(ENOMEM));
 		} else {
-			return throwssl(L, "ssl:setAlpnProtos");
+			return auxL_error(L, auxL_EOPENSSL, "ssl:setAlpnProtos");
 		}
 	}
 
@@ -5554,7 +5567,7 @@ static const luaL_Reg ssl_globals[] = {
 	{ NULL,        NULL },
 };
 
-static const integer_Reg ssl_version[] = {
+static const auxL_IntegerReg ssl_version[] = {
 	{ "SSL2_VERSION", SSL2_VERSION },
 	{ "SSL3_VERSION", SSL3_VERSION },
 	{ "TLS1_VERSION", TLS1_VERSION },
@@ -5572,9 +5585,9 @@ int luaopen__openssl_ssl(lua_State *L) {
 	initall(L);
 
 	luaL_newlib(L, ssl_globals);
-	lib_setintegers(L, ssl_version);
-	lib_setintegers(L, sx_verify);
-	lib_setintegers(L, sx_option);
+	auxL_setintegers(L, ssl_version);
+	auxL_setintegers(L, sx_verify);
+	auxL_setintegers(L, sx_option);
 
 	return 1;
 } /* luaopen__openssl_ssl() */
@@ -5605,7 +5618,7 @@ static int md_new(lua_State *L) {
 	EVP_MD_CTX_init(ctx);
 
 	if (!EVP_DigestInit_ex(ctx, type, NULL))
-		return throwssl(L, "digest.new");
+		return auxL_error(L, auxL_EOPENSSL, "digest.new");
 
 	return 1;
 } /* md_new() */
@@ -5626,7 +5639,7 @@ static void md_update_(lua_State *L, EVP_MD_CTX *ctx, int from, int to) {
 		p = luaL_checklstring(L, i, &n);
 
 		if (!EVP_DigestUpdate(ctx, p, n))
-			throwssl(L, "digest:update");
+			auxL_error(L, auxL_EOPENSSL, "digest:update");
 	}
 } /* md_update_() */
 
@@ -5651,7 +5664,7 @@ static int md_final(lua_State *L) {
 	md_update_(L, ctx, 2, lua_gettop(L));
 
 	if (!EVP_DigestFinal_ex(ctx, md, &len))
-		return throwssl(L, "digest:final");
+		return auxL_error(L, auxL_EOPENSSL, "digest:final");
 
 	lua_pushlstring(L, (char *)md, len);
 
@@ -5822,7 +5835,7 @@ static int cipher_new(lua_State *L) {
 	EVP_CIPHER_CTX_init(ctx);
 
 	if (!EVP_CipherInit_ex(ctx, type, NULL, NULL, NULL, -1))
-		return throwssl(L, "cipher.new");
+		return auxL_error(L, auxL_EOPENSSL, "cipher.new");
 
 	return 1;
 } /* cipher_new() */
@@ -5860,7 +5873,7 @@ static int cipher_init(lua_State *L, _Bool encrypt) {
 
 	return 1;
 sslerr:
-	return throwssl(L, (encrypt)? "cipher:encrypt" : "cipher:decrypt");
+	return auxL_error(L, auxL_EOPENSSL, (encrypt)? "cipher:encrypt" : "cipher:decrypt");
 } /* cipher_init() */
 
 
@@ -5919,7 +5932,7 @@ static int cipher_update(lua_State *L) {
 	return 1;
 sslerr:
 	lua_pushnil(L);
-	pusherror(L, NULL);
+	auxL_pusherror(L, auxL_EOPENSSL, NULL);
 
 	return 2;
 } /* cipher_update() */
@@ -5950,7 +5963,7 @@ static int cipher_final(lua_State *L) {
 	return 1;
 sslerr:
 	lua_pushnil(L);
-	pusherror(L, NULL);
+	auxL_pusherror(L, auxL_EOPENSSL, NULL);
 
 	return 2;
 } /* cipher_final() */
@@ -6137,7 +6150,7 @@ static int rand_stir(lua_State *L) {
 
 	if (error) {
 		lua_pushboolean(L, 0);
-		lua_pushstring(L, xstrerror(error));
+		lua_pushstring(L, aux_strerror(error));
 		lua_pushinteger(L, error);
 
 		return 3;
@@ -6178,7 +6191,7 @@ static int rand_bytes(lua_State *L) {
 		n = MIN((size - count), LUAL_BUFFERSIZE);
 
 		if (!RAND_bytes((void *)luaL_prepbuffer(&B), n))
-			return throwssl(L, "rand.bytes");
+			return auxL_error(L, auxL_EOPENSSL, "rand.bytes");
 
 		luaL_addsize(&B, n);
 		count += n;
@@ -6201,7 +6214,7 @@ static unsigned long long rand_llu(lua_State *L) {
 	unsigned long long llu;
 
 	if (!RAND_bytes((void *)&llu, sizeof llu))
-		throwssl(L, "rand.uniform");
+		auxL_error(L, auxL_EOPENSSL, "rand.uniform");
 
 	return llu;
 } /* rand_llu() */
@@ -6486,13 +6499,8 @@ static void initall(lua_State *L) {
 	static int initssl;
 	int error;
 
-	if ((error = mt_init())) {
-		if (error == -1) {
-			luaL_error(L, "openssl.init: %s", dlerror());
-		} else {
-			luaL_error(L, "openssl.init: %s", xstrerror(error));
-		}
-	}
+	if ((error = mt_init()))
+		auxL_error(L, error, "openssl.init");
 
 	pthread_mutex_lock(&mutex);
 
@@ -6512,21 +6520,11 @@ static void initall(lua_State *L) {
 
 	pthread_mutex_unlock(&mutex);
 
-	if ((error = compat_init())) {
-		if (error == -1) {
-			throwssl(L, "openssl.init");
-		} else {
-			luaL_error(L, "openssl.init: %s", xstrerror(error));
-		}
-	}
+	if ((error = compat_init()))
+		auxL_error(L, error, "openssl.init");
 
-	if ((error = ex_init())) {
-		if (error == -1) {
-			throwssl(L, "openssl.init");
-		} else {
-			luaL_error(L, "openssl.init: %s", xstrerror(error));
-		}
-	}
+	if ((error = ex_init()))
+		auxL_error(L, error, "openssl.init");
 
 	ex_newstate(L);
 
