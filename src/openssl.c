@@ -578,7 +578,6 @@ static void lib_setintegers(lua_State *L, const integer_Reg *l) {
 static struct {
 	int flags;
 
-	int SSL_CTX_ex_index;
 	void (*X509_STORE_free)(X509_STORE *);
 
 	struct {
@@ -586,7 +585,6 @@ static struct {
 	} tmp;
 } compat = {
 	.flags = 0,
-	.SSL_CTX_ex_index = -1,
 	.X509_STORE_free = &X509_STORE_free,
 };
 
