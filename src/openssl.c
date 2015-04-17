@@ -1,7 +1,7 @@
 /* ==========================================================================
  * openssl.c - Lua OpenSSL
  * --------------------------------------------------------------------------
- * Copyright (c) 2012-2014  William Ahern
+ * Copyright (c) 2012-2015  William Ahern
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
@@ -831,8 +831,14 @@ static int compat_init(void) {
 	} else {
 		/*
 		 * Because our onfree callback was invoked, X509_STORE_free
-		 * appears not to obey reference counts. Ensure that our
-		 * fixed version is called on SSL_CTX destruction.
+		 * appears not to obey reference counts. Use our fixed
+		 * version in our own code.
+		 */
+		compat.X509_STORE_free = &compat_X509_STORE_free;
+
+		 /*
+		 * Ensure that our fixed version is called on SSL_CTX
+		 * destruction.
 		 *
 		 * NB: We depend on the coincidental order of operations in
 		 * SSL_CTX_free that user data destruction occurs before
