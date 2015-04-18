@@ -30,7 +30,7 @@
 #include <math.h>         /* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
 #include <time.h>         /* struct tm time_t strptime(3) time(2) */
 #include <ctype.h>        /* tolower(3) */
-#include <errno.h>        /* ENOMEM ENOTSUP errno */
+#include <errno.h>        /* ENOMEM ENOTSUP EOVERFLOW errno */
 #include <assert.h>       /* assert */
 
 #include <sys/types.h>    /* ssize_t pid_t */
@@ -881,7 +881,7 @@ struct ex_state {
 }; /* struct ex_state */
 
 #ifndef EX_DATA_MAXARGS
-#define EX_DATA_MAXARGS 4
+#define EX_DATA_MAXARGS 8
 #endif
 
 struct ex_data {
@@ -1058,6 +1058,9 @@ static int ex_setdata(lua_State *L, int _type, void *obj, size_t n) {
 	struct ex_data *data;
 	size_t i, j;
 
+	if (n > countof(data->arg))
+		return EOVERFLOW;
+
 	if ((data = type->get_ex_data(obj, type->index)) && data->state) {
 		for (i = 0; i < countof(data->arg); i++) {
 			auxL_unref(L, &data->arg[i]);
@@ -1069,7 +1072,7 @@ static int ex_setdata(lua_State *L, int _type, void *obj, size_t n) {
 			return errno;
 
 		if (!type->set_ex_data(obj, type->index, data))
-			return -1;
+			return auxL_EOPENSSL;
 
 		data->state = state;
 		data->refs = 1;
@@ -5139,37 +5142,64 @@ static SSL *ssl_push(lua_State *, SSL *);
 static int sx_setAlpnSelect_cb(SSL *ssl, const unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *_ctx) {
 	SSL_CTX *ctx = _ctx;
 	lua_State *L = NULL;
-	size_t n;
-	int top, status;
+	size_t n, protolen, tmpsiz;
+	int otop, status;
+	const void *proto;
+	void *tmpbuf;
 
-	if (0 == (n = ex_getdata(&L, EX_SSL_CTX_ALPN_SELECT_CB, ctx)))
+	*out = NULL;
+	*outlen = 0;
+
+	/* always expect function (1st) and return string buffer (Nth) */
+	if ((n = ex_getdata(&L, EX_SSL_CTX_ALPN_SELECT_CB, ctx)) < 2)
 		return SSL_TLSEXT_ERR_ALERT_FATAL;
 
-	top = lua_gettop(L) - n;
+	otop = lua_gettop(L) - n;
 
 	/* TODO: Install temporary panic handler to catch OOM errors */
 
-	/* pass the SSL object as first argument */
+	/* pass SSL object as 1st argument */
 	ssl_push(L, ssl);
+	lua_insert(L, otop + 3);
+
+	/* pass table of protocol names as 2nd argument */
 	pushprotos(L, in, inlen);
+	lua_insert(L, otop + 4);
 
-	/* TODO: lua_rotate ssl and protocols table into position. */
-
-	if (LUA_OK != (status = lua_pcall(L, 2 + (n - 1), 1, 0)))
+	if (LUA_OK != (status = lua_pcall(L, 2 + (n - 2), 1, 0)))
 		goto fatal;
 
-	/* TODO: check return value */
-	(void)out; (void)outlen;
+	/* did we get a string result? */
+	if (!(proto = lua_tolstring(L, -1, &protolen)))
+		goto noack;
 
-	lua_settop(L, top);
+	/* will it fit in our return buffer? */
+	if (!(tmpbuf = lua_touserdata(L, otop + 1)))
+		goto fatal;
+
+	tmpsiz = lua_rawlen(L, otop + 1);
+
+	if (protolen > tmpsiz)
+		goto fatal;
+
+	memcpy(tmpbuf, proto, protolen);
+
+	/*
+	 * NB: Our return buffer is anchored using the luaL_ref API, so even
+	 * once we pop the stack it will remain valid.
+	 */
+	*out = tmpbuf;
+	*outlen = protolen;
+
+	lua_settop(L, otop);
 
 	return SSL_TLSEXT_ERR_OK;
 fatal:
-	lua_settop(L, top);
+	lua_settop(L, otop);
 
 	return SSL_TLSEXT_ERR_ALERT_FATAL;
 noack:
-	lua_settop(L, top);
+	lua_settop(L, otop);
 
 	return SSL_TLSEXT_ERR_NOACK;
 } /* sx_setAlpnSelect_cb() */
@@ -5180,13 +5210,18 @@ static int sx_setAlpnSelect(lua_State *L) {
 	int error;
 
 	luaL_checktype(L, 2, LUA_TFUNCTION);
-	if ((error = ex_setdata(L, EX_SSL_CTX_ALPN_SELECT_CB, ctx, 1))) {
+
+	/* allocate space to store the selected protocol in our callback */
+	lua_newuserdata(L, UCHAR_MAX);
+	lua_insert(L, 2);
+
+	if ((error = ex_setdata(L, EX_SSL_CTX_ALPN_SELECT_CB, ctx, lua_gettop(L) - 1))) {
 		if (error > 0) {
 			return luaL_error(L, "unable to set ALPN protocol selection callback: %s", aux_strerror(error));
-		} else if (!ERR_peek_error()) {
+		} else if (error == auxL_EOPENSSL && !ERR_peek_error()) {
 			return luaL_error(L, "unable to set ALPN protocol selection callback: Unknown internal error");
 		} else {
-			return auxL_error(L, auxL_EOPENSSL, "ssl.context:setAlpnSelect");
+			return auxL_error(L, error, "ssl.context:setAlpnSelect");
 		}
 	}
 
@@ -5224,6 +5259,9 @@ static const luaL_Reg sx_methods[] = {
 	{ "setEphemeralKey",  &sx_setEphemeralKey },
 #if HAVE_SSL_CTX_SET_ALPN_PROTOS
 	{ "setAlpnProtos",    &sx_setAlpnProtos },
+#endif
+#if HAVE_SSL_CTX_SET_ALPN_SELECT_CB
+	{ "setAlpnSelect",    &sx_setAlpnSelect },
 #endif
 	{ NULL, NULL },
 };
