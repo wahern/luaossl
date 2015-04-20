@@ -111,7 +111,7 @@
 		LIST_NEXT((elm), field)->field.le_prev = (elm)->field.le_prev; \
 	*(elm)->field.le_prev = LIST_NEXT((elm), field); \
 } while (0)
-#define LIST_INSERT_HEAD(head, elm, field) do {
+#define LIST_INSERT_HEAD(head, elm, field) do { \
 	if ((LIST_NEXT((elm), field) = LIST_FIRST((head))) != NULL) \
 		LIST_FIRST((head))->field.le_prev = &LIST_NEXT((elm), field); \
 	LIST_FIRST((head)) = (elm); \
@@ -5150,7 +5150,7 @@ static int sx_setAlpnSelect_cb(SSL *ssl, const unsigned char **out, unsigned cha
 	*out = NULL;
 	*outlen = 0;
 
-	/* always expect function (1st) and return string buffer (Nth) */
+	/* expect at least two values: return buffer and closure */
 	if ((n = ex_getdata(&L, EX_SSL_CTX_ALPN_SELECT_CB, ctx)) < 2)
 		return SSL_TLSEXT_ERR_ALERT_FATAL;
 
