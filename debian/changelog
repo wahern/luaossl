@@ -1,3 +1,13 @@
+liblua-openssl (20150422-0) unstable; urgency=low
+
+  * Add support for ALPN server callback, SSL_CTX_set_alpn_select_cb.
+  * Fix X509_STORE double-free bug on older OpenSSL releases (< 1.0.2)
+    by implementing and using our own X509_STORE_free routine which properly
+    checks reference counts. Workaround adapted from Ruby OpenSSL bindings.
+  * Fix strerror_r usage on glibc.
+
+ -- William Ahern <william@25thandClement.com>  Wed, 22 Apr 2015 15:39:14 -0700
+
 liblua-openssl (20150304-0) unstable; urgency=low
 
   * Merge ALPN support from quae@daurnimator.com.
