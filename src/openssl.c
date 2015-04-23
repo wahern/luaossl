@@ -81,7 +81,7 @@
 #endif
 
 #ifndef HAVE_SSL_CTX_SET_ALPN_PROTOS
-#define HAVE_SSL_CTX_SET_ALPN_PROTOS (OPENSSL_VERSION_NUMBER >= 0x1000200fL)
+#define HAVE_SSL_CTX_SET_ALPN_PROTOS (OPENSSL_VERSION_NUMBER >= 0x1000200fL && !defined LIBRESSL_VERSION_NUMBER)
 #endif
 
 #ifndef HAVE_SSL_CTX_SET_ALPN_SELECT_CB
@@ -1357,6 +1357,11 @@ int luaopen__openssl(lua_State *L) {
 
 	lua_pushstring(L, SHLIB_VERSION_NUMBER);
 	lua_setfield(L, -2, "SHLIB_VERSION_NUMBER");
+
+#if defined LIBRESSL_VERSION_NUMBER
+	auxL_pushinteger(L, LIBRESSL_VERSION_NUMBER);
+	lua_setfield(L, -2, "LIBRESSL_VERSION_NUMBER");
+#endif
 
 	return 1;
 } /* luaopen__openssl() */
