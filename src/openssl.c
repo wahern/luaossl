@@ -1548,7 +1548,7 @@ static int ctx__gc(lua_State *L) {
 static BN_CTX *getctx(lua_State *L) {
 	BN_CTX **ctx;
 
-	lua_pushcfunction(L, &ctx__gc);
+	lua_pushlightuserdata(L, (void *)&ctx__gc);
 	lua_gettable(L, LUA_REGISTRYINDEX);
 
 	if (lua_isnil(L, -1)) {
@@ -1559,7 +1559,7 @@ static BN_CTX *getctx(lua_State *L) {
 		if (!(*ctx = BN_CTX_new()))
 			auxL_error(L, auxL_EOPENSSL, "bignum");
 
-		lua_pushcfunction(L, &ctx__gc);
+		lua_pushlightuserdata(L, (void *)&ctx__gc);
 		lua_pushvalue(L, -2);
 		lua_settable(L, LUA_REGISTRYINDEX);
 	}
@@ -1767,7 +1767,7 @@ static int bio__gc(lua_State *L) {
 static BIO *getbio(lua_State *L) {
 	BIO **bio;
 
-	lua_pushcfunction(L, &bio__gc);
+	lua_pushlightuserdata(L, (void *)&bio__gc);
 	lua_gettable(L, LUA_REGISTRYINDEX);
 
 	if (lua_isnil(L, -1)) {
@@ -1778,7 +1778,7 @@ static BIO *getbio(lua_State *L) {
 		if (!(*bio = BIO_new(BIO_s_mem())))
 			auxL_error(L, auxL_EOPENSSL, "BIO_new");
 
-		lua_pushcfunction(L, &bio__gc);
+		lua_pushlightuserdata(L, (void *)&bio__gc);
 		lua_pushvalue(L, -2);
 		lua_settable(L, LUA_REGISTRYINDEX);
 	}
