@@ -1329,6 +1329,7 @@ static const auxL_IntegerReg ssleay_version[] = {
 #ifdef SSLEAY_DIR
 	{ "SSLEAY_DIR", SSLEAY_DIR },
 #endif
+	{ NULL, 0 },
 };
 
 int luaopen__openssl(lua_State *L) {
