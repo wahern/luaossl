@@ -23,7 +23,7 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.
  * ==========================================================================
  */
-#include <limits.h>       /* INT_MAX INT_MIN UCHAR_MAX */
+#include <limits.h>       /* INT_MAX INT_MIN LLONG_MAX LLONG_MIN UCHAR_MAX ULLONG_MAX */
 #include <stdint.h>       /* uintptr_t */
 #include <string.h>       /* memset(3) strerror_r(3) */
 #include <strings.h>      /* strcasecmp(3) */
@@ -519,7 +519,11 @@ static auxtype_t auxL_getref(lua_State *L, auxref_t ref) {
  * is typically used.
  */
 #define auxL_Integer long long
+#define auxL_IntegerMin LLONG_MIN
+#define auxL_IntegerMax LLONG_MAX
 #define auxL_Unsigned unsigned long long
+#define auxL_UnsignedMin 0
+#define auxL_UnsignedMax ULLONG_MAX
 
 #define lua_IntegerMax ((1ULL << (sizeof (lua_Integer) * 8 - 1)) - 1)
 #define lua_IntegerMin (-lua_IntegerMax - 1)
@@ -547,14 +551,44 @@ NOTUSED static void auxL_pushunsigned(lua_State *L, auxL_Unsigned i) {
 	}
 } /* auxL_pushunsigned() */
 
-static auxL_Integer auxL_checkinteger(lua_State *L, int index) {
+#define auxL_checkinteger_(a, b, c, d, ...) auxL_checkinteger((a), (b), (c), (d))
+#define auxL_checkinteger(...) auxL_checkinteger_(__VA_ARGS__, auxL_IntegerMin, auxL_IntegerMax, 0)
+
+static auxL_Integer (auxL_checkinteger)(lua_State *L, int index, auxL_Integer min, auxL_Integer max) {
+	auxL_Integer i;
+
 	if (sizeof (lua_Integer) >= sizeof (auxL_Integer)) {
-		return luaL_checkinteger(L, index);
+		i = luaL_checkinteger(L, index);
 	} else {
 		/* TODO: Check overflow. */
-		return (auxL_Integer)luaL_checknumber(L, index);
+		i = (auxL_Integer)luaL_checknumber(L, index);
 	}
+
+	if (i < min || i > max)
+		luaL_error(L, "integer value out of range");
+
+	return i;
 } /* auxL_checkinteger() */
+
+#define auxL_checkunsigned_(a, b, c, d, ...) auxL_checkunsigned((a), (b), (c), (d))
+#define auxL_checkunsigned(...) auxL_checkunsigned_(__VA_ARGS__, auxL_UnsignedMin, auxL_UnsignedMax, 0)
+
+static auxL_Unsigned (auxL_checkunsigned)(lua_State *L, int index, auxL_Unsigned min, auxL_Unsigned max) {
+	auxL_Unsigned i;
+
+	if (sizeof (lua_Integer) >= sizeof (auxL_Unsigned)) {
+		/* TODO: Check sign. */
+		i = luaL_checkinteger(L, index);
+	} else {
+		/* TODO: Check sign and overflow. */
+		i = (auxL_Integer)luaL_checknumber(L, index);
+	}
+
+	if (i < min || i > max)
+		luaL_error(L, "integer value out of range");
+
+	return i;
+} /* auxL_checkunsigned() */
 
 typedef struct {
 	const char *name;
@@ -1008,7 +1042,7 @@ static void ex_newstate(lua_State *L) {
 	state->L = thr;
 #endif
 
-	lua_pushcfunction(L, &ex__gc);
+	lua_pushlightuserdata(L, (void *)&ex__gc);
 	lua_pushvalue(L, -2);
 	lua_settable(L, LUA_REGISTRYINDEX);
 
@@ -1018,7 +1052,7 @@ static void ex_newstate(lua_State *L) {
 static struct ex_state *ex_getstate(lua_State *L) {
 	struct ex_state *state;
 
-	lua_pushcfunction(L, &ex__gc);
+	lua_pushlightuserdata(L, (void *)&ex__gc);
 	lua_gettable(L, LUA_REGISTRYINDEX);
 
 	luaL_checktype(L, -1, LUA_TUSERDATA);
@@ -1118,6 +1152,21 @@ int luaopen__openssl_compat(lua_State *L) {
  * Miscellaneous global interfaces.
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static int ossl_version(lua_State *L) {
+	if (lua_isnoneornil(L, 1)) {
+		auxL_pushunsigned(L, SSLeay());
+	} else {
+		lua_pushstring(L, SSLeay_version(auxL_checkinteger(L, 1, INT_MIN, INT_MAX)));
+	}
+
+	return 1;
+} /* ossl_version() */
+
+static const luaL_Reg ossl_globals[] = {
+	{ "version", &ossl_version },
+	{ NULL,      NULL },
+};
 
 /*
  * NOTE: Compile-time cipher exclusions from openssl-1.0.1i/util/mkdef.pl.
@@ -1258,11 +1307,34 @@ static const char opensslconf_no[][20] = {
 	{ "" } /* in case nothing is defined above */
 }; /* opensslconf_no[] */
 
+static const auxL_IntegerReg ssleay_version[] = {
+#ifdef SSLEAY_VERSION_NUMBER
+	{ "SSLEAY_VERSION_NUMBER", SSLEAY_VERSION_NUMBER },
+#endif
+#ifdef SSLEAY_VERSION
+	{ "SSLEAY_VERSION", SSLEAY_VERSION },
+#endif
+#ifdef SSLEAY_OPTIONS
+	{ "SSLEAY_OPTIONS", SSLEAY_OPTIONS },
+#endif
+#ifdef SSLEAY_CFLAGS
+	{ "SSLEAY_CFLAGS", SSLEAY_CFLAGS },
+#endif
+#ifdef SSLEAY_BUILT_ON
+	{ "SSLEAY_BUILT_ON", SSLEAY_BUILT_ON },
+#endif
+#ifdef SSLEAY_PLATFORM
+	{ "SSLEAY_PLATFORM", SSLEAY_PLATFORM },
+#endif
+#ifdef SSLEAY_DIR
+	{ "SSLEAY_DIR", SSLEAY_DIR },
+#endif
+};
 
 int luaopen__openssl(lua_State *L) {
 	size_t i;
 
-	lua_newtable(L);
+	luaL_newlib(L, ossl_globals);
 
 	for (i = 0; i < countof(opensslconf_no); i++) {
 		if (*opensslconf_no[i]) {
@@ -1271,6 +1343,8 @@ int luaopen__openssl(lua_State *L) {
 		}
 	}
 
+	auxL_setintegers(L, ssleay_version);
+
 	auxL_pushinteger(L, OPENSSL_VERSION_NUMBER);
 	lua_setfield(L, -2, "VERSION_NUMBER");
 
@@ -1278,10 +1352,10 @@ int luaopen__openssl(lua_State *L) {
 	lua_setfield(L, -2, "VERSION_TEXT");
 
 	lua_pushstring(L, SHLIB_VERSION_HISTORY);
-	lua_setfield(L, -2, "SSHLIB_VERSION_HISTORY");
+	lua_setfield(L, -2, "SHLIB_VERSION_HISTORY");
 
 	lua_pushstring(L, SHLIB_VERSION_NUMBER);
-	lua_setfield(L, -2, "SSHLIB_VERSION_NUMBER");
+	lua_setfield(L, -2, "SHLIB_VERSION_NUMBER");
 
 	return 1;
 } /* luaopen__openssl() */
