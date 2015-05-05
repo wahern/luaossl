@@ -1,3 +1,12 @@
+liblua-openssl (20150504-0) unstable; urgency=low
+
+  * Use lightuserdata as registry keys. C function hashes aren't stable
+    in LuaJIT.
+  * Add openssl.version as binding for SSLeay_version.
+  * Fix build on OpenBSD 5.6 libressl.
+
+ -- William Ahern <william@25thandClement.com>  Mon, 04 May 2015 17:49:08 -0700
+
 liblua-openssl (20150422-0) unstable; urgency=low
 
   * Add support for ALPN server callback, SSL_CTX_set_alpn_select_cb.
