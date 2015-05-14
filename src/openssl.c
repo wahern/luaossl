@@ -3632,6 +3632,37 @@ static int xc_addExtension(lua_State *L) {
 } /* xc_addExtension() */
 
 
+static int xc_getExtension(lua_State *L) {
+	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
+	const char *name = luaL_checkstring(L, 2);
+
+	X509_EXTENSION *ext, **ud;
+	ASN1_OBJECT *obj = NULL;
+
+	if (!(obj = OBJ_txt2obj(name, 0)))
+		goto error;
+
+	int i = X509_get_ext_by_OBJ(crt, obj, -1);
+	if (i > -1) {
+		ud = prepsimple(L, X509_EXT_CLASS);
+		if (!(ext = X509_get_ext(crt, i)))
+			goto error;
+		if (!(*ud = X509_EXTENSION_dup(ext)))
+			goto error;
+	}
+	else lua_pushnil(L);
+
+	ASN1_OBJECT_free(obj);
+	return 1;
+
+error:
+	if (obj)
+		ASN1_OBJECT_free(obj);
+
+	return auxL_error(L, auxL_EOPENSSL, "x509.cert:getExtension");
+} /* xc_getExtension() */
+
+
 static int xc_isIssuedBy(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	X509 *issuer = checksimple(L, 2, X509_CERT_CLASS);
@@ -3850,6 +3881,7 @@ static const luaL_Reg xc_methods[] = {
 	{ "getBasicConstraintsCritical", &xc_getBasicConstraintsCritical },
 	{ "setBasicConstraintsCritical", &xc_setBasicConstraintsCritical },
 	{ "addExtension",  &xc_addExtension },
+	{ "getExtension",  &xc_getExtension },
 	{ "isIssuedBy",    &xc_isIssuedBy },
 	{ "getPublicKey",  &xc_getPublicKey },
 	{ "setPublicKey",  &xc_setPublicKey },
