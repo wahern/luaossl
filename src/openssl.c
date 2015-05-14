@@ -2889,6 +2889,13 @@ static int xe_interpose(lua_State *L) {
 } /* xe_interpose() */
 
 
+static int xe_getData(lua_State *L) {
+	ASN1_STRING *data = X509_EXTENSION_get_data(checksimple(L, 1, X509_EXT_CLASS));
+	lua_pushlstring(L, (char *) ASN1_STRING_data(data), ASN1_STRING_length(data));
+	return 1;
+} /* xe_getData() */
+
+
 static int xe__gc(lua_State *L) {
 	X509_EXTENSION **ud = luaL_checkudata(L, 1, X509_EXT_CLASS);
 
@@ -2902,7 +2909,8 @@ static int xe__gc(lua_State *L) {
 
 
 static const luaL_Reg xe_methods[] = {
-	{ NULL,  NULL },
+	{ "getData",  &xe_getData },
+	{ NULL,       NULL },
 };
 
 static const luaL_Reg xe_metatable[] = {
