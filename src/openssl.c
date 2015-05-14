@@ -2841,12 +2841,31 @@ static int xe_new(lua_State *L) {
 	const char *name = luaL_checkstring(L, 1);
 	const char *value = luaL_checkstring(L, 2);
 
+	ASN1_OBJECT *obj = NULL;
+	ASN1_STRING *oct = NULL;
 	CONF *conf = NULL;
 	X509V3_CTX cbuf = { 0 }, *ctx = NULL;
 	X509_EXTENSION *ext = NULL;
 
 	if (!lua_isnil(L, 3)) {
-		const char *cdata = luaL_checkstring(L, 3);
+		size_t len;
+		const char *cdata = luaL_checklstring(L, 3, &len);
+		int crit = !strcmp(value, "critical,DER");
+
+		if (crit || !strcmp(value, "DER")) {
+			if (!(obj = OBJ_txt2obj(name, 0)))
+				goto error;
+			if (!(oct = ASN1_STRING_new()))
+				goto error;
+			if (!ASN1_STRING_set(oct, cdata, len))
+				goto error;
+			if (!(*ud = X509_EXTENSION_create_by_OBJ(NULL, obj, crit, oct)))
+				goto error;
+			ASN1_OBJECT_free(obj);
+			ASN1_STRING_free(oct);
+			return 1;
+		}
+
 		BIO *bio = getbio(L);
 		if (BIO_puts(bio, cdata) < 0)
 			goto error;
@@ -2877,6 +2896,12 @@ static int xe_new(lua_State *L) {
 
 	return 1;
 error:
+	if (obj)
+		ASN1_OBJECT_free(obj);
+
+	if (oct)
+		ASN1_STRING_free(oct);
+
 	if (conf)
 		NCONF_free(conf);
 
