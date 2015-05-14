@@ -4318,6 +4318,18 @@ error:
 } /* xx_add() */
 
 
+static int xx_addExtension(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	X509_EXTENSION *ext = checksimple(L, 2, X509_EXT_CLASS);
+
+	if (!X509_CRL_add_ext(crl, ext, -1))
+		return auxL_error(L, auxL_EOPENSSL, "x509.crl:addExtension");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* xx_addExtension() */
+
 static int xx_sign(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
@@ -4396,6 +4408,7 @@ static const luaL_Reg xx_methods[] = {
 	{ "getIssuer",      &xx_getIssuer },
 	{ "setIssuer",      &xx_setIssuer },
 	{ "add",            &xx_add },
+	{ "addExtension",   &xx_addExtension },
 	{ "sign",           &xx_sign },
 	{ "text",           &xx_text },
 	{ "tostring",       &xx__tostring },
