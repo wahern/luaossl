@@ -820,7 +820,6 @@ static void compat_init_X509_STORE_onfree(void *store, void *data NOTUSED, CRYPT
 static int compat_init(void) {
 	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 	static int store_index = -1, ssl_ctx_index = -1, done;
-	X509_STORE *store;
 	int error = 0;
 
 	if ((error = pthread_mutex_lock(&mutex)))
@@ -1615,7 +1614,6 @@ static int bn__mul(lua_State *L) {
 
 static int bn__div(lua_State *L) {
 	BIGNUM *r, *a, *b;
-	BN_CTX *ctx;
 
 	bn_prepops(L, &r, &a, &b, 0);
 
@@ -1628,7 +1626,6 @@ static int bn__div(lua_State *L) {
 
 static int bn__mod(lua_State *L) {
 	BIGNUM *r, *a, *b;
-	BN_CTX *ctx;
 
 	bn_prepops(L, &r, &a, &b, 0);
 
@@ -1641,7 +1638,6 @@ static int bn__mod(lua_State *L) {
 
 static int bn__pow(lua_State *L) {
 	BIGNUM *r, *a, *b;
-	BN_CTX *ctx;
 
 	bn_prepops(L, &r, &a, &b, 0);
 
@@ -2291,7 +2287,6 @@ static int pk__tostring(lua_State *L) {
 	BIO *bio = getbio(L);
 	char *data;
 	long len;
-	int ok = 0;
 
 	switch (type) {
 	case X509_PEM:
@@ -2843,7 +2838,6 @@ static int xe_new(lua_State *L) {
 
 	CONF *conf = NULL;
 	X509V3_CTX cbuf = { 0 }, *ctx = NULL;
-	X509_EXTENSION *ext = NULL;
 
 	if (!lua_isnil(L, 3)) {
 		const char *cdata = luaL_checkstring(L, 3);
@@ -3166,7 +3160,6 @@ static double timeutc(ASN1_TIME *time) {
 	char buf[32] = "", *cp;
 	struct tm tm = { 0 };
 	int gmtoff = 0, year, i;
-	double ts;
 
 	if (!ASN1_TIME_check(time))
 		return 0;
@@ -3264,7 +3257,6 @@ static int xc_getLifetime(lua_State *L) {
 
 static int xc_setLifetime(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
-	ASN1_TIME *time;
 	double ut;
 	const char *dt;
 
@@ -4181,7 +4173,6 @@ static int xx_getLastUpdate(lua_State *L) {
 static int xx_setLastUpdate(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 	double updated = luaL_checknumber(L, 2);
-	ASN1_TIME *time = NULL;
 
 	/* lastUpdate always present */
 	if (!ASN1_TIME_set(X509_CRL_get_lastUpdate(crl), updated))
@@ -5286,7 +5277,6 @@ noack:
 
 static int sx_setAlpnSelect(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
-	struct ex_data *data;
 	int error;
 
 	luaL_checktype(L, 2, LUA_TFUNCTION);
@@ -5770,7 +5760,6 @@ static void md_update_(lua_State *L, EVP_MD_CTX *ctx, int from, int to) {
 
 static int md_update(lua_State *L) {
 	EVP_MD_CTX *ctx = luaL_checkudata(L, 1, DIGEST_CLASS);
-	int i;
 
 	md_update_(L, ctx, 2, lua_gettop(L));
 
