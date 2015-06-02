@@ -76,12 +76,18 @@
 #include "compat52.h"
 #endif
 
+#define OPENSSL_PREREQ(M, m, p) \
+	(OPENSSL_VERSION_NUMBER >= (((M) << 28) | ((m) << 20) | ((p) << 12)) && !defined LIBRESSL_VERSION_NUMBER)
+
+#define LIBRESSL_PREREQ(M, m, p) \
+	(LIBRESSL_VERSION_NUMBER >= (((M) << 28) | ((m) << 20) | ((p) << 12)))
+
 #ifndef HAVE_DLADDR
 #define HAVE_DLADDR (!defined _AIX) /* TODO: https://root.cern.ch/drupal/content/aix-and-dladdr */
 #endif
 
 #ifndef HAVE_SSL_CTX_SET_ALPN_PROTOS
-#define HAVE_SSL_CTX_SET_ALPN_PROTOS (OPENSSL_VERSION_NUMBER >= 0x1000200fL && !defined LIBRESSL_VERSION_NUMBER)
+#define HAVE_SSL_CTX_SET_ALPN_PROTOS OPENSSL_PREREQ(1, 0, 2)
 #endif
 
 #ifndef HAVE_SSL_CTX_SET_ALPN_SELECT_CB
@@ -94,6 +100,30 @@
 
 #ifndef HAVE_SSL_GET0_ALPN_SELECTED
 #define HAVE_SSL_GET0_ALPN_SELECTED HAVE_SSL_CTX_SET_ALPN_PROTOS
+#endif
+
+#ifndef HAVE_DTLSV1_CLIENT_METHOD
+#define HAVE_DTLSV1_CLIENT_METHOD (!defined OPENSSL_NO_DTLS1)
+#endif
+
+#ifndef HAVE_DTLSV1_SERVER_METHOD
+#define HAVE_DTLSV1_SERVER_METHOD HAVE_DTLSV1_CLIENT_METHOD
+#endif
+
+#ifndef HAVE_DTLS_CLIENT_METHOD
+#define HAVE_DTLS_CLIENT_METHOD (OPENSSL_PREREQ(1, 0, 2) && !defined OPENSSL_NO_DTLS1)
+#endif
+
+#ifndef HAVE_DTLS_SERVER_METHOD
+#define HAVE_DTLS_SERVER_METHOD HAVE_DTLS_CLIENT_METHOD
+#endif
+
+#ifndef HAVE_DTLSV1_2_CLIENT_METHOD
+#define HAVE_DTLSV1_2_CLIENT_METHOD (OPENSSL_PREREQ(1, 0, 2) && !defined OPENSSL_NO_DTLS1)
+#endif
+
+#ifndef HAVE_DTLSV1_2_SERVER_METHOD
+#define HAVE_DTLSV1_2_SERVER_METHOD HAVE_DTLSV1_2_CLIENT_METHOD
 #endif
 
 #ifndef STRERROR_R_CHAR_P
@@ -279,7 +309,13 @@ static void addclass(lua_State *L, const char *name, const luaL_Reg *methods, co
 } /* addclass() */
 
 
-static int checkoption(struct lua_State *L, int index, const char *def, const char *const opts[]) {
+static int badoption(lua_State *L, int index, const char *opt) {
+	opt = (opt)? opt : luaL_checkstring(L, index);
+
+	return luaL_argerror(L, index, lua_pushfstring(L, "invalid option %s", opt));
+} /* badoption() */
+
+static int checkoption(lua_State *L, int index, const char *def, const char *const opts[]) {
 	const char *opt = (def)? luaL_optstring(L, index, def) : luaL_checkstring(L, index);
 	int i; 
 
@@ -288,7 +324,7 @@ static int checkoption(struct lua_State *L, int index, const char *def, const ch
 			return i;
 	}
 
-	return luaL_argerror(L, index, lua_pushfstring(L, "invalid option %s", opt));
+	return badoption(L, index, opt);
 } /* checkoption() */
 
 
@@ -4940,15 +4976,17 @@ int luaopen__openssl_pkcs12(lua_State *L) {
  */
 static int sx_new(lua_State *L) {
 	static const char *const opts[] = {
-		"SSLv2", "SSLv3", "SSLv23",
-		"TLSv1", "TLSv1.0",
-#if defined SSL_OP_NO_TLSv1_1
-		"TLSv1_1", "TLSv1.1",
-#endif
-#if defined SSL_OP_NO_TLSv1_2
-		"TLSv1_2", "TLSv1.2",
-#endif
-		"SSL", "TLS",
+		[0] = "SSL",
+		[1] = "TLS",
+		[2] = "SSLv2",
+		[3] = "SSLv3",
+		[4] = "SSLv23",
+		[5] = "TLSv1", [6] = "TLSv1.0",
+		[7] = "TLSv1_1", [8] = "TLSv1.1",
+		[9] = "TLSv1_2", [10] = "TLSv1.2",
+		[11] = "DTLS",
+		[12] = "DTLSv1", [13] = "DTLSv1.0",
+		[14] = "DTLSv1_2", [15] = "DTLSv1.2",
 		NULL
 	};
 	/* later versions of SSL declare a const qualifier on the return type */
@@ -4961,41 +4999,60 @@ static int sx_new(lua_State *L) {
 	srv = lua_toboolean(L, 2);
 
 	switch (checkoption(L, 1, "TLS", opts)) {
+	case 0: /* SSL */
+		method = (srv)? &SSLv23_server_method : &SSLv23_client_method;
+		options = SSL_OP_NO_SSLv2;
+		break;
+	case 1: /* TLS */
+		method = (srv)? &SSLv23_server_method : &SSLv23_client_method;
+		options = SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3;
+		break;
 #ifndef OPENSSL_NO_SSL2
-	case 0: /* SSLv2 */
+	case 2: /* SSLv2 */
 		method = (srv)? &SSLv2_server_method : &SSLv2_client_method;
 		break;
 #endif
-	case 1: /* SSLv3 */
+	case 3: /* SSLv3 */
 		method = (srv)? &SSLv3_server_method : &SSLv3_client_method;
 		break;
-	case 2: /* SSLv23 */
+	case 4: /* SSLv23 */
 		method = (srv)? &SSLv23_server_method : &SSLv23_client_method;
 		break;
-	case 3: /* TLSv1 */
-	case 4: /* TLSv1.0 */
+	case 5: /* TLSv1 */
+	case 6: /* TLSv1.0 */
 		method = (srv)? &TLSv1_server_method : &TLSv1_client_method;
 		break;
 #if defined SSL_OP_NO_TLSv1_1
-	case 5: /* TLSv1_1 */
-	case 6: /* TLSv1.1 */
+	case 7: /* TLSv1_1 */
+	case 8: /* TLSv1.1 */
 		method = (srv)? &TLSv1_1_server_method : &TLSv1_1_client_method;
 		break;
 #endif
 #if defined SSL_OP_NO_TLSv1_2
-	case 7: /* TLSv1_2 */
-	case 8: /* TLSv1.2 */
+	case 9: /* TLSv1_2 */
+	case 10: /* TLSv1.2 */
 		method = (srv)? &TLSv1_2_server_method : &TLSv1_2_client_method;
 		break;
 #endif
-	case 9: /* SSL */
-		method = (srv)? &SSLv23_server_method : &SSLv23_client_method;
-		options = SSL_OP_NO_SSLv2;
+#if HAVE_DTLS_CLIENT_METHOD
+	case 11: /* DTLS */
+		method = (srv)? &DTLS_server_method : &DTLS_client_method;
 		break;
-	case 10: /* TLS */
-		method = (srv)? &SSLv23_server_method : &SSLv23_client_method;
-		options = SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3;
+#endif
+#if HAVE_DTLSV1_CLIENT_METHOD
+	case 12: /* DTLSv1 */
+	case 13: /* DTLSv1.0 */
+		method = (srv)? &DTLSv1_server_method : &DTLSv1_client_method;
 		break;
+#endif
+#if HAVE_DTLSV1_2_CLIENT_METHOD
+	case 14: /* DTLSv1_2 */
+	case 15: /* DTLSv1.2 */
+		method = (srv)? &DTLSv1_server_method : &DTLSv1_client_method;
+		break;
+#endif
+	default:
+		return badoption(L, 1, NULL);
 	}
 
 	ud = prepsimple(L, SSL_CTX_CLASS);
