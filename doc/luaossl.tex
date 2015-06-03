@@ -694,22 +694,25 @@ Returns a new context object. $protocol$ is an optional string identifier select
 \begin{ctabular}{ c | p{14cm} }
 \multicolumn{2}{c}{$protocol$ identifiers}\\\hline\hline
 name & \href{https://www.openssl.org/docs/ssl/SSL_CTX_new.html}{description} \\\hline
-TLS & Supports TLS 1.0 and above. Internally uses \fn{SSLv23\_method} and disables SSLv2 and 
+TLS & Supports TLS 1.0 \emph{and above}. Internally uses \fn{SSLv23\_method} and disables SSLv2 and 
 SSLv3 using \texttt{SSL\_OP\_NO\_SSLv2} and \texttt{SSL\_OP\_NO\_SSLv3}.\\
 
-SSL & Supports SSL 3.0 and above. Internally uses \fn{SSLv23\_method} and disables SSLv2 using \texttt{SSL\_OP\_NO\_SSLv2}.\\
+SSL & Supports SSL 3.0 \emph{and above}. Internally uses \fn{SSLv23\_method} and disables SSLv2 using \texttt{SSL\_OP\_NO\_SSLv2}.\\
 
 SSLv23 & A catchall for all versions of SSL/TLS supported by OpenSSL. Individual versions can be disabled using \method{context:setOptions}. Internally uses \fn{SSLv23\_method}.\\
 
-TLSv1\_2 & Supports \emph{only} TLS 1.2; \emph{not} anything lower \emph{or} higher. Internally uses \fn{TLSv1\_2\_method}.\\
+TLSv1\_2 & Supports \emph{only} TLS 1.2. Internally uses \fn{TLSv1\_2\_method}.\\
 
-TLSv1\_1 & Supports \emph{only} TLS 1.1; \emph{not} anything lower \emph{or} higher. Internally uses \fn{TLSv1\_1\_method}.\\
+TLSv1\_1 & Supports \emph{only} TLS 1.1. Internally uses \fn{TLSv1\_1\_method}.\\
 
-TLSv1 & Supports \emph{only} TLS 1.0; \emph{not} anything lower \emph{or} higher. Internally uses \fn{TLSv1\_method}.\\
+TLSv1 & Supports \emph{only} TLS 1.0. Internally uses \fn{TLSv1\_method}.\\
 
-SSLv3 & Supports \emph{only} SSL 3.0; \emph{not} anything lower \emph{or} higher. Internally uses \fn{SSLv3\_method}.\\
+SSLv3 & Supports \emph{only} SSL 3.0. Internally uses \fn{SSLv3\_method}.\\
 
-SSLv2 & Supports \emph{only} SSL 2.0; \emph{not} anything lower \emph{or} higher. Internally uses \fn{SSLv2\_method}.
+SSLv2 & Supports \emph{only} SSL 2.0. Internally uses \fn{SSLv2\_method}. \\
+DTLS & Supports DTLS 1.0 \emph{and above}. Internally uses \fn{DTLS\_method}. \\
+DTLSv1 & Supports \emph{only} DTLS 1.0. Internally uses \fn{DTLSv1\_method}. \\
+DTLSv1\_2 & Supports \emph{only} DTLS 1.2. Internally uses \fn{DTLSv1\_2\_method}.
 \end{ctabular}
 
 
