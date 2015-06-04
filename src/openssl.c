@@ -748,7 +748,7 @@ static struct {
 	.X509_STORE_free = &X509_STORE_free,
 };
 
-#if !HAVE_EVP_PKEY_base_id
+#if !HAVE_EVP_PKEY_BASE_ID
 #define EVP_PKEY_base_id(key) compat_EVP_PKEY_base_id((key))
 
 static int compat_EVP_PKEY_base_id(EVP_PKEY *key) {
@@ -757,7 +757,7 @@ static int compat_EVP_PKEY_base_id(EVP_PKEY *key) {
 #endif
 
 
-#if !HAVE_EVP_PKEY_get0
+#if !HAVE_EVP_PKEY_GET0
 #define EVP_PKEY_get0(key) compat_EVP_PKEY_get0((key))
 
 static void *compat_EVP_PKEY_get0(EVP_PKEY *key) {
@@ -790,6 +790,14 @@ static void *compat_EVP_PKEY_get0(EVP_PKEY *key) {
 
 	return ptr;
 } /* compat_EVP_PKEY_get0() */
+#endif
+
+#if !HAVE_X509_GET0_EXT
+#define X509_get0_ext(crt, i) X509_get_ext((crt), (i))
+#endif
+
+#if !HAVE_X509_EXTENSION_GET0_DATA
+#define X509_EXTENSION_get0_data(ext) X509_EXTENSION_get_data((ext))
 #endif
 
 /*
@@ -2864,25 +2872,33 @@ int luaopen__openssl_x509_altname(lua_State *L) {
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+static _Bool xe_new_isder(const char *value, _Bool *crit) {
+	if (!strcmp(value, "critical,DER"))
+		return (*crit = 1), 1;
+	if (!strcmp(value, "DER"))
+		return (*crit = 0), 1;
+
+	return 0;
+} /* xs_new_isder() */
+
 static int xe_new(lua_State *L) {
-	lua_settop(L, 3);
-
-	X509_EXTENSION **ud = prepsimple(L, X509_EXT_CLASS);
-
 	const char *name = luaL_checkstring(L, 1);
 	const char *value = luaL_checkstring(L, 2);
-
 	ASN1_OBJECT *obj = NULL;
 	ASN1_STRING *oct = NULL;
 	CONF *conf = NULL;
 	X509V3_CTX cbuf = { 0 }, *ctx = NULL;
+	X509_EXTENSION **ud;
+
+	lua_settop(L, 3);
+	ud = prepsimple(L, X509_EXT_CLASS);
 
 	if (!lua_isnil(L, 3)) {
 		size_t len;
 		const char *cdata = luaL_checklstring(L, 3, &len);
-		int crit = !strcmp(value, "critical,DER");
+		_Bool crit;
 
-		if (crit || !strcmp(value, "DER")) {
+		if (xe_new_isder(value, &crit)) {
 			if (!(obj = OBJ_txt2obj(name, 0)))
 				goto error;
 			if (!(oct = ASN1_STRING_new()))
@@ -2891,8 +2907,10 @@ static int xe_new(lua_State *L) {
 				goto error;
 			if (!(*ud = X509_EXTENSION_create_by_OBJ(NULL, obj, crit, oct)))
 				goto error;
+
 			ASN1_OBJECT_free(obj);
 			ASN1_STRING_free(oct);
+
 			return 1;
 		}
 
@@ -2928,10 +2946,8 @@ static int xe_new(lua_State *L) {
 error:
 	if (obj)
 		ASN1_OBJECT_free(obj);
-
 	if (oct)
 		ASN1_STRING_free(oct);
-
 	if (conf)
 		NCONF_free(conf);
 
@@ -2945,8 +2961,10 @@ static int xe_interpose(lua_State *L) {
 
 
 static int xe_getData(lua_State *L) {
-	ASN1_STRING *data = X509_EXTENSION_get_data(checksimple(L, 1, X509_EXT_CLASS));
-	lua_pushlstring(L, (char *) ASN1_STRING_data(data), ASN1_STRING_length(data));
+	ASN1_STRING *data = X509_EXTENSION_get0_data(checksimple(L, 1, X509_EXT_CLASS));
+
+	lua_pushlstring(L, (char *)ASN1_STRING_data(data), ASN1_STRING_length(data));
+
 	return 1;
 } /* xe_getData() */
 
@@ -3696,7 +3714,6 @@ static int xc_addExtension(lua_State *L) {
 static int xc_getExtension(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	const char *name = luaL_checkstring(L, 2);
-
 	X509_EXTENSION *ext, **ud;
 	ASN1_OBJECT *obj = NULL;
 
@@ -3706,16 +3723,17 @@ static int xc_getExtension(lua_State *L) {
 	int i = X509_get_ext_by_OBJ(crt, obj, -1);
 	if (i > -1) {
 		ud = prepsimple(L, X509_EXT_CLASS);
-		if (!(ext = X509_get_ext(crt, i)))
+		if (!(ext = X509_get0_ext(crt, i)))
 			goto error;
 		if (!(*ud = X509_EXTENSION_dup(ext)))
 			goto error;
+	} else {
+		lua_pushnil(L);
 	}
-	else lua_pushnil(L);
 
 	ASN1_OBJECT_free(obj);
-	return 1;
 
+	return 1;
 error:
 	if (obj)
 		ASN1_OBJECT_free(obj);
@@ -4434,6 +4452,7 @@ static int xx_addExtension(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 	X509_EXTENSION *ext = checksimple(L, 2, X509_EXT_CLASS);
 
+	/* NOTE: Will dup extension in X509v3_add_ext. */
 	if (!X509_CRL_add_ext(crl, ext, -1))
 		return auxL_error(L, auxL_EOPENSSL, "x509.crl:addExtension");
 
