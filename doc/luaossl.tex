@@ -487,6 +487,10 @@ Returns the public key component as an \module{openssl.pkey} object.
 
 Sets the public key component referenced by the \module{openssl.pkey} object $key$.
 
+\subsubsection[\fn{x509:getPublicKeyDigest}]{\fn{x509:getPublicKeyDigest([$type$])}}
+
+Returns the digest of the public key as a binary string. $type$ is an optional string describing the digest type, and defaults to ``sha1''.
+
 \subsubsection[\fn{x509:sign}]{\fn{x509:sign($key$ [, $type$])}}
 
 Signs and updates the instance certificate using the \module{openssl.pkey} $key$. $type$ is an optional string describing the digest type. See \module{pkey:sign}, regarding which types of digests are valid. If $type$ is omitted than a default type is used---``sha1'' for RSA keys, ``dss1'' for DSA keys, and ``ecdsa-with-SHA1'' for EC keys.
