@@ -217,6 +217,38 @@ Install Lua 5.3 module.
 
 \section{Modules}
 
+\begin{Module}{openssl}
+
+Binds various global interfaces, including version and build information.
+
+\subsubsection[\fn{openssl[]}]{\fn{openssl[]}}
+
+Table of various compile-time constant values. See also \fn{openssl.version}.
+
+\begin{ctabular}{ c | p{12cm} }
+name & description \\\hline
+\small{\texttt{SSLEAY\_VERSION\_NUMBER}} & OpenSSL version as an integer. \\
+\small{\texttt{LIBRESSL\_VERSION\_NUMBER}} & LibreSSL version as an integer. \\
+\small{\texttt{NO\_[feature]}} & If defined, signals that this installation of OpenSSL was compiled without [feature]. \\
+\end{ctabular}
+
+
+\subsubsection[\fn{openssl.version}]{\fn{openssl.version($info$)}}
+
+Returns information about the run-time version of OpenSSL, as opposed to the compile-time version used to build the Lua module. If $info$ is not specified, returns the version number as an integer. Otherwise, $info$ may be one of the following constants.
+
+\begin{ctabular}{ c | p{12cm} }
+name & description \\\hline
+\small{\texttt{SSLEAY\_VERSION}} & OpenSSL version description as a string. \\
+\small{\texttt{SSLEAY\_CFLAGS}} & Description of compiler flags used to build OpenSSL as a string. \\
+\small{\texttt{SSLEAY\_BUILT\_ON}} & Compilation date description as a string. \\
+\small{\texttt{SSLEAY\_PLATFORM}} & Platform description as a string. \\
+\small{\texttt{SSLEAY\_DIR}} & OpenSSL installation directory description as a string. \\
+\end{ctabular}
+
+\end{Module}
+
+
 \begin{Module}{openssl.bignum}
 
 \module{openssl.bignum} binds OpenSSL's libcrypto bignum library. It supports all the standard arithmetic operations. Regular number operands in a mixed arithmetic expression are upgraded as-if \method{bignum.new} was used explicitly. The \fn{\_\_tostring} metamethod generates a decimal encoded represention.
