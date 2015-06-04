@@ -3722,7 +3722,7 @@ static int xc_setPublicKey(lua_State *L) {
 
 
 static int xc_getPublicKeyDigest(lua_State *L) {
-	ASN1_BIT_STRING *pk = ((X509 *)checksimple(L, 1, X509_CERT_CLASS))->cert_info->key->public_key;
+	ASN1_BIT_STRING *pk = X509_get0_pubkey_bitstr(checksimple(L, 1, X509_CERT_CLASS));
 	const char *id = luaL_optstring(L, 2, "sha1");
 	const EVP_MD *md;
 	unsigned char digest[EVP_MAX_MD_SIZE];
