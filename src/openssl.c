@@ -3721,6 +3721,21 @@ static int xc_setPublicKey(lua_State *L) {
 } /* xc_setPublicKey() */
 
 
+static int xc_getPublicKeyDigest(lua_State *L) {
+	ASN1_BIT_STRING *pk = ((X509 *) checksimple(L, 1, X509_CERT_CLASS))->cert_info->key->public_key;
+
+	unsigned char digest[EVP_MAX_MD_SIZE];
+	unsigned int len;
+
+	if (!EVP_Digest(pk->data, pk->length, digest, &len, EVP_sha1(), NULL))
+		return auxL_error(L, auxL_EOPENSSL, "x509.cert:getPublicKeyDigest");
+
+	lua_pushlstring(L, (char *) digest, len);
+
+	return 1;
+} /* xc_setPublicKeyDigest() */
+
+
 static const EVP_MD *xc_signature(lua_State *L, int index, EVP_PKEY *key) {
 	const char *id;
 	const EVP_MD *md;
@@ -3881,6 +3896,7 @@ static const luaL_Reg xc_methods[] = {
 	{ "isIssuedBy",    &xc_isIssuedBy },
 	{ "getPublicKey",  &xc_getPublicKey },
 	{ "setPublicKey",  &xc_setPublicKey },
+	{ "getPublicKeyDigest", &xc_getPublicKeyDigest },
 	{ "sign",          &xc_sign },
 	{ "text",          &xc_text },
 	{ "tostring",      &xc__tostring },
