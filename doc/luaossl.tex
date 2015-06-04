@@ -355,14 +355,37 @@ Returns a key-value iterator over the alternative names. The key is one of ``ema
 
 Binds the X.509 extension OpenSSL object.
 
-\subsubsection[\fn{extension.new}]{\fn{extension.new($name$, $value$ [, $conf$])}}
+\subsubsection[\fn{extension.new}]{\fn{extension.new($name$, $value$ [, $data$])}}
 
-Returns a new X.509 extension. $name$, $value$, and $conf$ are [currently] plain text strings.
-$value$ and $conf$ should use \href{https://www.openssl.org/docs/apps/x509v3_config.html#ARBITRARY_EXTENSIONS}{OpenSSL's arbitrary extension format}.
+Returns a new X.509 extension. If $value$ is the string ``DER'' or ``critical,DER'', then $data$ is an ASN.1-encoded octet string. Otherwise, $name$ and $value$ are plain text strings in \href{https://www.openssl.org/docs/apps/x509v3_config.html#ARBITRARY_EXTENSIONS}{OpenSSL's arbitrary extension format}; and if specified, $data$ is an OpenSSL configuration string defining any referenced identifiers in $value$.
 
 \subsubsection[\fn{extension.interpose}]{\fn{extension.interpose($name$, $function$)}}
 
 Add or interpose an extension class method. Returns the previous method, if any.
+
+\subsubsection[\fn{extension:getID}]{\fn{extension:getID()}}
+
+Returns the ASN.1 OID as a plain text string.
+
+\subsubsection[\fn{extension:getName}]{\fn{extension:getName()}}
+
+Returns a more human-readable name as a plain text string in the following order of preference: OpenSSL's short name, OpenSSL's long name, ASN.1 OID.
+
+\subsubsection[\fn{extension:getShortName}]{\fn{extension:getShortName()}}
+
+Returns OpenSSL's short name as a plain text string if available.
+
+\subsubsection[\fn{extension:getLongName}]{\fn{extension:getLongName()}}
+
+Returns OpenSSL's long name as a plain text string if available.
+
+\subsubsection[\fn{extension:getData}]{\fn{extension:getData()}}
+
+Returns the extension value as an ASN.1-encoded octet string.
+
+\subsubsection[\fn{extension:getCritical}]{\fn{extension:getCritical()}}
+
+Returns the extension critical flag as a boolean.
 
 \end{Module}
 
@@ -473,7 +496,11 @@ Sets the basic constraints critical flag.
 
 \subsubsection[\fn{x509:addExtension}]{\fn{x509:addExtension($ext$)}}
 
-Adds \module{x509.extension} object to the certificate. 
+Adds a copy of the \module{x509.extension} object to the certificate. 
+
+\subsubsection[\fn{x509:getExtension}]{\fn{x509:getExtension($name$)}}
+
+Returns a copy of the \module{x509.extension} object identified by $name$, where $name$ is a plain text string of the OID, long name, or short name. Returns $nil$ if no such extension was found.
 
 \subsubsection[\fn{x509:isIssuedBy}]{\fn{x509:isIssuedBy($issuer$)}}
 
@@ -600,6 +627,14 @@ Sets the issuer distinguished name. $name$ should be an \module{x509.name} objec
 \subsubsection[\fn{crl:add}]{\fn{crl:add($serial$ [, $time$])}}
 
 Add the certificate identified by $serial$ to the revocation list. $serial$ should be a \module{openssl.bignum} object, as returned by \fn{x509:getSerial}. $time$ is the revocation date as a Unix timestamp. If unspecified $time$ defaults to the current time.
+
+\subsubsection[\fn{crl:addExtension}]{\fn{crl:addExtension($ext$)}}
+
+Adds a copy of the \module{x509.extension} object to the revocation list. 
+
+\subsubsection[\fn{crl:getExtension}]{\fn{crl:getExtension($name$)}}
+
+Returns a copy of the \module{x509.extension} object identified by $name$, where $name$ is a plain text string of the OID, long name, or short name. Returns $nil$ if no such extension was found.
 
 \subsubsection[\fn{crl:sign}]{\fn{crl:sign($key$)}}
 
