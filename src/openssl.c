@@ -694,6 +694,13 @@ static auxL_Integer (auxL_checkinteger)(lua_State *L, int index, auxL_Integer mi
 	return i;
 } /* auxL_checkinteger() */
 
+#define auxL_optinteger_(a, b, c, d, e, ...) auxL_optinteger((a), (b), (c), (d), (e))
+#define auxL_optinteger(...) auxL_optinteger_(__VA_ARGS__, auxL_IntegerMin, auxL_IntegerMax, 0)
+
+static auxL_Integer (auxL_optinteger)(lua_State *L, int index, auxL_Integer def, auxL_Integer min, auxL_Integer max) {
+	return (lua_isnoneornil(L, index))? def : auxL_checkinteger(L, index, min, max);
+} /* auxL_optinteger() */
+
 #define auxL_checkunsigned_(a, b, c, d, ...) auxL_checkunsigned((a), (b), (c), (d))
 #define auxL_checkunsigned(...) auxL_checkunsigned_(__VA_ARGS__, auxL_UnsignedMin, auxL_UnsignedMax, 0)
 
@@ -713,6 +720,13 @@ static auxL_Unsigned (auxL_checkunsigned)(lua_State *L, int index, auxL_Unsigned
 
 	return i;
 } /* auxL_checkunsigned() */
+
+#define auxL_optunsigned_(a, b, c, d, e, ...) auxL_optunsigned((a), (b), (c), (d), (e))
+#define auxL_optunsigned(...) auxL_optunsigned_(__VA_ARGS__, auxL_UnsignedMin, auxL_UnsignedMax, 0)
+
+static auxL_Unsigned (auxL_optunsigned)(lua_State *L, int index, auxL_Unsigned def, auxL_Unsigned min, auxL_Unsigned max) {
+	return (lua_isnoneornil(L, index))? def : auxL_checkunsigned(L, index, min, max);
+} /* auxL_optunsigned() */
 
 typedef struct {
 	const char *name;
@@ -3135,6 +3149,25 @@ static int xe_getCritical(lua_State *L) {
 } /* xe_getCritical() */
 
 
+static int xe_text(lua_State *L) {
+	X509_EXTENSION *ext = checksimple(L, 1, X509_EXT_CLASS);
+	unsigned long flags = auxL_optunsigned(L, 2, 0, 0, ULONG_MAX);
+	int indent = auxL_optinteger(L, 3, 0, 0, INT_MAX);
+	BIO *bio = getbio(L);
+	char *data;
+	size_t len;
+
+	if (!X509V3_EXT_print(bio, ext, flags, indent))
+		return auxL_error(L, auxL_EOPENSSL, "x509.extension.text");
+
+	len = BIO_get_mem_data(bio, &data);
+
+	lua_pushlstring(L, data, len);
+
+	return 1;
+} /* xe_text() */
+
+
 static int xe__gc(lua_State *L) {
 	X509_EXTENSION **ud = luaL_checkudata(L, 1, X509_EXT_CLASS);
 
@@ -3154,6 +3187,7 @@ static const luaL_Reg xe_methods[] = {
 	{ "getLongName",  &xe_getLongName },
 	{ "getData",      &xe_getData },
 	{ "getCritical",  &xe_getCritical },
+	{ "text",         &xe_text },
 	{ NULL,           NULL },
 };
 
@@ -3169,10 +3203,19 @@ static const luaL_Reg xe_globals[] = {
 	{ NULL,        NULL },
 };
 
+static const auxL_IntegerReg xe_textopts[] = {
+	{ "UNKNOWN_MASK", X509V3_EXT_UNKNOWN_MASK },
+	{ "DEFAULT", X509V3_EXT_DEFAULT },
+	{ "ERROR_UNKNOWN", X509V3_EXT_ERROR_UNKNOWN },
+	{ "PARSE_UNKNOWN", X509V3_EXT_PARSE_UNKNOWN },
+	{ "DUMP_UNKNOWN", X509V3_EXT_DUMP_UNKNOWN },
+};
+
 int luaopen__openssl_x509_extension(lua_State *L) {
 	initall(L);
 
 	luaL_newlib(L, xe_globals);
+	auxL_setintegers(L, xe_textopts);
 
 	return 1;
 } /* luaopen__openssl_x509_extension() */
@@ -6672,7 +6715,7 @@ static void randL_checkpid(struct randL_state *st) {
 
 
 static int rand_stir(lua_State *L) {
-	int error = randL_stir(randL_getstate(L), luaL_optunsigned(L, 1, 16));
+	int error = randL_stir(randL_getstate(L), auxL_optunsigned(L, 1, 16, 0, UINT_MAX));
 
 	if (error) {
 		lua_pushboolean(L, 0);
