@@ -530,9 +530,13 @@ Sets the basic constraints critical flag.
 
 Adds a copy of the \module{x509.extension} object to the certificate. 
 
-\subsubsection[\fn{x509:getExtension}]{\fn{x509:getExtension($name$)}}
+\subsubsection[\fn{x509:getExtension}]{\fn{x509:getExtension($key$)}}
 
-Returns a copy of the \module{x509.extension} object identified by $name$, where $name$ is a plain text string of the OID, long name, or short name. Returns $nil$ if no such extension was found.
+Returns a copy of the \module{x509.extension} object identified by $key$ where $key$ is the plain text string of the OID, long name, or short name; or the integer index (1-based) of the extension. Returns nothing if no such extension was found by that name or at that index.
+
+\subsubsection[\fn{x509:getExtensionCount}]{\fn{x509:getExtensionCount()}}
+
+Returns the integer count of the number of extensions.
 
 \subsubsection[\fn{x509:isIssuedBy}]{\fn{x509:isIssuedBy($issuer$)}}
 
@@ -664,9 +668,13 @@ Add the certificate identified by $serial$ to the revocation list. $serial$ shou
 
 Adds a copy of the \module{x509.extension} object to the revocation list. 
 
-\subsubsection[\fn{crl:getExtension}]{\fn{crl:getExtension($name$)}}
+\subsubsection[\fn{crl:getExtension}]{\fn{crl:getExtension($key$)}}
 
-Returns a copy of the \module{x509.extension} object identified by $name$, where $name$ is a plain text string of the OID, long name, or short name. Returns $nil$ if no such extension was found.
+Returns a copy of the \module{x509.extension} object identified by $key$ where $key$ is the plain text string of the OID, long name, or short name; or the integer index (1-based) of the extension. Returns nothing if no such extension was found by that name or at that index.
+
+\subsubsection[\fn{crl:getExtensionCount}]{\fn{crl:getExtensionCount()}}
+
+Returns the integer count of the number of extensions.
 
 \subsubsection[\fn{crl:sign}]{\fn{crl:sign($key$)}}
 
