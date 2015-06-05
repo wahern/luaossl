@@ -585,6 +585,24 @@ static size_t auxS_obj2txt(void *dst, size_t lim, const ASN1_OBJECT *obj) {
 	return auxS_obj2id(dst, lim, obj);
 } /* auxS_obj2txt() */
 
+static _Bool auxS_isoid(const char *txt) {
+	return (*txt >= '0' && *txt <= '9');
+} /* auxS_isoid() */
+
+static _Bool auxS_txt2obj(ASN1_OBJECT **obj, const char *txt) {
+	int nid;
+
+	if ((nid = OBJ_sn2nid(txt)) != NID_undef
+	||  (nid = OBJ_ln2nid(txt)) != NID_undef) {
+		return NULL != (*obj = OBJ_nid2obj(nid));
+	} else if (auxS_isoid(txt)) {
+		return NULL != (*obj = OBJ_txt2obj(txt, 1));
+	} else {
+		*obj = NULL;
+		return 1;
+	}
+} /* auxS_txt2obj() */
+
 
 /*
  * Auxiliary Lua API routines
@@ -3867,33 +3885,49 @@ static int xc_addExtension(lua_State *L) {
 
 static int xc_getExtension(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
-	const char *name = luaL_checkstring(L, 2);
-	X509_EXTENSION *ext, **ud;
-	ASN1_OBJECT *obj = NULL;
+	X509_EXTENSION *ext = NULL, **ud;
+	int i;
 
-	if (!(obj = OBJ_txt2obj(name, 0)))
-		goto error;
+	luaL_checkany(L, 2);
 
-	int i = X509_get_ext_by_OBJ(crt, obj, -1);
-	if (i > -1) {
-		ud = prepsimple(L, X509_EXT_CLASS);
-		if (!(ext = X509_get0_ext(crt, i)))
-			goto error;
-		if (!(*ud = X509_EXTENSION_dup(ext)))
-			goto error;
+	if (lua_type(L, 2) == LUA_TNUMBER) {
+		/* NB: Lua 1-based indexing */
+		i = auxL_checkinteger(L, 2, 1, INT_MAX) - 1;
 	} else {
-		lua_pushnil(L);
+		ASN1_OBJECT *obj;
+
+		if (!auxS_txt2obj(&obj, luaL_checkstring(L, 2))) {
+			goto error;
+		} else if (!obj) {
+			goto undef;
+		}
+
+		i = X509_get_ext_by_OBJ(crt, obj, -1);
+
+		ASN1_OBJECT_free(obj);
 	}
 
-	ASN1_OBJECT_free(obj);
+	ud = prepsimple(L, X509_EXT_CLASS);
+
+	if (i < 0 || !(ext = X509_get0_ext(crt, i)))
+		goto undef;
+
+	if (!(*ud = X509_EXTENSION_dup(ext)))
+		goto error;
 
 	return 1;
+undef:
+	return 0;
 error:
-	if (obj)
-		ASN1_OBJECT_free(obj);
-
 	return auxL_error(L, auxL_EOPENSSL, "x509.cert:getExtension");
 } /* xc_getExtension() */
+
+
+static int xc_getExtensionCount(lua_State *L) {
+	auxL_pushinteger(L, X509_get_ext_count(checksimple(L, 1, X509_CERT_CLASS)));
+
+	return 1;
+} /* xc_getExtensionCount() */
 
 
 static int xc_isIssuedBy(lua_State *L) {
@@ -4134,6 +4168,7 @@ static const luaL_Reg xc_methods[] = {
 	{ "setBasicConstraintsCritical", &xc_setBasicConstraintsCritical },
 	{ "addExtension",  &xc_addExtension },
 	{ "getExtension",  &xc_getExtension },
+	{ "getExtensionCount", &xc_getExtensionCount },
 	{ "isIssuedBy",    &xc_isIssuedBy },
 	{ "getPublicKey",  &xc_getPublicKey },
 	{ "setPublicKey",  &xc_setPublicKey },
@@ -4618,33 +4653,49 @@ static int xx_addExtension(lua_State *L) {
 
 static int xx_getExtension(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
-	const char *name = luaL_checkstring(L, 2);
-	X509_EXTENSION *ext, **ud;
-	ASN1_OBJECT *obj = NULL;
+	X509_EXTENSION *ext = NULL, **ud;
+	int i;
 
-	if (!(obj = OBJ_txt2obj(name, 0)))
-		goto error;
+	luaL_checkany(L, 2);
 
-	int i = X509_CRL_get_ext_by_OBJ(crl, obj, -1);
-	if (i > -1) {
-		ud = prepsimple(L, X509_CRL_CLASS);
-		if (!(ext = X509_CRL_get0_ext(crl, i)))
-			goto error;
-		if (!(*ud = X509_EXTENSION_dup(ext)))
-			goto error;
+	if (lua_type(L, 2) == LUA_TNUMBER) {
+		/* NB: Lua 1-based indexing */
+		i = auxL_checkinteger(L, 2, 1, INT_MAX) - 1;
 	} else {
-		lua_pushnil(L);
+		ASN1_OBJECT *obj;
+
+		if (!auxS_txt2obj(&obj, luaL_checkstring(L, 2))) {
+			goto error;
+		} else if (!obj) {
+			goto undef;
+		}
+
+		i = X509_CRL_get_ext_by_OBJ(crl, obj, -1);
+
+		ASN1_OBJECT_free(obj);
 	}
 
-	ASN1_OBJECT_free(obj);
+	ud = prepsimple(L, X509_EXT_CLASS);
+
+	if (i < 0 || !(ext = X509_CRL_get0_ext(crl, i)))
+		goto undef;
+
+	if (!(*ud = X509_EXTENSION_dup(ext)))
+		goto error;
 
 	return 1;
+undef:
+	return 0;
 error:
-	if (obj)
-		ASN1_OBJECT_free(obj);
-
 	return auxL_error(L, auxL_EOPENSSL, "x509.crl:getExtension");
 } /* xx_getExtension() */
+
+
+static int xx_getExtensionCount(lua_State *L) {
+	auxL_pushinteger(L, X509_CRL_get_ext_count(checksimple(L, 1, X509_CRL_CLASS)));
+
+	return 1;
+} /* xx_getExtensionCount() */
 
 
 static int xx_sign(lua_State *L) {
@@ -4727,6 +4778,7 @@ static const luaL_Reg xx_methods[] = {
 	{ "add",            &xx_add },
 	{ "addExtension",   &xx_addExtension },
 	{ "getExtension",   &xx_getExtension },
+	{ "getExtensionCount", &xx_getExtensionCount },
 	{ "sign",           &xx_sign },
 	{ "text",           &xx_text },
 	{ "tostring",       &xx__tostring },
