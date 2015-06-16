@@ -34,9 +34,6 @@
 #include <assert.h>       /* assert */
 
 #include <sys/types.h>    /* ssize_t pid_t */
-#if !defined __sun && !defined _AIX
-#include <sys/sysctl.h>   /* CTL_KERN KERN_RANDOM RANDOM_UUID KERN_URND KERN_ARND sysctl(2) */
-#endif
 #include <sys/time.h>     /* struct timeval gettimeofday(2) */
 #include <sys/stat.h>     /* struct stat stat(2) */
 #include <sys/socket.h>   /* AF_INET AF_INET6 */
@@ -6588,6 +6585,13 @@ static struct randL_state *randL_getstate(lua_State *L) {
 	return lua_touserdata(L, lua_upvalueindex(1));
 } /* randL_getstate() */
 
+#ifndef HAVE_SYS_SYSCTL_H
+#define HAVE_SYS_SYSCTL_H (!defined __sun && !defined _AIX)
+#endif
+
+#if HAVE_SYS_SYSCTL_H
+#include <sys/sysctl.h> /* CTL_KERN KERN_RANDOM RANDOM_UUID KERN_URND KERN_ARND sysctl(2) */
+#endif
 
 #ifndef HAVE_RANDOM_UUID
 #define HAVE_RANDOM_UUID (defined __linux) /* RANDOM_UUID is an enum, not macro */
