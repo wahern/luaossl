@@ -1185,6 +1185,15 @@ static void ex_newstate(lua_State *L) {
 	struct ex_state *state;
 	struct lua_State *thr;
 
+	lua_pushlightuserdata(L, (void *)&ex__gc);
+	lua_gettable(L, LUA_REGISTRYINDEX);
+
+	if (!lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+
+		return;
+	}
+
 	state = prepudata(L, sizeof *state, NULL, &ex__gc);
 	LIST_INIT(&state->data);
 
