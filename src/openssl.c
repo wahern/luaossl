@@ -1181,18 +1181,23 @@ static int ex__gc(lua_State *L) {
 	return 0;
 } /* ex__gc() */
 
+static _Bool ex_hasstate(lua_State *L) {
+	_Bool has;
+
+	lua_pushlightuserdata(L, (void *)&ex__gc);
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	has = !lua_isnil(L, -1);
+	lua_pop(L, 1);
+
+	return has;
+} /* ex_hasstate() */
+
 static void ex_newstate(lua_State *L) {
 	struct ex_state *state;
 	struct lua_State *thr;
 
-	lua_pushlightuserdata(L, (void *)&ex__gc);
-	lua_gettable(L, LUA_REGISTRYINDEX);
-
-	if (!lua_isnil(L, -1)) {
-		lua_pop(L, 1);
-
+	if (ex_hasstate(L))
 		return;
-	}
 
 	state = prepudata(L, sizeof *state, NULL, &ex__gc);
 	LIST_INIT(&state->data);
