@@ -1,3 +1,14 @@
+liblua-openssl (20150727-0) unstable; urgency=low
+
+  * More extension work from Kaarle Ritvanen.
+  * Add DTLS support.
+  * More extension work from kunkku.
+  * Fix bug in ex_newstate which could cause application data attached
+    to OpenSSL objects using OpenSSL's external application data API to be
+    prematurely invalidated as-if the Lua interperter was destroyed.
+
+ -- William Ahern <william@25thandClement.com>  Mon, 27 Jul 2015 01:42:46 -0700
+
 liblua-openssl (20150504-0) unstable; urgency=low
 
   * Use lightuserdata as registry keys. C function hashes aren't stable
