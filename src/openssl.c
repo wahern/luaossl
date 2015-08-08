@@ -1208,6 +1208,7 @@ static void ex_newstate(lua_State *L) {
 	 * Instead, we'll install our own panic handlers.
 	 */
 #if defined LUA_RIDX_MAINTHREAD
+	(void)thr;
 	lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
 	state->L = lua_tothread(L, -1);
 	lua_pop(L, 1);
