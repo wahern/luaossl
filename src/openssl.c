@@ -2941,9 +2941,8 @@ static int xn__next(lua_State *L) {
 	X509_NAME *name = checksimple(L, lua_upvalueindex(1), X509_NAME_CLASS);
 	X509_NAME_ENTRY *entry;
 	ASN1_OBJECT *obj;
-	const char *id;
 	char txt[256];
-	int i, n, nid, len;
+	int i, n, len;
 
 	lua_settop(L, 0);
 
