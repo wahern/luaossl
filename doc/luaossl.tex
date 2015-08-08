@@ -871,9 +871,9 @@ Sets the X.509 certificate \module{openssl.x509} object $crt$ to send during SSL
 
 Sets the private key \module{openssl.pkey} object $key$ for use during SSL connection instance handshakes.
 
-\subsubsection[\fn{context:setCipherList}]{\fn{context:setCipherList($string$)}}
+\subsubsection[\fn{context:setCipherList}]{\fn{context:setCipherList($string$ [, ...])}}
 
-Sets the allowed public key and private key algorithms. The string format is documented in the \href{http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT}{OpenSSL ciphers(1) utility documentation}.
+Sets the allowed public key and private key algorithm(s). The string format is documented in the \href{http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT}{OpenSSL ciphers(1) utility documentation}.
 
 \subsubsection[\fn{context:setEphemeralKey}]{\fn{context:setEphemeralKey($key$)}}
 
