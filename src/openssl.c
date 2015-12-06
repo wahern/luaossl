@@ -1558,6 +1558,16 @@ static BIGNUM *bn_push(lua_State *L) {
 } /* bn_push() */
 
 
+static BIGNUM *bn_dup(lua_State *L, const BIGNUM *src) {
+	BIGNUM **ud = prepsimple(L, BIGNUM_CLASS);
+
+	if (!(*ud = BN_dup(src)))
+		auxL_error(L, auxL_EOPENSSL, "bignum.new");
+
+	return *ud;
+} /* bn_dup() */
+
+
 #define checkbig_(a, b, c, ...) checkbig((a), (b), (c))
 #define checkbig(...) checkbig_(__VA_ARGS__, &(_Bool){ 0 }, 0)
 
@@ -2472,64 +2482,64 @@ static int pk_getParameters(lua_State *L) {
 	switch (EVP_PKEY_base_id(key)) {
 	case EVP_PKEY_RSA:
 		/* RSA public modulus n */
-		if (!BN_copy(bn_push(L), ((RSA*)tmp)->n))
+		if (!bn_dup(L, ((RSA*)tmp)->n))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "n");
 
 		/* RSA public exponent e */
-		if (!BN_copy(bn_push(L), ((RSA*)tmp)->e))
+		if (!bn_dup(L, ((RSA*)tmp)->e))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "e");
 
 		/* RSA secret exponent d */
-		if (!BN_copy(bn_push(L), ((RSA*)tmp)->d))
+		if (!bn_dup(L, ((RSA*)tmp)->d))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "d");
 
 		/* RSA secret prime p */
-		if (!BN_copy(bn_push(L), ((RSA*)tmp)->p))
+		if (!bn_dup(L, ((RSA*)tmp)->p))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "p");
 
 		/* RSA secret prime q with p < q */
-		if (!BN_copy(bn_push(L), ((RSA*)tmp)->q))
+		if (!bn_dup(L, ((RSA*)tmp)->q))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "q");
 
 		/* exponent1 */
-		if (!BN_copy(bn_push(L), ((RSA*)tmp)->dmp1))
+		if (!bn_dup(L, ((RSA*)tmp)->dmp1))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "dmp1");
 
 		/* exponent2 */
-		if (!BN_copy(bn_push(L), ((RSA*)tmp)->dmq1))
+		if (!bn_dup(L, ((RSA*)tmp)->dmq1))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "dmq1");
 
 		/* coefficient */
-		if (!BN_copy(bn_push(L), ((RSA*)tmp)->iqmp))
+		if (!bn_dup(L, ((RSA*)tmp)->iqmp))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "iqmp");
 
 		break;
 	case EVP_PKEY_DH:
 		/* prime */
-		if (!BN_copy(bn_push(L), ((DH*)tmp)->p))
+		if (!bn_dup(L, ((DH*)tmp)->p))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "p");
 
 		/* generator */
-		if (!BN_copy(bn_push(L), ((DH*)tmp)->g))
+		if (!bn_dup(L, ((DH*)tmp)->g))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "g");
 
 		/* pub_key */
-		if (!BN_copy(bn_push(L), ((DH*)tmp)->pub_key))
+		if (!bn_dup(L, ((DH*)tmp)->pub_key))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "pub_key");
 
 		/* priv_key */
-		if (!BN_copy(bn_push(L), ((DH*)tmp)->priv_key))
+		if (!bn_dup(L, ((DH*)tmp)->priv_key))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "priv_key");
 
@@ -2538,12 +2548,12 @@ static int pk_getParameters(lua_State *L) {
 		/* pub_key */
 		if (!(group = EC_KEY_get0_group(tmp)) || !(public_key = EC_KEY_get0_public_key(tmp)))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
-		if (!BN_copy(bn_push(L), EC_POINT_point2bn(group, public_key, EC_KEY_get_conv_form(tmp), NULL, getctx(L))))
+		if (!bn_dup(L, EC_POINT_point2bn(group, public_key, EC_KEY_get_conv_form(tmp), NULL, getctx(L))))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "pub_key");
 
 		/* priv_key */
-		if (!BN_copy(bn_push(L), EC_KEY_get0_private_key(tmp)))
+		if (!bn_dup(L, EC_KEY_get0_private_key(tmp)))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "priv_key");
 
