@@ -2458,6 +2458,104 @@ static int pk_toPEM(lua_State *L) {
 } /* pk_toPEM() */
 
 
+static int pk_getParameters(lua_State *L) {
+	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
+	void *tmp;
+	const EC_GROUP *group;
+	const EC_POINT *public_key;
+
+	if (!(tmp = EVP_PKEY_get0(key)))
+		return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+
+	lua_newtable(L);
+
+	switch (EVP_PKEY_base_id(key)) {
+	case EVP_PKEY_RSA:
+		/* RSA public modulus n */
+		if (!BN_copy(bn_push(L), ((RSA*)tmp)->n))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		lua_setfield(L, -2, "n");
+
+		/* RSA public exponent e */
+		if (!BN_copy(bn_push(L), ((RSA*)tmp)->e))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		lua_setfield(L, -2, "e");
+
+		/* RSA secret exponent d */
+		if (!BN_copy(bn_push(L), ((RSA*)tmp)->d))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		lua_setfield(L, -2, "d");
+
+		/* RSA secret prime p */
+		if (!BN_copy(bn_push(L), ((RSA*)tmp)->p))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		lua_setfield(L, -2, "p");
+
+		/* RSA secret prime q with p < q */
+		if (!BN_copy(bn_push(L), ((RSA*)tmp)->q))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		lua_setfield(L, -2, "q");
+
+		/* exponent1 */
+		if (!BN_copy(bn_push(L), ((RSA*)tmp)->dmp1))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		lua_setfield(L, -2, "dmp1");
+
+		/* exponent2 */
+		if (!BN_copy(bn_push(L), ((RSA*)tmp)->dmq1))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		lua_setfield(L, -2, "dmq1");
+
+		/* coefficient */
+		if (!BN_copy(bn_push(L), ((RSA*)tmp)->iqmp))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		lua_setfield(L, -2, "iqmp");
+
+		break;
+	case EVP_PKEY_DH:
+		/* prime */
+		if (!BN_copy(bn_push(L), ((DH*)tmp)->p))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		lua_setfield(L, -2, "p");
+
+		/* generator */
+		if (!BN_copy(bn_push(L), ((DH*)tmp)->g))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		lua_setfield(L, -2, "g");
+
+		/* pub_key */
+		if (!BN_copy(bn_push(L), ((DH*)tmp)->pub_key))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		lua_setfield(L, -2, "pub_key");
+
+		/* priv_key */
+		if (!BN_copy(bn_push(L), ((DH*)tmp)->priv_key))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		lua_setfield(L, -2, "priv_key");
+
+		break;
+	case EVP_PKEY_EC:
+		/* pub_key */
+		if (!(group = EC_KEY_get0_group(tmp)) || !(public_key = EC_KEY_get0_public_key(tmp)))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		if (!BN_copy(bn_push(L), EC_POINT_point2bn(group, public_key, EC_KEY_get_conv_form(tmp), NULL, getctx(L))))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		lua_setfield(L, -2, "pub_key");
+
+		/* priv_key */
+		if (!BN_copy(bn_push(L), EC_KEY_get0_private_key(tmp)))
+			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+		lua_setfield(L, -2, "priv_key");
+
+		break;
+	default:
+		return luaL_error(L, "%d: unsupported EVP base type", EVP_PKEY_base_id(key));
+	} /* switch() */
+
+	return 1;
+}
+
+
 static int pk__tostring(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
 	int type = optencoding(L, 2, "pem", X509_PEM|X509_DER);
@@ -2503,6 +2601,7 @@ static const luaL_Reg pk_methods[] = {
 	{ "sign",          &pk_sign },
 	{ "verify",        &pk_verify },
 	{ "toPEM",         &pk_toPEM },
+	{ "getParameters", &pk_getParameters },
 	{ NULL,            NULL },
 };
 
