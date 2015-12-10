@@ -2470,6 +2470,8 @@ static int pk_toPEM(lua_State *L) {
 
 static int pk_getParameters(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
+	_Bool public_only = lua_toboolean(L, 2);
+
 	void *tmp;
 	const EC_GROUP *group;
 	const EC_POINT *public_key;
@@ -2490,6 +2492,8 @@ static int pk_getParameters(lua_State *L) {
 		if (!bn_dup(L, ((RSA*)tmp)->e))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "e");
+
+		if (public_only) break;
 
 		/* RSA secret exponent d */
 		if (!bn_dup(L, ((RSA*)tmp)->d))
@@ -2538,6 +2542,8 @@ static int pk_getParameters(lua_State *L) {
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "pub_key");
 
+		if (public_only) break;
+
 		/* priv_key */
 		if (!bn_dup(L, ((DH*)tmp)->priv_key))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
@@ -2551,6 +2557,8 @@ static int pk_getParameters(lua_State *L) {
 		if (!bn_dup(L, EC_POINT_point2bn(group, public_key, EC_KEY_get_conv_form(tmp), NULL, getctx(L))))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 		lua_setfield(L, -2, "pub_key");
+
+		if (public_only) break;
 
 		/* priv_key */
 		if (!bn_dup(L, EC_KEY_get0_private_key(tmp)))
