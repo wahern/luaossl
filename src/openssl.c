@@ -1809,6 +1809,12 @@ static int bn__mod(lua_State *L) {
 	if (!BN_mod(r, a, b, getctx(L)))
 		return auxL_error(L, auxL_EOPENSSL, "bignum:__mod");
 
+	/* lua has different rounding behaviour for mod than C */
+	if (!BN_is_zero(r) && (BN_is_negative(a) ^ BN_is_negative(b))) {
+		if (!BN_add(r, r, b))
+			return auxL_error(L, auxL_EOPENSSL, "bignum:__mod");
+	}
+
 	return 1;
 } /* bn__mod() */
 
