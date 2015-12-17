@@ -6450,13 +6450,19 @@ static const EVP_CIPHER *cipher_checktype(lua_State *L, int index) {
 static int cipher_new(lua_State *L) {
 	const EVP_CIPHER *type;
 	EVP_CIPHER_CTX *ctx;
+	unsigned char key[EVP_MAX_KEY_LENGTH] = { 0 };
 
 	type = cipher_checktype(L, 1);
 
 	ctx = prepudata(L, sizeof *ctx, CIPHER_CLASS, NULL);
 	EVP_CIPHER_CTX_init(ctx);
 
-	if (!EVP_CipherInit_ex(ctx, type, NULL, NULL, NULL, -1))
+	/*
+	 * NOTE: For some ciphers like AES calling :update or :final without
+	 * setting a key causes a SEGV. Set a dummy key here. Same solution
+	 * as used by Ruby OSSL.
+	 */
+	if (!EVP_CipherInit_ex(ctx, type, NULL, key, NULL, -1))
 		return auxL_error(L, auxL_EOPENSSL, "cipher.new");
 
 	return 1;
