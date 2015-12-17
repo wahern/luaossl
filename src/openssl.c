@@ -1898,16 +1898,34 @@ static int bn__gc(lua_State *L) {
 } /* bn__gc() */
 
 
+static BIO *getbio(lua_State *);
+
 static int bn__tostring(lua_State *L) {
 	BIGNUM *bn = checksimple(L, 1, BIGNUM_CLASS);
-	char *txt;
+	char *txt = NULL;
+	BIO *bio;
+	BUF_MEM *buf;
 
 	if (!(txt = BN_bn2dec(bn)))
-		return auxL_error(L, auxL_EOPENSSL, "bignum:__tostring");
+		goto sslerr;
 
-	lua_pushstring(L, txt);
+	/* use GC-visible BIO as temporary buffer */
+	bio = getbio(L);
+
+	if (BIO_puts(bio, txt) < 0)
+		goto sslerr;
+
+	OPENSSL_free(txt);
+	txt = NULL;
+
+	BIO_get_mem_ptr(bio, &buf);
+	lua_pushlstring(L, buf->data, buf->length);
 
 	return 1;
+sslerr:
+	OPENSSL_free(txt);
+
+	return auxL_error(L, auxL_EOPENSSL, "bignum:__tostring");
 } /* bn__tostring() */
 
 
