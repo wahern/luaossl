@@ -2420,8 +2420,8 @@ static int pk_toPEM(lua_State *L) {
 
 			len = BIO_get_mem_data(bio, &pem);
 			lua_pushlstring(L, pem, len);
-
 			BIO_reset(bio);
+
 			break;
 		case 2: case 3: /* private, PrivateKey */
 			if (!PEM_write_bio_PrivateKey(bio, key, 0, 0, 0, 0, 0))
@@ -2429,6 +2429,7 @@ static int pk_toPEM(lua_State *L) {
 
 			len = BIO_get_mem_data(bio, &pem);
 			lua_pushlstring(L, pem, len);
+			BIO_reset(bio);
 
 			break;
 #if 0
