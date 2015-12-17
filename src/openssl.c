@@ -1753,6 +1753,16 @@ static BN_CTX *getctx(lua_State *L) {
 } /* getctx() */
 
 
+static int bn_tobin(lua_State *L) {
+	BIGNUM *bn = checksimple(L, 1, BIGNUM_CLASS);
+	size_t len = BN_num_bytes(bn);
+	unsigned char* dst = lua_newuserdata(L, len);
+	BN_bn2bin(bn, dst);
+	lua_pushlstring(L, dst, len);
+	return 1;
+} /* bn_tobin() */
+
+
 static int bn__add(lua_State *L) {
 	BIGNUM *r, *a, *b;
 
@@ -1898,6 +1908,7 @@ static int bn__tostring(lua_State *L) {
 
 
 static const luaL_Reg bn_methods[] = {
+	{ "tobin", &bn_tobin },
 	{ NULL,  NULL },
 };
 
