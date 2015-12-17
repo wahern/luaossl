@@ -1909,7 +1909,7 @@ static int bn__tostring(lua_State *L) {
 
 static const luaL_Reg bn_methods[] = {
 	{ "tobin", &bn_tobin },
-	{ NULL,  NULL },
+	{ NULL,    NULL },
 };
 
 static const luaL_Reg bn_metatable[] = {
