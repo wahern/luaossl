@@ -1941,6 +1941,12 @@ sslerr:
 
 
 static const luaL_Reg bn_methods[] = {
+	{ "add",   &bn__add },
+	{ "sub",   &bn__sub },
+	{ "mul",   &bn__mul },
+	{ "div",   &bn__div },
+	{ "mod",   &bn__mod },
+	{ "pow",   &bn__pow },
 	{ "tobin", &bn_tobin },
 	{ NULL,    NULL },
 };
