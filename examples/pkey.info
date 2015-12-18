@@ -1,0 +1,8 @@
+local pkey = require"openssl.pkey"
+
+local rsa = pkey.new{ type = "RSA", bits = 512 }
+
+for k, v in pairs(rsa:getParameters()) do
+	print(k, v)
+end
+
