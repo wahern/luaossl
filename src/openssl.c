@@ -2566,7 +2566,9 @@ static void pk_pushparam(lua_State *L, void *_key, enum pk_param which) {
 		RSA *rsa;
 		DH *dh;
 		DSA *dsa;
+#ifndef OPENSSL_NO_EC
 		EC_KEY *ec;
+#endif
 	} key = { _key };
 
 	switch (which) {
@@ -2646,6 +2648,7 @@ static void pk_pushparam(lua_State *L, void *_key, enum pk_param which) {
 		bn_dup(L, key.dh->priv_key);
 
 		break;
+#ifndef OPENSSL_NO_EC
 	case PK_EC_PUB_KEY: {
 		const EC_GROUP *group;
 		const EC_POINT *public_key;
@@ -2660,6 +2663,7 @@ static void pk_pushparam(lua_State *L, void *_key, enum pk_param which) {
 		bn_dup(L, EC_KEY_get0_private_key(key.ec));
 
 		break;
+#endif
 	default:
 		luaL_error(L, "%d: invalid EVP_PKEY parameter", which);
 	}
