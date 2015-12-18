@@ -2511,10 +2511,7 @@ static int pk_toPEM(lua_State *L) {
 static int pk_getParameters(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
 	_Bool public_only = lua_toboolean(L, 2);
-
 	void *tmp;
-	const EC_GROUP *group;
-	const EC_POINT *public_key;
 
 	if (!(tmp = EVP_PKEY_get0(key)))
 		return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
@@ -2590,7 +2587,11 @@ static int pk_getParameters(lua_State *L) {
 		lua_setfield(L, -2, "priv_key");
 
 		break;
-	case EVP_PKEY_EC:
+#ifndef OPENSSL_NO_EC
+	case EVP_PKEY_EC: {
+		const EC_GROUP *group;
+		const EC_POINT *public_key;
+
 		/* pub_key */
 		if (!(group = EC_KEY_get0_group(tmp)) || !(public_key = EC_KEY_get0_public_key(tmp)))
 			return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
@@ -2606,12 +2607,14 @@ static int pk_getParameters(lua_State *L) {
 		lua_setfield(L, -2, "priv_key");
 
 		break;
+	}
+#endif
 	default:
 		return luaL_error(L, "%d: unsupported EVP base type", EVP_PKEY_base_id(key));
 	} /* switch() */
 
 	return 1;
-}
+} /* pk_getParameters() */
 
 
 static int pk__tostring(lua_State *L) {
