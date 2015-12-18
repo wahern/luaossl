@@ -620,7 +620,7 @@ static void auxL_ref(lua_State *L, int index, auxref_t *ref) {
 	*ref = luaL_ref(L, LUA_REGISTRYINDEX);
 } /* auxL_ref() */
 
-static auxtype_t auxL_getref(lua_State *L, auxref_t ref) {
+NOTUSED static auxtype_t auxL_getref(lua_State *L, auxref_t ref) {
 	if (ref == LUA_NOREF || ref == LUA_REFNIL) {
 		lua_pushnil(L);
 	} else {
