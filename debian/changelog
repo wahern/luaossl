@@ -1,3 +1,11 @@
+liblua-openssl (20151218-0) unstable; urgency=low
+
+  * Add :tobin method to bignums. (daurnimator)
+  * Add :getParameters method to pkeys. (daurnimator)
+  * Fix build when SSLv3 support is not present.
+
+ -- William Ahern <william@25thandClement.com>  Fri, 18 Dec 2015 03:09:29 -0800
+
 liblua-openssl (20150727-0) unstable; urgency=low
 
   * More extension work from Kaarle Ritvanen.
