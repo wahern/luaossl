@@ -1970,6 +1970,35 @@ sslerr:
 } /* bn_todec() */
 
 
+static int bn_tohex(lua_State *L) {
+	BIGNUM *bn = checksimple(L, 1, BIGNUM_CLASS);
+	char *txt = NULL;
+	BIO *bio;
+	BUF_MEM *buf;
+
+	if (!(txt = BN_bn2hex(bn)))
+		goto sslerr;
+
+	/* use GC-visible BIO as temporary buffer */
+	bio = getbio(L);
+
+	if (BIO_puts(bio, txt) < 0)
+		goto sslerr;
+
+	OPENSSL_free(txt);
+	txt = NULL;
+
+	BIO_get_mem_ptr(bio, &buf);
+	lua_pushlstring(L, buf->data, buf->length);
+
+	return 1;
+sslerr:
+	OPENSSL_free(txt);
+
+	return auxL_error(L, auxL_EOPENSSL, "bignum:tohex");
+} /* bn_tohex() */
+
+
 static const luaL_Reg bn_methods[] = {
 	{ "add",   &bn__add },
 	{ "sub",   &bn__sub },
@@ -1981,6 +2010,7 @@ static const luaL_Reg bn_methods[] = {
 	{ "shr",   &bn__shr },
 	{ "tobin", &bn_tobin },
 	{ "todec", &bn_todec },
+	{ "tohex", &bn_tohex },
 	{ NULL,    NULL },
 };
 
