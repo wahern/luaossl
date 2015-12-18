@@ -1941,7 +1941,7 @@ static int bn__gc(lua_State *L) {
 
 static BIO *getbio(lua_State *);
 
-static int bn__tostring(lua_State *L) {
+static int bn_todec(lua_State *L) {
 	BIGNUM *bn = checksimple(L, 1, BIGNUM_CLASS);
 	char *txt = NULL;
 	BIO *bio;
@@ -1966,8 +1966,8 @@ static int bn__tostring(lua_State *L) {
 sslerr:
 	OPENSSL_free(txt);
 
-	return auxL_error(L, auxL_EOPENSSL, "bignum:__tostring");
-} /* bn__tostring() */
+	return auxL_error(L, auxL_EOPENSSL, "bignum:todec");
+} /* bn_todec() */
 
 
 static const luaL_Reg bn_methods[] = {
@@ -1980,6 +1980,7 @@ static const luaL_Reg bn_methods[] = {
 	{ "shl",   &bn__shl },
 	{ "shr",   &bn__shr },
 	{ "tobin", &bn_tobin },
+	{ "todec", &bn_todec },
 	{ NULL,    NULL },
 };
 
@@ -1997,7 +1998,7 @@ static const luaL_Reg bn_metatable[] = {
 	{ "__lt",       &bn__lt },
 	{ "__le",       &bn__le },
 	{ "__gc",       &bn__gc },
-	{ "__tostring", &bn__tostring },
+	{ "__tostring", &bn_todec },
 	{ NULL,         NULL },
 };
 
