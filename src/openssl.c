@@ -1856,6 +1856,36 @@ static int bn__pow(lua_State *L) {
 } /* bn__pow() */
 
 
+static int bn__shl(lua_State *L) {
+	BIGNUM *r, *a;
+	int n;
+
+	a = checkbig(L, 1);
+	n = luaL_checkinteger(L, 2);
+	r = bn_push(L);
+
+	if (!BN_lshift(r, a, n))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:__shl");
+
+	return 1;
+} /* bn__shl() */
+
+
+static int bn__shr(lua_State *L) {
+	BIGNUM *r, *a;
+	int n;
+
+	a = checkbig(L, 1);
+	n = luaL_checkinteger(L, 2);
+	r = bn_push(L);
+
+	if (!BN_rshift(r, a, n))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:__shr");
+
+	return 1;
+} /* bn__shr() */
+
+
 static int bn__unm(lua_State *L) {
 	BIGNUM *a = checksimple(L, 1, BIGNUM_CLASS);
 
@@ -1947,6 +1977,8 @@ static const luaL_Reg bn_methods[] = {
 	{ "div",   &bn__div },
 	{ "mod",   &bn__mod },
 	{ "pow",   &bn__pow },
+	{ "shl",   &bn__shl },
+	{ "shr",   &bn__shr },
 	{ "tobin", &bn_tobin },
 	{ NULL,    NULL },
 };
@@ -1959,6 +1991,8 @@ static const luaL_Reg bn_metatable[] = {
 	{ "__mod",      &bn__mod },
 	{ "__pow",      &bn__pow },
 	{ "__unm",      &bn__unm },
+	{ "__shl",      &bn__shl },
+	{ "__shr",      &bn__shr },
 	{ "__eq",       &bn__eq },
 	{ "__lt",       &bn__lt },
 	{ "__le",       &bn__le },
