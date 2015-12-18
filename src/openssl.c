@@ -2161,7 +2161,7 @@ creat:
 		}
 #endif
 		default:
-			return luaL_error(L, "%d: unknown EVP base type (%d)", EVP_PKEY_type(type), type);
+			return luaL_error(L, "%d: unsupported EVP_PKEY base type", EVP_PKEY_type(type));
 		} /* switch() */
 	} else if (lua_isstring(L, 1)) {
 		int type = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
@@ -2488,7 +2488,7 @@ static int pk_toPEM(lua_State *L) {
 			}
 #endif
 			default:
-				return luaL_error(L, "%d: unknown EVP base type", EVP_PKEY_type(key->type));
+				return luaL_error(L, "%d: unsupported EVP_PKEY base type", EVP_PKEY_type(key->type));
 			}
 
 			lua_pushlstring(L, pem, len);
@@ -2508,102 +2508,246 @@ static int pk_toPEM(lua_State *L) {
 } /* pk_toPEM() */
 
 
-static int pk_getParameters(lua_State *L) {
-	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
-	_Bool public_only = lua_toboolean(L, 2);
-	void *tmp;
+enum pk_param  {
+#define PK_RSA_OPTLIST { "n", "e", "d", "p", "q", "dmp1", "dmq1", "iqmp", NULL }
+#define PK_RSA_OPTOFFSET PK_RSA_N
+	PK_RSA_N = 1,
+	PK_RSA_E,
+	PK_RSA_D,
+	PK_RSA_P,
+	PK_RSA_Q,
+	PK_RSA_DMP1,
+	PK_RSA_DMQ1,
+	PK_RSA_IQMP,
 
-	if (!(tmp = EVP_PKEY_get0(key)))
-		goto sslerr;
+#define PK_DSA_OPTLIST { "p", "q", "g", "pub_key", "priv_key", NULL }
+#define PK_DSA_OPTOFFSET PK_DSA_P
+	PK_DSA_P,
+	PK_DSA_Q,
+	PK_DSA_G,
+	PK_DSA_PUB_KEY,
+	PK_DSA_PRIV_KEY,
 
-	lua_newtable(L);
+#define PK_DH_OPTLIST { "p", "g", "pub_key", "priv_key", NULL }
+#define PK_DH_OPTOFFSET PK_DH_P
+	PK_DH_P,
+	PK_DH_G,
+	PK_DH_PUB_KEY,
+	PK_DH_PRIV_KEY,
 
-	switch (EVP_PKEY_base_id(key)) {
+#define PK_EC_OPTLIST { "pub_key", "priv_key", NULL }
+#define PK_EC_OPTOFFSET PK_EC_PUB_KEY
+	PK_EC_PUB_KEY,
+	PK_EC_PRIV_KEY,
+}; /* enum pk_param */
+
+static const char *const pk_rsa_optlist[] = PK_RSA_OPTLIST;
+static const char *const pk_dsa_optlist[] = PK_DSA_OPTLIST;
+static const char *const pk_dh_optlist[] = PK_DH_OPTLIST;
+static const char *const pk_ec_optlist[] = PK_EC_OPTLIST;
+
+static int pk_checkparam(lua_State *L, int type, int index) {
+	switch (type) {
 	case EVP_PKEY_RSA:
-		/* RSA public modulus n */
-		bn_dup(L, ((RSA*)tmp)->n);
-		lua_setfield(L, -2, "n");
-
-		/* RSA public exponent e */
-		bn_dup(L, ((RSA*)tmp)->e);
-		lua_setfield(L, -2, "e");
-
-		if (public_only)
-			break;
-
-		/* RSA secret exponent d */
-		bn_dup(L, ((RSA*)tmp)->d);
-		lua_setfield(L, -2, "d");
-
-		/* RSA secret prime p */
-		bn_dup(L, ((RSA*)tmp)->p);
-		lua_setfield(L, -2, "p");
-
-		/* RSA secret prime q with p < q */
-		bn_dup(L, ((RSA*)tmp)->q);
-		lua_setfield(L, -2, "q");
-
-		/* exponent1 */
-		bn_dup(L, ((RSA*)tmp)->dmp1);
-		lua_setfield(L, -2, "dmp1");
-
-		/* exponent2 */
-		bn_dup(L, ((RSA*)tmp)->dmq1);
-		lua_setfield(L, -2, "dmq1");
-
-		/* coefficient */
-		bn_dup(L, ((RSA*)tmp)->iqmp);
-		lua_setfield(L, -2, "iqmp");
-
-		break;
+		return luaL_checkoption(L, index, NULL, pk_rsa_optlist) + PK_RSA_OPTOFFSET;
+	case EVP_PKEY_DSA:
+		return luaL_checkoption(L, index, NULL, pk_dsa_optlist) + PK_DSA_OPTOFFSET;
 	case EVP_PKEY_DH:
-		/* prime */
-		bn_dup(L, ((DH*)tmp)->p);
-		lua_setfield(L, -2, "p");
+		return luaL_checkoption(L, index, NULL, pk_dh_optlist) + PK_DH_OPTOFFSET;
+	case EVP_PKEY_EC:
+		return luaL_checkoption(L, index, NULL, pk_ec_optlist) + PK_EC_OPTOFFSET;
+	default:
+		return luaL_error(L, "%d: unsupported EVP_PKEY base type", type);
+	}
+} /* pk_checkparam() */
 
-		/* generator */
-		bn_dup(L, ((DH*)tmp)->g);
-		lua_setfield(L, -2, "g");
+static void pk_pushparam(lua_State *L, void *_key, enum pk_param which) {
+	union {
+		RSA *rsa;
+		DH *dh;
+		DSA *dsa;
+		EC_KEY *ec;
+	} key = { _key };
 
-		/* pub_key */
-		bn_dup(L, ((DH*)tmp)->pub_key);
-		lua_setfield(L, -2, "pub_key");
-
-		if (public_only)
-			break;
-
-		/* priv_key */
-		bn_dup(L, ((DH*)tmp)->priv_key);
-		lua_setfield(L, -2, "priv_key");
+	switch (which) {
+	case PK_RSA_N:
+		/* RSA public modulus n */
+		bn_dup(L, key.rsa->n);
 
 		break;
-#ifndef OPENSSL_NO_EC
-	case EVP_PKEY_EC: {
+	case PK_RSA_E:
+		/* RSA public exponent e */
+		bn_dup(L, key.rsa->e);
+
+		break;
+	case PK_RSA_D:
+		/* RSA secret exponent d */
+		bn_dup(L, key.rsa->d);
+
+		break;
+	case PK_RSA_P:
+		/* RSA secret prime p */
+		bn_dup(L, key.rsa->p);
+
+		break;
+	case PK_RSA_Q:
+		/* RSA secret prime q with p < q */
+		bn_dup(L, key.rsa->q);
+
+		break;
+	case PK_RSA_DMP1:
+		/* exponent1 */
+		bn_dup(L, key.rsa->dmp1);
+
+		break;
+	case PK_RSA_DMQ1:
+		/* exponent2 */
+		bn_dup(L, key.rsa->dmq1);
+
+		break;
+	case PK_RSA_IQMP:
+		/* coefficient */
+		bn_dup(L, key.rsa->iqmp);
+
+		break;
+	case PK_DSA_P:
+		bn_dup(L, key.dsa->p);
+
+		break;
+	case PK_DSA_Q:
+		bn_dup(L, key.dsa->q);
+
+		break;
+	case PK_DSA_G:
+		bn_dup(L, key.dsa->g);
+
+		break;
+	case PK_DSA_PUB_KEY:
+		bn_dup(L, key.dsa->pub_key);
+
+		break;
+	case PK_DSA_PRIV_KEY:
+		bn_dup(L, key.dsa->priv_key);
+
+		break;
+	case PK_DH_P:
+		bn_dup(L, key.dh->p);
+
+		break;
+	case PK_DH_G:
+		bn_dup(L, key.dh->g);
+
+		break;
+	case PK_DH_PUB_KEY:
+		bn_dup(L, key.dh->pub_key);
+
+		break;
+	case PK_DH_PRIV_KEY:
+		bn_dup(L, key.dh->priv_key);
+
+		break;
+	case PK_EC_PUB_KEY: {
 		const EC_GROUP *group;
 		const EC_POINT *public_key;
 
-		/* pub_key */
-		if (!(group = EC_KEY_get0_group(tmp)) || !(public_key = EC_KEY_get0_public_key(tmp)))
+		if (!(group = EC_KEY_get0_group(key.ec)) || !(public_key = EC_KEY_get0_public_key(key.ec)))
 			goto sslerr;
-		bn_dup(L, EC_POINT_point2bn(group, public_key, EC_KEY_get_conv_form(tmp), NULL, getctx(L)));
-		lua_setfield(L, -2, "pub_key");
-
-		if (public_only)
-			break;
-
-		/* priv_key */
-		bn_dup(L, EC_KEY_get0_private_key(tmp));
-			goto sslerr;
-		lua_setfield(L, -2, "priv_key");
+		bn_dup(L, EC_POINT_point2bn(group, public_key, EC_KEY_get_conv_form(key.ec), NULL, getctx(L)));
 
 		break;
 	}
-#endif
-	default:
-		return luaL_error(L, "%d: unsupported EVP base type", EVP_PKEY_base_id(key));
-	} /* switch() */
+	case PK_EC_PRIV_KEY:
+		bn_dup(L, EC_KEY_get0_private_key(key.ec));
 
-	return 1;
+		break;
+	default:
+		luaL_error(L, "%d: invalid EVP_PKEY parameter", which);
+	}
+
+	return;
+sslerr:
+	auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+
+	return;
+} /* pk_pushparam() */
+
+
+static int pk_getParameters(lua_State *L) {
+	EVP_PKEY *_key = checksimple(L, 1, PKEY_CLASS);
+	int type = EVP_PKEY_base_id(_key);
+	void *key;
+	int otop, index, tindex;
+
+	if (!(key = EVP_PKEY_get0(_key)))
+		goto sslerr;
+
+	if (lua_isnoneornil(L, 2)) {
+		const char *const *optlist;
+		const char *const *opt;
+
+		switch (type) {
+		case EVP_PKEY_RSA:
+			optlist = pk_rsa_optlist;
+			luaL_checkstack(L, countof(pk_rsa_optlist), "");
+
+			break;
+		case EVP_PKEY_DSA:
+			optlist = pk_dsa_optlist;
+			luaL_checkstack(L, countof(pk_dsa_optlist), "");
+
+			break;
+		case EVP_PKEY_DH:
+			optlist = pk_dh_optlist;
+			luaL_checkstack(L, countof(pk_dh_optlist), "");
+
+			break;
+		case EVP_PKEY_EC:
+			optlist = pk_ec_optlist;
+			luaL_checkstack(L, countof(pk_ec_optlist), "");
+
+			break;
+		default:
+			return luaL_error(L, "%d: unsupported EVP_PKEY base type", EVP_PKEY_base_id(key));
+		}
+
+		/*
+		 * Use special "{" parameter to tell loop to push table.
+		 * Subsequent parameters will be assigned as fields.
+		 *
+		 * NOTE: optlist arrays are NULL-terminated. luaL_checkstack()
+		 * calls above left room for "{".
+		 */
+		lua_pushstring(L, "{");
+
+		for (opt = optlist; *opt; opt++) {
+			lua_pushstring(L, *opt);
+		}
+	}
+
+	otop = lua_gettop(L);
+
+	/* provide space for results and working area */
+	luaL_checkstack(L, (otop - 1) + LUA_MINSTACK, "");
+
+	/* no table index, yet */
+	tindex = 0;
+
+	for (index = 2; index <= otop; index++) {
+		const char *opt = luaL_checkstring(L, index);
+
+		if (*opt == '{') {
+			lua_newtable(L);
+			tindex = lua_gettop(L);
+		} else {
+			pk_pushparam(L, key, pk_checkparam(L, type, index));
+
+			if (tindex) {
+				lua_setfield(L, tindex, opt);
+			}
+		}
+	}
+
+	return lua_gettop(L) - otop;
 sslerr:
 	return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 } /* pk_getParameters() */
