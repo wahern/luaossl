@@ -1814,16 +1814,16 @@ static int bn__mul(lua_State *L) {
 } /* bn__mul() */
 
 
-static int bn__div(lua_State *L) {
-	BIGNUM *r, *a, *b;
+static int bn__idiv(lua_State *L) {
+	BIGNUM *dv, *a, *b;
 
-	bn_prepops(L, &r, &a, &b, 0);
+	bn_prepops(L, &dv, &a, &b, 0);
 
-	if (!BN_div(r, NULL, a, b, getctx(L)))
-		return auxL_error(L, auxL_EOPENSSL, "bignum:__div");
+	if (!BN_div(dv, NULL, a, b, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:__idiv");
 
 	return 1;
-} /* bn__div() */
+} /* bn__idiv() */
 
 
 static int bn__mod(lua_State *L) {
@@ -2003,7 +2003,7 @@ static const luaL_Reg bn_methods[] = {
 	{ "add",   &bn__add },
 	{ "sub",   &bn__sub },
 	{ "mul",   &bn__mul },
-	{ "div",   &bn__div },
+	{ "idiv",  &bn__idiv },
 	{ "mod",   &bn__mod },
 	{ "pow",   &bn__pow },
 	{ "shl",   &bn__shl },
@@ -2018,7 +2018,7 @@ static const luaL_Reg bn_metatable[] = {
 	{ "__add",      &bn__add },
 	{ "__sub",      &bn__sub },
 	{ "__mul",      &bn__mul },
-	{ "__div",      &bn__div },
+	{ "__idiv",     &bn__idiv },
 	{ "__mod",      &bn__mod },
 	{ "__pow",      &bn__pow },
 	{ "__unm",      &bn__unm },
