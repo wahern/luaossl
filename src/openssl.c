@@ -2018,6 +2018,7 @@ static const luaL_Reg bn_metatable[] = {
 	{ "__add",      &bn__add },
 	{ "__sub",      &bn__sub },
 	{ "__mul",      &bn__mul },
+	{ "__div",      &bn__idiv },
 	{ "__idiv",     &bn__idiv },
 	{ "__mod",      &bn__mod },
 	{ "__pow",      &bn__pow },
