@@ -314,7 +314,7 @@ static int badoption(lua_State *L, int index, const char *opt) {
 
 static int checkoption(lua_State *L, int index, const char *def, const char *const opts[]) {
 	const char *opt = (def)? luaL_optstring(L, index, def) : luaL_checkstring(L, index);
-	int i; 
+	int i;
 
 	for (i = 0; opts[i]; i++) {
 		if (strieq(opts[i], opt))
@@ -620,7 +620,7 @@ static void auxL_ref(lua_State *L, int index, auxref_t *ref) {
 	*ref = luaL_ref(L, LUA_REGISTRYINDEX);
 } /* auxL_ref() */
 
-static auxtype_t auxL_getref(lua_State *L, auxref_t ref) {
+NOTUSED static auxtype_t auxL_getref(lua_State *L, auxref_t ref) {
 	if (ref == LUA_NOREF || ref == LUA_REFNIL) {
 		lua_pushnil(L);
 	} else {
@@ -1208,6 +1208,7 @@ static void ex_newstate(lua_State *L) {
 	 * Instead, we'll install our own panic handlers.
 	 */
 #if defined LUA_RIDX_MAINTHREAD
+	(void)thr;
 	lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
 	state->L = lua_tothread(L, -1);
 	lua_pop(L, 1);
@@ -2945,9 +2946,8 @@ static int xn__next(lua_State *L) {
 	X509_NAME *name = checksimple(L, lua_upvalueindex(1), X509_NAME_CLASS);
 	X509_NAME_ENTRY *entry;
 	ASN1_OBJECT *obj;
-	const char *id;
 	char txt[256];
-	int i, n, nid, len;
+	int i, n, len;
 
 	lua_settop(L, 0);
 
@@ -3830,7 +3830,7 @@ static double timeutc(ASN1_TIME *time) {
 
 		gmtoff *= sign;
 	}
-	
+
 	return tm2unix(&tm, gmtoff);
 badfmt:
 	return INFINITY;
@@ -7118,7 +7118,7 @@ static unsigned long long rand_llu(lua_State *L) {
  * The following algorithm for rand_uniform() is taken from OpenBSD's
  * arc4random_uniform, written by Otto Moerbeek, with subsequent
  * simplification by Jorden Verwer. Otto's source code comment reads
- * 
+ *
  *   Uniformity is achieved by generating new random numbers until the one
  *   returned is outside the range [0, 2**32 % upper_bound). This guarantees
  *   the selected random number will be inside [2**32 % upper_bound, 2**32)
@@ -7141,22 +7141,22 @@ static unsigned long long rand_llu(lua_State *L) {
  *   X-Complaints-To: ne...@news.purdue.edu
  *   NNTP-Posting-Date: Thu, 14 Nov 2002 16:20:37 +0000 (UTC)
  *   Xref: archiver1.google.com sci.crypt:78935
- *   
+ *
  *   In article <3DCD8D7...@nospam.com>,
  *   Michael Amling  <nos...@nospam.com> wrote:
  *   >Carlos Moreno wrote:
- *   
+ *
  *   I have already posted on this, but a repeat might be
  *   in order.
- *   
+ *
  *   If one can trust random bits, the most bitwise efficient
  *   manner to get a single random integer between 0 and N-1
  *   can be obtained as follows; the code can be made more
  *   computationally efficient.  I believe it is easier to
  *   understand with gotos.  I am assuming N>1.
- *   
+ *
  *   	i = 0;	j = 1;
- *   
+ *
  *   loop:	j=2*j; i=2*i+RANBIT;
  *   	if (j < N) goto loop;
  *   	if (i >= N) {
@@ -7164,14 +7164,14 @@ static unsigned long long rand_llu(lua_State *L) {
  *   		j = j - N;
  *   		goto loop:}
  *   	else return (i);
- *   
+ *
  *   The algorithm works because at each stage i is uniform
  *   between 0 and j-1.
- *   
+ *
  *   Another possibility is to generate k bits, where 2^k >= N.
  *   If 2^k = c*N + remainder, generate the appropriate value
  *   if a k-bit random number is less than c*N.
- *   
+ *
  *   For N = 17 (numbers just larger than powers of 2 are "bad"),
  *   the amount of information is about 4.09 bits, the best
  *   algorithm to generate one random number takes about 5.765
@@ -7349,7 +7349,7 @@ static int mt_init(void) {
 			int i;
 
 			mt_state.nlock = CRYPTO_num_locks();
-		
+
 			if (!(mt_state.lock = malloc(mt_state.nlock * sizeof *mt_state.lock))) {
 				error = errno;
 				goto epilog;
