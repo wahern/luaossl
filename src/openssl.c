@@ -1814,16 +1814,16 @@ static int bn__mul(lua_State *L) {
 } /* bn__mul() */
 
 
-static int bn__div(lua_State *L) {
-	BIGNUM *r, *a, *b;
+static int bn__idiv(lua_State *L) {
+	BIGNUM *dv, *a, *b;
 
-	bn_prepops(L, &r, &a, &b, 0);
+	bn_prepops(L, &dv, &a, &b, 0);
 
-	if (!BN_div(r, NULL, a, b, getctx(L)))
-		return auxL_error(L, auxL_EOPENSSL, "bignum:__div");
+	if (!BN_div(dv, NULL, a, b, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:__idiv");
 
 	return 1;
-} /* bn__div() */
+} /* bn__idiv() */
 
 
 static int bn__mod(lua_State *L) {
@@ -1854,6 +1854,36 @@ static int bn__pow(lua_State *L) {
 
 	return 1;
 } /* bn__pow() */
+
+
+static int bn__shl(lua_State *L) {
+	BIGNUM *r, *a;
+	int n;
+
+	a = checkbig(L, 1);
+	n = luaL_checkinteger(L, 2);
+	r = bn_push(L);
+
+	if (!BN_lshift(r, a, n))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:__shl");
+
+	return 1;
+} /* bn__shl() */
+
+
+static int bn__shr(lua_State *L) {
+	BIGNUM *r, *a;
+	int n;
+
+	a = checkbig(L, 1);
+	n = luaL_checkinteger(L, 2);
+	r = bn_push(L);
+
+	if (!BN_rshift(r, a, n))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:__shr");
+
+	return 1;
+} /* bn__shr() */
 
 
 static int bn__unm(lua_State *L) {
@@ -1911,7 +1941,7 @@ static int bn__gc(lua_State *L) {
 
 static BIO *getbio(lua_State *);
 
-static int bn__tostring(lua_State *L) {
+static int bn_todec(lua_State *L) {
 	BIGNUM *bn = checksimple(L, 1, BIGNUM_CLASS);
 	char *txt = NULL;
 	BIO *bio;
@@ -1936,12 +1966,51 @@ static int bn__tostring(lua_State *L) {
 sslerr:
 	OPENSSL_free(txt);
 
-	return auxL_error(L, auxL_EOPENSSL, "bignum:__tostring");
-} /* bn__tostring() */
+	return auxL_error(L, auxL_EOPENSSL, "bignum:todec");
+} /* bn_todec() */
+
+
+static int bn_tohex(lua_State *L) {
+	BIGNUM *bn = checksimple(L, 1, BIGNUM_CLASS);
+	char *txt = NULL;
+	BIO *bio;
+	BUF_MEM *buf;
+
+	if (!(txt = BN_bn2hex(bn)))
+		goto sslerr;
+
+	/* use GC-visible BIO as temporary buffer */
+	bio = getbio(L);
+
+	if (BIO_puts(bio, txt) < 0)
+		goto sslerr;
+
+	OPENSSL_free(txt);
+	txt = NULL;
+
+	BIO_get_mem_ptr(bio, &buf);
+	lua_pushlstring(L, buf->data, buf->length);
+
+	return 1;
+sslerr:
+	OPENSSL_free(txt);
+
+	return auxL_error(L, auxL_EOPENSSL, "bignum:tohex");
+} /* bn_tohex() */
 
 
 static const luaL_Reg bn_methods[] = {
+	{ "add",   &bn__add },
+	{ "sub",   &bn__sub },
+	{ "mul",   &bn__mul },
+	{ "idiv",  &bn__idiv },
+	{ "mod",   &bn__mod },
+	{ "pow",   &bn__pow },
+	{ "shl",   &bn__shl },
+	{ "shr",   &bn__shr },
 	{ "tobin", &bn_tobin },
+	{ "todec", &bn_todec },
+	{ "tohex", &bn_tohex },
 	{ NULL,    NULL },
 };
 
@@ -1949,15 +2018,17 @@ static const luaL_Reg bn_metatable[] = {
 	{ "__add",      &bn__add },
 	{ "__sub",      &bn__sub },
 	{ "__mul",      &bn__mul },
-	{ "__div",      &bn__div },
+	{ "__idiv",     &bn__idiv },
 	{ "__mod",      &bn__mod },
 	{ "__pow",      &bn__pow },
 	{ "__unm",      &bn__unm },
+	{ "__shl",      &bn__shl },
+	{ "__shr",      &bn__shr },
 	{ "__eq",       &bn__eq },
 	{ "__lt",       &bn__lt },
 	{ "__le",       &bn__le },
 	{ "__gc",       &bn__gc },
-	{ "__tostring", &bn__tostring },
+	{ "__tostring", &bn_todec },
 	{ NULL,         NULL },
 };
 
