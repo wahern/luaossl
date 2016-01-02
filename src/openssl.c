@@ -1598,6 +1598,17 @@ static int bn_new(lua_State *L) {
 } /* bn_new() */
 
 
+static int bn_fromBinary(lua_State *L) {
+	size_t len;
+	const char *s = luaL_checklstring(L, 1, &len);
+	BIGNUM *bn = bn_push(L);
+	if (!BN_bin2bn((const unsigned char*)s, len, bn)) {
+		auxL_error(L, auxL_EOPENSSL, "bignum");
+	}
+	return 1;
+} /* bn_fromBinary() */
+
+
 static int bn_interpose(lua_State *L) {
 	return interpose(L, BIGNUM_CLASS);
 } /* bn_interpose() */
@@ -2119,6 +2130,7 @@ static const luaL_Reg bn_metatable[] = {
 static const luaL_Reg bn_globals[] = {
 	{ "new",           &bn_new },
 	{ "interpose",     &bn_interpose },
+	{ "fromBinary",    &bn_fromBinary },
 	{ "generatePrime", &bn_generatePrime },
 	{ NULL,            NULL },
 };
