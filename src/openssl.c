@@ -29,7 +29,7 @@
 #include <strings.h>      /* strcasecmp(3) */
 #include <math.h>         /* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
 #include <time.h>         /* struct tm time_t strptime(3) time(2) */
-#include <ctype.h>        /* tolower(3) */
+#include <ctype.h>        /* isdigit(3), isxdigit(3), tolower(3) */
 #include <errno.h>        /* ENOMEM ENOTSUP EOVERFLOW errno */
 #include <assert.h>       /* assert */
 
@@ -1685,7 +1685,7 @@ static _Bool f2bn(BIGNUM **bn, double f) {
 static BIGNUM *(checkbig)(lua_State *L, int index, _Bool *lvalue) {
 	BIGNUM **bn;
 	const char *str;
-	size_t len;
+	size_t len, i;
 	_Bool neg, hex = 0;
 
 	index = lua_absindex(L, index);
@@ -1702,6 +1702,15 @@ static BIGNUM *(checkbig)(lua_State *L, int index, _Bool *lvalue) {
 
 		if (str[neg] == '0' && (str[neg+1] == 'x' || str[neg+1] == 'X')) {
 			hex = 1;
+			for (i = 2+neg; i < len; i++) {
+				if (!isxdigit(str[i]))
+					luaL_argerror(L, 1, "invalid hex string");
+			}
+		} else {
+			for (i = neg; i < len; i++) {
+				if (!isdigit(str[i]))
+					luaL_argerror(L, 1, "invalid decimal string");
+			}
 		}
 
 		bn = prepsimple(L, BIGNUM_CLASS);
