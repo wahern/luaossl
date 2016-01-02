@@ -1686,7 +1686,7 @@ static BIGNUM *(checkbig)(lua_State *L, int index, _Bool *lvalue) {
 	BIGNUM **bn;
 	const char *str;
 	size_t len, i;
-	_Bool neg, hex = 0;
+	_Bool neg, hex;
 
 	index = lua_absindex(L, index);
 
@@ -1696,17 +1696,17 @@ static BIGNUM *(checkbig)(lua_State *L, int index, _Bool *lvalue) {
 
 		str = lua_tolstring(L, index, &len);
 
-		luaL_argcheck(L, len > 0 && *str, index, "invalid big number string");
-
 		neg = (str[0] == '-');
+		hex = (str[neg] == '0' && (str[neg+1] == 'x' || str[neg+1] == 'X'));
 
-		if (str[neg] == '0' && (str[neg+1] == 'x' || str[neg+1] == 'X')) {
-			hex = 1;
+		if (hex) {
+			luaL_argcheck(L, len > 2+(size_t)neg, index, "invalid hex string");
 			for (i = 2+neg; i < len; i++) {
 				if (!isxdigit(str[i]))
 					luaL_argerror(L, 1, "invalid hex string");
 			}
 		} else {
+			luaL_argcheck(L, len > neg, index, "invalid decimal string");
 			for (i = neg; i < len; i++) {
 				if (!isdigit(str[i]))
 					luaL_argerror(L, 1, "invalid decimal string");
