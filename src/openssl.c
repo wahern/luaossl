@@ -1673,7 +1673,7 @@ static _Bool f2bn(BIGNUM **bn, double f) {
 
 static BIGNUM *(checkbig)(lua_State *L, int index, _Bool *lvalue) {
 	BIGNUM **bn;
-	const char *dec;
+	const char *str;
 	size_t len;
 
 	index = lua_absindex(L, index);
@@ -1682,14 +1682,19 @@ static BIGNUM *(checkbig)(lua_State *L, int index, _Bool *lvalue) {
 	case LUA_TSTRING:
 		*lvalue = 0;
 
-		dec = lua_tolstring(L, index, &len);
+		str = lua_tolstring(L, index, &len);
 
-		luaL_argcheck(L, len > 0 && *dec, index, "invalid big number string");
+		luaL_argcheck(L, len > 0 && *str, index, "invalid big number string");
 
 		bn = prepsimple(L, BIGNUM_CLASS);
 
-		if (!BN_dec2bn(bn, dec))
-			auxL_error(L, auxL_EOPENSSL, "bignum");
+		if (str[0] == '0' && (str[1] == 'x' || str[1] == 'X')) {
+			if (!BN_hex2bn(bn, str+2))
+				auxL_error(L, auxL_EOPENSSL, "bignum");
+		} else {
+			if (!BN_dec2bn(bn, str))
+				auxL_error(L, auxL_EOPENSSL, "bignum");
+		}
 
 		lua_replace(L, index);
 
