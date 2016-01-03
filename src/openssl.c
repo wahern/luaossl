@@ -1976,6 +1976,20 @@ static int bn__gc(lua_State *L) {
 } /* bn__gc() */
 
 
+static int bn_isPrime(lua_State *L) {
+	BIGNUM *bn = checksimple(L, 1, BIGNUM_CLASS);
+	int nchecks = luaL_optinteger(L, 2, BN_prime_checks);
+	int res = BN_is_prime_ex(bn, nchecks, getctx(L), NULL);
+
+	if (res == -1)
+		return auxL_error(L, auxL_EOPENSSL, "bignum:isPrime");
+
+	lua_pushboolean(L, res);
+
+	return 1;
+} /* bn_isPrime() */
+
+
 static BIO *getbio(lua_State *);
 
 static int bn_todec(lua_State *L) {
@@ -2037,21 +2051,22 @@ sslerr:
 
 
 static const luaL_Reg bn_methods[] = {
-	{ "add",    &bn__add },
-	{ "sub",    &bn__sub },
-	{ "mul",    &bn__mul },
-	{ "sqr",    &bn_sqr },
-	{ "idiv",   &bn__idiv },
-	{ "mod",    &bn__mod },
-	{ "nnmod",  &bn_nnmod },
-	{ "exp",    &bn__pow },
-	{ "gcd",    &bn_gcd },
-	{ "lshift", &bn__shl },
-	{ "rshift", &bn__shr },
-	{ "tobin",  &bn_tobin },
-	{ "todec",  &bn_todec },
-	{ "tohex",  &bn_tohex },
-	{ NULL,     NULL },
+	{ "add",     &bn__add },
+	{ "sub",     &bn__sub },
+	{ "mul",     &bn__mul },
+	{ "sqr",     &bn_sqr },
+	{ "idiv",    &bn__idiv },
+	{ "mod",     &bn__mod },
+	{ "nnmod",   &bn_nnmod },
+	{ "exp",     &bn__pow },
+	{ "gcd",     &bn_gcd },
+	{ "lshift",  &bn__shl },
+	{ "rshift",  &bn__shr },
+	{ "isPrime", &bn_isPrime },
+	{ "tobin",   &bn_tobin },
+	{ "todec",   &bn_todec },
+	{ "tohex",   &bn_tohex },
+	{ NULL,      NULL },
 };
 
 static const luaL_Reg bn_metatable[] = {
