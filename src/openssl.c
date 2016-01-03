@@ -223,6 +223,14 @@ static const char *xitoa(char *dst, size_t lim, long i) {
 } /* xitoa() */
 
 
+static _Bool optbool(lua_State *L, int idx, _Bool d) {
+	if (lua_isnoneornil(L, idx))
+		return d;
+	luaL_checktype(L, idx, LUA_TBOOLEAN);
+	return lua_toboolean(L, idx);
+} /* optbool() */
+
+
 static void *prepudata(lua_State *L, size_t size, const char *tname, int (*gc)(lua_State *)) {
 	void *p = memset(lua_newuserdata(L, size), 0, size);
 
@@ -1976,6 +1984,20 @@ static int bn__gc(lua_State *L) {
 } /* bn__gc() */
 
 
+static int bn_generatePrime(lua_State *L) {
+	int bits = luaL_checkinteger(L, 1);
+	_Bool safe = optbool(L, 2, 0);
+	const BIGNUM *add = lua_isnoneornil(L, 3) ? NULL : checkbig(L, 3);
+	const BIGNUM *rem = lua_isnoneornil(L, 4) ? NULL : checkbig(L, 4);
+	BIGNUM *bn = bn_push(L);
+
+	if (!BN_generate_prime_ex(bn, bits, safe, add, rem, NULL))
+		return auxL_error(L, auxL_EOPENSSL, "bignum.generatePrime");
+
+	return 1;
+} /* bn_generatePrime() */
+
+
 static int bn_isPrime(lua_State *L) {
 	BIGNUM *bn = checksimple(L, 1, BIGNUM_CLASS);
 	int nchecks = luaL_optinteger(L, 2, BN_prime_checks);
@@ -2090,9 +2112,10 @@ static const luaL_Reg bn_metatable[] = {
 
 
 static const luaL_Reg bn_globals[] = {
-	{ "new",       &bn_new },
-	{ "interpose", &bn_interpose },
-	{ NULL,        NULL },
+	{ "new",           &bn_new },
+	{ "interpose",     &bn_interpose },
+	{ "generatePrime", &bn_generatePrime },
+	{ NULL,            NULL },
 };
 
 int luaopen__openssl_bignum(lua_State *L) {
