@@ -1814,6 +1814,18 @@ static int bn__mul(lua_State *L) {
 } /* bn__mul() */
 
 
+static int bn_sqr(lua_State *L) {
+	BIGNUM *r, *a;
+
+	bn_prepops(L, &r, &a, NULL, 1);
+
+	if (!BN_sqr(r, a, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:sqr");
+
+	return 1;
+} /* bn_sqr() */
+
+
 static int bn__idiv(lua_State *L) {
 	BIGNUM *dv, *a, *b;
 
@@ -1844,6 +1856,18 @@ static int bn__mod(lua_State *L) {
 } /* bn__mod() */
 
 
+static int bn_nnmod(lua_State *L) {
+	BIGNUM *r, *a, *b;
+
+	bn_prepops(L, &r, &a, &b, 0);
+
+	if (!BN_nnmod(r, a, b, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:nnmod");
+
+	return 1;
+} /* bn_nnmod() */
+
+
 static int bn__pow(lua_State *L) {
 	BIGNUM *r, *a, *b;
 
@@ -1854,6 +1878,18 @@ static int bn__pow(lua_State *L) {
 
 	return 1;
 } /* bn__pow() */
+
+
+static int bn_gcd(lua_State *L) {
+	BIGNUM *r, *a, *b;
+
+	bn_prepops(L, &r, &a, &b, 1);
+
+	if (!BN_gcd(r, a, b, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:gcd");
+
+	return 1;
+} /* bn_gcd() */
 
 
 static int bn__shl(lua_State *L) {
@@ -2003,9 +2039,12 @@ static const luaL_Reg bn_methods[] = {
 	{ "add",    &bn__add },
 	{ "sub",    &bn__sub },
 	{ "mul",    &bn__mul },
+	{ "sqr",    &bn_sqr },
 	{ "idiv",   &bn__idiv },
 	{ "mod",    &bn__mod },
+	{ "nnmod",  &bn_nnmod },
 	{ "exp",    &bn__pow },
+	{ "gcd",    &bn_gcd },
 	{ "lshift", &bn__shl },
 	{ "rshift", &bn__shr },
 	{ "tobin",  &bn_tobin },
