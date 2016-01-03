@@ -6280,7 +6280,7 @@ static int ssl_interpose(lua_State *L) {
 
 
 static int ssl_setOptions(lua_State *L) {
-	SSL *ssl = checksimple(L, 1, SSL_CTX_CLASS);
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	auxL_Integer options = auxL_checkinteger(L, 2);
 
 	auxL_pushinteger(L, SSL_set_options(ssl, options));
@@ -6290,7 +6290,7 @@ static int ssl_setOptions(lua_State *L) {
 
 
 static int ssl_getOptions(lua_State *L) {
-	SSL *ssl = checksimple(L, 1, SSL_CTX_CLASS);
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 
 	auxL_pushinteger(L, SSL_get_options(ssl));
 
@@ -6299,7 +6299,7 @@ static int ssl_getOptions(lua_State *L) {
 
 
 static int ssl_clearOptions(lua_State *L) {
-	SSL *ssl = checksimple(L, 1, SSL_CTX_CLASS);
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	auxL_Integer options = auxL_checkinteger(L, 2);
 
 	auxL_pushinteger(L, SSL_clear_options(ssl, options));
