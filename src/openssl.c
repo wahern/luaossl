@@ -2000,18 +2000,18 @@ sslerr:
 
 
 static const luaL_Reg bn_methods[] = {
-	{ "add",   &bn__add },
-	{ "sub",   &bn__sub },
-	{ "mul",   &bn__mul },
-	{ "idiv",  &bn__idiv },
-	{ "mod",   &bn__mod },
-	{ "pow",   &bn__pow },
-	{ "shl",   &bn__shl },
-	{ "shr",   &bn__shr },
-	{ "tobin", &bn_tobin },
-	{ "todec", &bn_todec },
-	{ "tohex", &bn_tohex },
-	{ NULL,    NULL },
+	{ "add",    &bn__add },
+	{ "sub",    &bn__sub },
+	{ "mul",    &bn__mul },
+	{ "idiv",   &bn__idiv },
+	{ "mod",    &bn__mod },
+	{ "exp",    &bn__pow },
+	{ "lshift", &bn__shl },
+	{ "rshift", &bn__shr },
+	{ "tobin",  &bn_tobin },
+	{ "todec",  &bn_todec },
+	{ "tohex",  &bn_tohex },
+	{ NULL,     NULL },
 };
 
 static const luaL_Reg bn_metatable[] = {
