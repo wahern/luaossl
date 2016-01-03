@@ -1924,8 +1924,9 @@ static int bn__shr(lua_State *L) {
 
 static int bn__unm(lua_State *L) {
 	BIGNUM *a = checksimple(L, 1, BIGNUM_CLASS);
+	BIGNUM *r = bn_dup(L, a);
 
-	BN_set_negative(a, !BN_is_negative(a));
+	BN_set_negative(r, !BN_is_negative(a));
 
 	return 1;
 } /* bn__unm() */
