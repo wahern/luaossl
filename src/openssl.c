@@ -223,6 +223,14 @@ static const char *xitoa(char *dst, size_t lim, long i) {
 } /* xitoa() */
 
 
+static _Bool optbool(lua_State *L, int idx, _Bool d) {
+	if (lua_isnoneornil(L, idx))
+		return d;
+	luaL_checktype(L, idx, LUA_TBOOLEAN);
+	return lua_toboolean(L, idx);
+} /* optbool() */
+
+
 static void *prepudata(lua_State *L, size_t size, const char *tname, int (*gc)(lua_State *)) {
 	void *p = memset(lua_newuserdata(L, size), 0, size);
 
@@ -1814,6 +1822,18 @@ static int bn__mul(lua_State *L) {
 } /* bn__mul() */
 
 
+static int bn_sqr(lua_State *L) {
+	BIGNUM *r, *a;
+
+	bn_prepops(L, &r, &a, NULL, 1);
+
+	if (!BN_sqr(r, a, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:sqr");
+
+	return 1;
+} /* bn_sqr() */
+
+
 static int bn__idiv(lua_State *L) {
 	BIGNUM *dv, *a, *b;
 
@@ -1844,6 +1864,18 @@ static int bn__mod(lua_State *L) {
 } /* bn__mod() */
 
 
+static int bn_nnmod(lua_State *L) {
+	BIGNUM *r, *a, *b;
+
+	bn_prepops(L, &r, &a, &b, 0);
+
+	if (!BN_nnmod(r, a, b, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:nnmod");
+
+	return 1;
+} /* bn_nnmod() */
+
+
 static int bn__pow(lua_State *L) {
 	BIGNUM *r, *a, *b;
 
@@ -1854,6 +1886,18 @@ static int bn__pow(lua_State *L) {
 
 	return 1;
 } /* bn__pow() */
+
+
+static int bn_gcd(lua_State *L) {
+	BIGNUM *r, *a, *b;
+
+	bn_prepops(L, &r, &a, &b, 1);
+
+	if (!BN_gcd(r, a, b, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:gcd");
+
+	return 1;
+} /* bn_gcd() */
 
 
 static int bn__shl(lua_State *L) {
@@ -1888,8 +1932,9 @@ static int bn__shr(lua_State *L) {
 
 static int bn__unm(lua_State *L) {
 	BIGNUM *a = checksimple(L, 1, BIGNUM_CLASS);
+	BIGNUM *r = bn_dup(L, a);
 
-	BN_set_negative(a, !BN_is_negative(a));
+	BN_set_negative(r, !BN_is_negative(a));
 
 	return 1;
 } /* bn__unm() */
@@ -1937,6 +1982,34 @@ static int bn__gc(lua_State *L) {
 
 	return 0;
 } /* bn__gc() */
+
+
+static int bn_generatePrime(lua_State *L) {
+	int bits = luaL_checkinteger(L, 1);
+	_Bool safe = optbool(L, 2, 0);
+	const BIGNUM *add = lua_isnoneornil(L, 3) ? NULL : checkbig(L, 3);
+	const BIGNUM *rem = lua_isnoneornil(L, 4) ? NULL : checkbig(L, 4);
+	BIGNUM *bn = bn_push(L);
+
+	if (!BN_generate_prime_ex(bn, bits, safe, add, rem, NULL))
+		return auxL_error(L, auxL_EOPENSSL, "bignum.generatePrime");
+
+	return 1;
+} /* bn_generatePrime() */
+
+
+static int bn_isPrime(lua_State *L) {
+	BIGNUM *bn = checksimple(L, 1, BIGNUM_CLASS);
+	int nchecks = luaL_optinteger(L, 2, BN_prime_checks);
+	int res = BN_is_prime_ex(bn, nchecks, getctx(L), NULL);
+
+	if (res == -1)
+		return auxL_error(L, auxL_EOPENSSL, "bignum:isPrime");
+
+	lua_pushboolean(L, res);
+
+	return 1;
+} /* bn_isPrime() */
 
 
 static BIO *getbio(lua_State *);
@@ -2000,18 +2073,22 @@ sslerr:
 
 
 static const luaL_Reg bn_methods[] = {
-	{ "add",   &bn__add },
-	{ "sub",   &bn__sub },
-	{ "mul",   &bn__mul },
-	{ "idiv",  &bn__idiv },
-	{ "mod",   &bn__mod },
-	{ "pow",   &bn__pow },
-	{ "shl",   &bn__shl },
-	{ "shr",   &bn__shr },
-	{ "tobin", &bn_tobin },
-	{ "todec", &bn_todec },
-	{ "tohex", &bn_tohex },
-	{ NULL,    NULL },
+	{ "add",     &bn__add },
+	{ "sub",     &bn__sub },
+	{ "mul",     &bn__mul },
+	{ "sqr",     &bn_sqr },
+	{ "idiv",    &bn__idiv },
+	{ "mod",     &bn__mod },
+	{ "nnmod",   &bn_nnmod },
+	{ "exp",     &bn__pow },
+	{ "gcd",     &bn_gcd },
+	{ "lshift",  &bn__shl },
+	{ "rshift",  &bn__shr },
+	{ "isPrime", &bn_isPrime },
+	{ "tobin",   &bn_tobin },
+	{ "todec",   &bn_todec },
+	{ "tohex",   &bn_tohex },
+	{ NULL,      NULL },
 };
 
 static const luaL_Reg bn_metatable[] = {
@@ -2035,9 +2112,10 @@ static const luaL_Reg bn_metatable[] = {
 
 
 static const luaL_Reg bn_globals[] = {
-	{ "new",       &bn_new },
-	{ "interpose", &bn_interpose },
-	{ NULL,        NULL },
+	{ "new",           &bn_new },
+	{ "interpose",     &bn_interpose },
+	{ "generatePrime", &bn_generatePrime },
+	{ NULL,            NULL },
 };
 
 int luaopen__openssl_bignum(lua_State *L) {
