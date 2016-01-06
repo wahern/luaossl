@@ -148,6 +148,7 @@
 
 #define BIGNUM_CLASS     "BIGNUM*"
 #define PKEY_CLASS       "EVP_PKEY*"
+#define EC_GROUP_CLASS   "EVP_GROUP*"
 #define X509_NAME_CLASS  "X509_NAME*"
 #define X509_GENS_CLASS  "GENERAL_NAMES*"
 #define X509_EXT_CLASS   "X509_EXTENSION*"
@@ -336,10 +337,11 @@ static int checkoption(lua_State *L, int index, const char *def, const char *con
 #define X509_ANY 0x01
 #define X509_PEM 0x02
 #define X509_DER 0x04
+#define X509_TXT 0x08 /* "pretty" */
 #define X509_ALL (X509_PEM|X509_DER)
 
 static int optencoding(lua_State *L, int index, const char *def, int allow) {
-	static const char *const opts[] = { "*", "pem", "der", NULL };
+	static const char *const opts[] = { "*", "pem", "der", "pretty", NULL };
 	int type = 0;
 
 	switch (checkoption(L, index, def, opts)) {
@@ -351,6 +353,9 @@ static int optencoding(lua_State *L, int index, const char *def, int allow) {
 		break;
 	case 2:
 		type = X509_DER;
+		break;
+	case 3:
+		type = X509_TXT;
 		break;
 	}
 
@@ -607,6 +612,21 @@ static _Bool auxS_txt2obj(ASN1_OBJECT **obj, const char *txt) {
 		return 1;
 	}
 } /* auxS_txt2obj() */
+
+static _Bool auxS_txt2nid(int *nid, const char *txt) {
+	/* try builtins first */
+	if ((*nid = OBJ_sn2nid(txt)) != NID_undef
+	||  (*nid = OBJ_ln2nid(txt)) != NID_undef) {
+		return 1;
+	}
+
+	/* OBJ_txt2nid creates a temporary ASN1_OBJECT; call sparingly */
+	if (auxS_isoid(txt) && (*nid = OBJ_txt2nid(txt)) != NID_undef) {
+		return 1;
+	}
+
+	return 0;
+} /* auxS_txt2nid() */
 
 
 /*
@@ -1577,6 +1597,11 @@ static BIGNUM *bn_dup(lua_State *L, const BIGNUM *src) {
 } /* bn_dup() */
 
 
+static BIGNUM *bn_dup_nil(lua_State *L, const BIGNUM *src) {
+	return (src)? bn_dup(L, src) : (lua_pushnil(L), (BIGNUM *)0);
+} /* bn_dup_nil() */
+
+
 #define checkbig_(a, b, c, ...) checkbig((a), (b), (c))
 #define checkbig(...) checkbig_(__VA_ARGS__, &(_Bool){ 0 }, 0)
 
@@ -1976,7 +2001,7 @@ static int bn__gc(lua_State *L) {
 	BIGNUM **ud = luaL_checkudata(L, 1, BIGNUM_CLASS);
 
 	if (*ud) {
-		BN_free(*ud);
+		BN_clear_free(*ud);
 		*ud = NULL;
 	}
 
@@ -2222,8 +2247,8 @@ static int pk_new(lua_State *L) {
 		}
 
 		if (loadfield(L, 1, "curve", LUA_TSTRING, &id)) {
-			curve = OBJ_sn2nid(id);
-			luaL_argcheck(L, curve != NID_undef, 1, lua_pushfstring(L, "%s: invalid curve", id));
+			if (!auxS_txt2nid(&curve, id))
+				luaL_argerror(L, 1, lua_pushfstring(L, "%s: invalid curve", id));
 		}
 
 creat:
@@ -2686,8 +2711,14 @@ enum pk_param  {
 	PK_DH_PUB_KEY,
 	PK_DH_PRIV_KEY,
 
-#define PK_EC_OPTLIST { "pub_key", "priv_key", NULL }
-#define PK_EC_OPTOFFSET PK_EC_PUB_KEY
+/*
+ * NB: group MUST come before pub_key as setting pub_key requires the group
+ * to be defined. :setParameters will do the requested assignments in the
+ * order defined by by this array.
+ */
+#define PK_EC_OPTLIST { "group", "pub_key", "priv_key", NULL }
+#define PK_EC_OPTOFFSET PK_EC_GROUP
+	PK_EC_GROUP,
 	PK_EC_PUB_KEY,
 	PK_EC_PRIV_KEY,
 }; /* enum pk_param */
@@ -2712,6 +2743,10 @@ static int pk_checkparam(lua_State *L, int type, int index) {
 	}
 } /* pk_checkparam() */
 
+#ifndef OPENSSL_NO_EC
+static EC_GROUP *ecg_dup_nil(lua_State *, const EC_GROUP *);
+#endif
+
 static void pk_pushparam(lua_State *L, void *_key, enum pk_param which) {
 	union {
 		RSA *rsa;
@@ -2725,93 +2760,99 @@ static void pk_pushparam(lua_State *L, void *_key, enum pk_param which) {
 	switch (which) {
 	case PK_RSA_N:
 		/* RSA public modulus n */
-		bn_dup(L, key.rsa->n);
+		bn_dup_nil(L, key.rsa->n);
 
 		break;
 	case PK_RSA_E:
 		/* RSA public exponent e */
-		bn_dup(L, key.rsa->e);
+		bn_dup_nil(L, key.rsa->e);
 
 		break;
 	case PK_RSA_D:
 		/* RSA secret exponent d */
-		bn_dup(L, key.rsa->d);
+		bn_dup_nil(L, key.rsa->d);
 
 		break;
 	case PK_RSA_P:
 		/* RSA secret prime p */
-		bn_dup(L, key.rsa->p);
+		bn_dup_nil(L, key.rsa->p);
 
 		break;
 	case PK_RSA_Q:
 		/* RSA secret prime q with p < q */
-		bn_dup(L, key.rsa->q);
+		bn_dup_nil(L, key.rsa->q);
 
 		break;
 	case PK_RSA_DMP1:
 		/* exponent1 */
-		bn_dup(L, key.rsa->dmp1);
+		bn_dup_nil(L, key.rsa->dmp1);
 
 		break;
 	case PK_RSA_DMQ1:
 		/* exponent2 */
-		bn_dup(L, key.rsa->dmq1);
+		bn_dup_nil(L, key.rsa->dmq1);
 
 		break;
 	case PK_RSA_IQMP:
 		/* coefficient */
-		bn_dup(L, key.rsa->iqmp);
+		bn_dup_nil(L, key.rsa->iqmp);
 
 		break;
 	case PK_DSA_P:
-		bn_dup(L, key.dsa->p);
+		bn_dup_nil(L, key.dsa->p);
 
 		break;
 	case PK_DSA_Q:
-		bn_dup(L, key.dsa->q);
+		bn_dup_nil(L, key.dsa->q);
 
 		break;
 	case PK_DSA_G:
-		bn_dup(L, key.dsa->g);
+		bn_dup_nil(L, key.dsa->g);
 
 		break;
 	case PK_DSA_PUB_KEY:
-		bn_dup(L, key.dsa->pub_key);
+		bn_dup_nil(L, key.dsa->pub_key);
 
 		break;
 	case PK_DSA_PRIV_KEY:
-		bn_dup(L, key.dsa->priv_key);
+		bn_dup_nil(L, key.dsa->priv_key);
 
 		break;
 	case PK_DH_P:
-		bn_dup(L, key.dh->p);
+		bn_dup_nil(L, key.dh->p);
 
 		break;
 	case PK_DH_G:
-		bn_dup(L, key.dh->g);
+		bn_dup_nil(L, key.dh->g);
 
 		break;
 	case PK_DH_PUB_KEY:
-		bn_dup(L, key.dh->pub_key);
+		bn_dup_nil(L, key.dh->pub_key);
 
 		break;
 	case PK_DH_PRIV_KEY:
-		bn_dup(L, key.dh->priv_key);
+		bn_dup_nil(L, key.dh->priv_key);
 
 		break;
 #ifndef OPENSSL_NO_EC
+	case PK_EC_GROUP:
+		ecg_dup_nil(L, EC_KEY_get0_group(key.ec));
+
+		break;
 	case PK_EC_PUB_KEY: {
 		const EC_GROUP *group;
-		const EC_POINT *public_key;
+		const EC_POINT *pub_key;
 
-		if (!(group = EC_KEY_get0_group(key.ec)) || !(public_key = EC_KEY_get0_public_key(key.ec)))
-			goto sslerr;
-		bn_dup(L, EC_POINT_point2bn(group, public_key, EC_KEY_get_conv_form(key.ec), NULL, getctx(L)));
+		if ((group = EC_KEY_get0_group(key.ec)) && (pub_key = EC_KEY_get0_public_key(key.ec))) {
+			bn_dup_nil(L, EC_POINT_point2bn(group, pub_key, EC_KEY_get_conv_form(key.ec), NULL, getctx(L)));
+		} else {
+			lua_pushnil(L);
+		}
 
 		break;
 	}
 	case PK_EC_PRIV_KEY:
-		bn_dup(L, EC_KEY_get0_private_key(key.ec));
+		bn_dup_nil(L, EC_KEY_get0_private_key(key.ec));
 
 		break;
 #endif
@@ -2820,11 +2861,156 @@ static void pk_pushparam(lua_State *L, void *_key, enum pk_param which) {
 	}
 
 	return;
-sslerr:
-	auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
+} /* pk_pushparam() */
+
+
+static _Bool pk_bn_set_nothrow(BIGNUM **dst, BIGNUM *src) {
+	BIGNUM *tmp;
+
+	if (!(tmp = BN_dup(src)))
+		return 0;
+
+	if (*dst)
+		BN_clear_free(*dst);
+	*dst = tmp;
+
+	return 1;
+} /* pk_bn_set_nothrow() */
+
+#define pk_bn_set(L, dst, index) do { \
+	BIGNUM *n = checkbig((L), (index)); \
+	if (!pk_bn_set_nothrow((dst), n)) \
+		goto sslerr; \
+} while (0)
+
+static void pk_setparam(lua_State *L, void *_key, enum pk_param which, int index) {
+	union {
+		RSA *rsa;
+		DH *dh;
+		DSA *dsa;
+#ifndef OPENSSL_NO_EC
+		EC_KEY *ec;
+#endif
+	} key = { _key };
+
+	switch (which) {
+	case PK_RSA_N:
+		pk_bn_set(L, &key.rsa->n, index);
+
+		break;
+	case PK_RSA_E:
+		pk_bn_set(L, &key.rsa->e, index);
+
+		break;
+	case PK_RSA_D:
+		pk_bn_set(L, &key.rsa->d, index);
+
+		break;
+	case PK_RSA_P:
+		pk_bn_set(L, &key.rsa->p, index);
+
+		break;
+	case PK_RSA_Q:
+		pk_bn_set(L, &key.rsa->q, index);
+
+		break;
+	case PK_RSA_DMP1:
+		pk_bn_set(L, &key.rsa->dmp1, index);
+
+		break;
+	case PK_RSA_DMQ1:
+		pk_bn_set(L, &key.rsa->dmq1, index);
+
+		break;
+	case PK_RSA_IQMP:
+		pk_bn_set(L, &key.rsa->iqmp, index);
+
+		break;
+	case PK_DSA_P:
+		pk_bn_set(L, &key.dsa->p, index);
+
+		break;
+	case PK_DSA_Q:
+		pk_bn_set(L, &key.dsa->q, index);
+
+		break;
+	case PK_DSA_G:
+		pk_bn_set(L, &key.dsa->g, index);
+
+		break;
+	case PK_DSA_PUB_KEY:
+		pk_bn_set(L, &key.dsa->pub_key, index);
+
+		break;
+	case PK_DSA_PRIV_KEY:
+		pk_bn_set(L, &key.dsa->priv_key, index);
+
+		break;
+	case PK_DH_P:
+		pk_bn_set(L, &key.dh->p, index);
+
+		break;
+	case PK_DH_G:
+		pk_bn_set(L, &key.dh->g, index);
+
+		break;
+	case PK_DH_PUB_KEY:
+		pk_bn_set(L, &key.dh->pub_key, index);
+
+		break;
+	case PK_DH_PRIV_KEY:
+		pk_bn_set(L, &key.dh->priv_key, index);
+
+		break;
+#ifndef OPENSSL_NO_EC
+	case PK_EC_GROUP: {
+		const EC_GROUP *group = checksimple(L, index, EC_GROUP_CLASS);
+
+		if (!EC_KEY_set_group(key.ec, group))
+			goto sslerr;
+
+		break;
+	}
+	case PK_EC_PUB_KEY: {
+		const BIGNUM *n = checkbig(L, index);
+		const EC_GROUP *group;
+		EC_POINT *pub_key;
+		_Bool okay;
+
+		if (!(group = EC_KEY_get0_group(key.ec)))
+			luaL_error(L, "unable to set EC pub_key (no group defined)");
+
+		if (!(pub_key = EC_POINT_bn2point(group, n, NULL, getctx(L))))
+			goto sslerr;
+
+		/* NB: copies key, doesn't share or take ownership */
+		okay = EC_KEY_set_public_key(key.ec, pub_key);
+		EC_POINT_free(pub_key);
+		if (!okay)
+			goto sslerr;
+
+		break;
+	}
+	case PK_EC_PRIV_KEY: {
+		const BIGNUM *n = checkbig(L, index);
+
+		/* NB: copies key, doesn't share or take ownership */
+		if (!EC_KEY_set_private_key(key.ec, n))
+			goto sslerr;
+
+		break;
+	}
+#endif
+	default:
+		luaL_error(L, "%d: invalid EVP_PKEY parameter", which);
+	}
 
 	return;
-} /* pk_pushparam() */
+sslerr:
+	auxL_error(L, auxL_EOPENSSL, "pkey:setParameters");
+
+	return;
+} /* pk_setparam() */
 
 
 static int pk_getParameters(lua_State *L) {
@@ -2862,7 +3048,7 @@ static int pk_getParameters(lua_State *L) {
 
 			break;
 		default:
-			return luaL_error(L, "%d: unsupported EVP_PKEY base type", EVP_PKEY_base_id(key));
+			return luaL_error(L, "%d: unsupported EVP_PKEY base type", type);
 		}
 
 		/*
@@ -2906,6 +3092,56 @@ static int pk_getParameters(lua_State *L) {
 sslerr:
 	return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 } /* pk_getParameters() */
+
+
+static int pk_setParameters(lua_State *L) {
+	EVP_PKEY *_key = checksimple(L, 1, PKEY_CLASS);
+	int type = EVP_PKEY_base_id(_key);
+	void *key;
+	const char *const *optlist;
+	int optindex, optoffset;
+
+	luaL_checktype(L, 2, LUA_TTABLE);
+
+	if (!(key = EVP_PKEY_get0(_key)))
+		goto sslerr;
+
+	switch (type) {
+	case EVP_PKEY_RSA:
+		optlist = pk_rsa_optlist;
+		optoffset = PK_RSA_OPTOFFSET;
+
+		break;
+	case EVP_PKEY_DSA:
+		optlist = pk_dsa_optlist;
+		optoffset = PK_DSA_OPTOFFSET;
+
+		break;
+	case EVP_PKEY_DH:
+		optlist = pk_dh_optlist;
+		optoffset = PK_DH_OPTOFFSET;
+
+		break;
+	case EVP_PKEY_EC:
+		optlist = pk_ec_optlist;
+		optoffset = PK_EC_OPTOFFSET;
+
+		break;
+	default:
+		return luaL_error(L, "%d: unsupported EVP_PKEY base type", type);
+	}
+
+	for (optindex = 0; optlist[optindex]; optindex++) {
+		if (getfield(L, 2, optlist[optindex])) {
+			pk_setparam(L, key, optindex + optoffset, -1);
+			lua_pop(L, 1);
+		}
+	}
+
+	return 0;
+sslerr:
+	return auxL_error(L, auxL_EOPENSSL, "pkey:setParameters");
+} /* pk_setParameters() */
 
 
 static int pk__tostring(lua_State *L) {
@@ -2954,6 +3190,7 @@ static const luaL_Reg pk_methods[] = {
 	{ "verify",        &pk_verify },
 	{ "toPEM",         &pk_toPEM },
 	{ "getParameters", &pk_getParameters },
+	{ "setParameters", &pk_setParameters },
 	{ NULL,            NULL },
 };
 
@@ -2985,6 +3222,205 @@ int luaopen__openssl_pkey(lua_State *L) {
 int luaopen__openssl_pubkey(lua_State *L) {
 	return luaopen__openssl_pkey(L);
 } /* luaopen__openssl_pubkey() */
+
+
+/*
+ * EC_GROUP - openssl.ec.group
+ *
+ * NOTE: Ensure copy-by-value semantics when passing EC_GROUP objects as it
+ * doesn't support reference counting. The only persistent reference should
+ * be the Lua userdata value.
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+#ifndef OPENSSL_NO_EC
+
+static EC_GROUP *ecg_dup(lua_State *L, const EC_GROUP *src) {
+	EC_GROUP **ud = prepsimple(L, EC_GROUP_CLASS);
+
+	if (!(*ud = EC_GROUP_dup(src)))
+		auxL_error(L, auxL_EOPENSSL, "group");
+
+	return *ud;
+} /* ecg_dup() */
+
+static EC_GROUP *ecg_dup_nil(lua_State *L, const EC_GROUP *src) {
+	return (src)? ecg_dup(L, src) : (lua_pushnil(L), (EC_GROUP *)0);
+} /* ecg_dup_nil() */
+
+static EC_GROUP *ecg_new_by_nid(int nid) {
+	EC_GROUP *group;
+
+	if (!(group = EC_GROUP_new_by_curve_name(nid)))
+		return NULL;
+
+	/* flag as named for benefit of __tostring */
+	EC_GROUP_set_asn1_flag(group, OPENSSL_EC_NAMED_CURVE);
+
+	/* compressed points may be patented */
+	EC_GROUP_set_point_conversion_form(group, POINT_CONVERSION_UNCOMPRESSED);
+
+	return group;
+} /* ecg_new_by_nid() */
+
+static EC_GROUP *ecg_push_by_nid(lua_State *L, int nid) {
+	EC_GROUP **group = prepsimple(L, EC_GROUP_CLASS);
+
+	if (!(*group = EC_GROUP_new_by_curve_name(nid)))
+		goto oops;
+
+	EC_GROUP_set_asn1_flag(*group, OPENSSL_EC_NAMED_CURVE);
+
+	/* compressed points may be patented */
+	EC_GROUP_set_point_conversion_form(*group, POINT_CONVERSION_UNCOMPRESSED);
+
+	return *group;
+oops:
+	lua_pop(L, 1);
+
+	return NULL;
+} /* ecg_push_by_nid() */
+
+static int ecg_new(lua_State *L) {
+	switch (lua_type(L, 1)) {
+	case LUA_TSTRING: {
+		const char *data;
+		size_t datalen;
+		int nid, type, goterr;
+		BIO *bio;
+		EC_GROUP **group;
+
+		data = luaL_checklstring(L, 1, &datalen);
+
+		if (auxS_txt2nid(&nid, data)) {
+			if (!ecg_push_by_nid(L, nid))
+				goto sslerr;
+		} else {
+			type = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
+			group = prepsimple(L, EC_GROUP_CLASS);
+
+			luaL_argcheck(L, datalen < INT_MAX, 1, "string too long");
+			if (!(bio = BIO_new_mem_buf((void *)data, datalen)))
+				return auxL_error(L, auxL_EOPENSSL, "group.new");
+
+			goterr = 0;
+
+			if (type == X509_PEM || type == X509_ANY) {
+				goterr |= !(*group = PEM_read_bio_ECPKParameters(bio, NULL, 0, ""));
+			}
+
+			if (!*group && (type == X509_DER || type == X509_ANY)) {
+				BIO_reset(bio);
+				goterr |= !(*group = d2i_ECPKParameters_bio(bio, NULL));
+			}
+
+			BIO_free(bio);
+
+			if (!*group)
+				return auxL_error(L, auxL_EOPENSSL, "group.new");
+			if (goterr)
+				ERR_clear_error();
+		}
+
+		return 1;
+	}
+	case LUA_TNUMBER: {
+		int nid = luaL_checkint(L, 2);
+
+		if (!ecg_push_by_nid(L, nid))
+			goto sslerr;
+
+		return 1;
+	}
+	default:
+		return luaL_error(L, "%s: unknown group initializer", lua_typename(L, lua_type(L, 1)));
+	} /* switch() */
+
+	return 0;
+sslerr:
+	return auxL_error(L, auxL_EOPENSSL, "group.new");
+} /* ecg_new() */
+
+static int ecg_interpose(lua_State *L) {
+	return interpose(L, EC_GROUP_CLASS);
+} /* ecg_interpose() */
+
+static int ecg_tostring(lua_State *L) {
+	EC_GROUP *group = checksimple(L, 1, EC_GROUP_CLASS);
+	int how = optencoding(L, 2, "pem", X509_PEM|X509_DER|X509_TXT);
+	BIO *bio = getbio(L);
+	char *bytes;
+	int len, indent;
+
+	switch (how) {
+	case X509_PEM:
+		if (!PEM_write_bio_ECPKParameters(bio, group))
+			goto sslerr;
+		break;
+	case X509_DER:
+		if (!i2d_ECPKParameters_bio(bio, group))
+			goto sslerr;
+		break;
+	case X509_TXT:
+		indent = auxL_optinteger(L, 3, 0, 0, INT_MAX);
+		if (!ECPKParameters_print(bio, group, indent))
+			goto sslerr;
+		break;
+	}
+
+	len = BIO_get_mem_data(bio, &bytes);
+	lua_pushlstring(L, bytes, len);
+
+	return 1;
+sslerr:
+	return auxL_error(L, auxL_EOPENSSL, "group:__tostring");
+} /* ecg_tostring() */
+
+static int ecg__tostring(lua_State *L) {
+	return ecg_tostring(L);
+} /* ecg__tostring() */
+
+static int ecg__gc(lua_State *L) {
+	EC_GROUP **ud = luaL_checkudata(L, 1, EC_GROUP_CLASS);
+
+	if (*ud) {
+		EC_GROUP_clear_free(*ud);
+		*ud = NULL;
+	}
+
+	return 0;
+} /* ecg__gc() */
+
+static const luaL_Reg ecg_methods[] = {
+	{ "tostring", &ecg_tostring },
+	{ NULL,       NULL },
+};
+
+static const luaL_Reg ecg_metatable[] = {
+	{ "__tostring", &ecg__tostring },
+	{ "__gc",       &ecg__gc },
+	{ NULL,         NULL },
+};
+
+static const luaL_Reg ecg_globals[] = {
+	{ "new",       &ecg_new },
+	{ "interpose", &ecg_interpose },
+	{ NULL,        NULL },
+};
+
+#endif /* OPENSSL_NO_EC */
+
+int luaopen__openssl_ec_group(lua_State *L) {
+#ifndef OPENSSL_NO_EC
+	initall(L);
+
+	luaL_newlib(L, ecg_globals);
+
+	return 1;
+#else
+	return 0;
+#endif
+} /* luaopen__openssl_ec_group() */
 
 
 /*
@@ -7575,6 +8011,9 @@ static void initall(lua_State *L) {
 
 	addclass(L, BIGNUM_CLASS, bn_methods, bn_metatable);
 	addclass(L, PKEY_CLASS, pk_methods, pk_metatable);
+#ifndef OPENSSL_NO_EC
+	addclass(L, EC_GROUP_CLASS, ecg_methods, ecg_metatable);
+#endif
 	addclass(L, X509_NAME_CLASS, xn_methods, xn_metatable);
 	addclass(L, X509_GENS_CLASS, gn_methods, gn_metatable);
 	addclass(L, X509_EXT_CLASS, xe_methods, xe_metatable);
