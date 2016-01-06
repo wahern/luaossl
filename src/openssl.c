@@ -2714,7 +2714,7 @@ enum pk_param  {
 /*
  * NB: group MUST come before pub_key as setting pub_key requires the group
  * to be defined. :setParameters will do the requested assignments in the
- * order defined by by this array.
+ * order defined by this array.
  */
 #define PK_EC_OPTLIST { "group", "pub_key", "priv_key", NULL }
 #define PK_EC_OPTOFFSET PK_EC_GROUP
