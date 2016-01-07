@@ -303,36 +303,7 @@ static int interpose(lua_State *L, const char *mt) {
 	return 1; /* return old method */
 } /* interpose() */
 
-
-static void addclass(lua_State *L, const char *name, const luaL_Reg *methods, const luaL_Reg *metamethods) {
-	if (luaL_newmetatable(L, name)) {
-		luaL_setfuncs(L, metamethods, 0);
-		lua_newtable(L);
-		luaL_setfuncs(L, methods, 0);
-		lua_setfield(L, -2, "__index");
-		lua_pop(L, 1);
-	}
-} /* addclass() */
-
-
-static int badoption(lua_State *L, int index, const char *opt) {
-	opt = (opt)? opt : luaL_checkstring(L, index);
-
-	return luaL_argerror(L, index, lua_pushfstring(L, "invalid option %s", opt));
-} /* badoption() */
-
-static int checkoption(lua_State *L, int index, const char *def, const char *const opts[]) {
-	const char *opt = (def)? luaL_optstring(L, index, def) : luaL_checkstring(L, index);
-	int i;
-
-	for (i = 0; opts[i]; i++) {
-		if (strieq(opts[i], opt))
-			return i;
-	}
-
-	return badoption(L, index, opt);
-} /* checkoption() */
-
+static int auxL_checkoption(lua_State *, int, const char *, const char *const *, _Bool);
 
 #define X509_ANY 0x01
 #define X509_PEM 0x02
@@ -344,7 +315,7 @@ static int optencoding(lua_State *L, int index, const char *def, int allow) {
 	static const char *const opts[] = { "*", "pem", "der", "pretty", NULL };
 	int type = 0;
 
-	switch (checkoption(L, index, def, opts)) {
+	switch (auxL_checkoption(L, index, def, opts, 1)) {
 	case 0:
 		type = X509_ANY;
 		break;
@@ -658,6 +629,27 @@ NOTUSED static auxtype_t auxL_getref(lua_State *L, auxref_t ref) {
 	return lua_type(L, -1);
 } /* auxL_getref() */
 
+static int auxL_testoption(lua_State *L, int index, const char *def, const char *const *optlist, _Bool nocase) {
+	const char *optname = (def)? luaL_optstring(L, index, def) : luaL_checkstring(L, index);
+	int (*optcmp)() = (nocase)? &strcasecmp : &strcmp;
+
+	for (int i = 0; optlist[i]; i++) {
+		if (0 == optcmp(optlist[i], optname))
+			return i;
+	}
+
+	return -1;
+} /* auxL_testoption() */
+
+static int auxL_checkoption(lua_State *L, int index, const char *def, const char *const *optlist, _Bool nocase) {
+	int i;
+
+	if ((i = auxL_testoption(L, index, def, optlist, nocase)) >= 0)
+		return i;
+
+	return luaL_argerror(L, index, lua_pushfstring(L, "invalid option '%s'", luaL_optstring(L, index, def)));
+} /* auxL_checkoption() */
+
 /*
  * Lua 5.3 distinguishes integers and numbers, and by default uses 64-bit
  * integers. The following routines try to preserve this distinction and
@@ -753,6 +745,13 @@ static auxL_Unsigned (auxL_optunsigned)(lua_State *L, int index, auxL_Unsigned d
 	return (lua_isnoneornil(L, index))? def : auxL_checkunsigned(L, index, min, max);
 } /* auxL_optunsigned() */
 
+static int auxL_size2int(lua_State *L, size_t n) {
+	if (n > INT_MAX)
+		luaL_error(L, "integer value out of range (%zu > INT_MAX)", n);
+
+	return (int)n;
+} /* auxL_size2int() */
+
 typedef struct {
 	const char *name;
 	auxL_Integer value;
@@ -764,6 +763,105 @@ static void auxL_setintegers(lua_State *L, const auxL_IntegerReg *l) {
 		lua_setfield(L, -2, l->name);
 	}
 } /* auxL_setintegers() */
+
+#define AUXL_REG_NULL (&(auxL_Reg[]){ 0 })
+
+typedef struct {
+	const char *name;
+	lua_CFunction func;
+	unsigned nups; /* in addition to nups specified to auxL_setfuncs */
+} auxL_Reg;
+
+static inline size_t auxL_liblen(const auxL_Reg *l) {
+	size_t n = 0;
+
+	while ((l++)->name)
+		n++;
+
+	return n;
+} /* auxL_liblen() */
+
+#define auxL_newlibtable(L, l) \
+	lua_createtable((L), 0, countof((l)) - 1)
+
+#define auxL_newlib(L, l, nups) \
+	(auxL_newlibtable((L), (l)), auxL_setfuncs((L), (l), (nups)))
+
+static void auxL_setfuncs(lua_State *L, const auxL_Reg *l, int nups) {
+	for (; l->name; l++) {
+		/* copy shared upvalues */
+		luaL_checkstack(L, nups, "too many upvalues");
+		for (int i = 0; i < nups; i++)
+			lua_pushvalue(L, -nups);
+
+		/* nil-fill local upvalues */
+		luaL_checkstack(L, l->nups, "too many upvalues");
+		lua_settop(L, lua_gettop(L) + l->nups);
+
+		/* set closure */
+		luaL_checkstack(L, 1, "too many upvalues");
+		lua_pushcclosure(L, l->func, nups + l->nups);
+		lua_setfield(L, -(nups + 2), l->name);
+	}
+
+	lua_pop(L, nups);
+
+	return;
+} /* auxL_setfuncs() */
+
+static void auxL_clear(lua_State *L, int tindex) {
+	tindex = lua_absindex(L, tindex);
+
+	lua_pushnil(L);
+	while (lua_next(L, tindex)) {
+		lua_pop(L, 1);
+		lua_pushvalue(L, -1);
+		lua_pushnil(L);
+		lua_rawset(L, tindex);
+	}
+} /* auxL_clear() */
+
+static _Bool auxL_newmetatable(lua_State *L, const char *name, _Bool reset) {
+	if (luaL_newmetatable(L, name))
+		return 1;
+	if (!reset)
+		return 0;
+
+	/*
+	 * NB: Keep existing table as it may be cached--e.g. in
+	 * another module that isn't being reloaded. But scrub it
+	 * clean so function interposition--which will presumably
+	 * run again if the C module is being reloaded--doesn't
+	 * result in loops.
+	 */
+	auxL_clear(L, -1);
+	lua_pushnil(L);
+	lua_setmetatable(L, -2);
+#if LUA_VERSION_NUM >= 502
+	lua_pushnil(L);
+	lua_setuservalue(L, -2);
+#endif
+
+	return 0;
+} /* auxL_newmetatable() */
+
+static _Bool auxL_newclass(lua_State *L, const char *name, const auxL_Reg *methods, const auxL_Reg *metamethods, _Bool reset) {
+	_Bool fresh = auxL_newmetatable(L, name, reset);
+	int n;
+
+	auxL_setfuncs(L, metamethods, 0);
+
+	if ((n = auxL_liblen(methods))) {
+		lua_createtable(L, 0, auxL_size2int(L, n));
+		auxL_setfuncs(L, methods, 0);
+		lua_setfield(L, -2, "__index");
+	}
+
+	return fresh;
+} /* auxL_newclass() */
+
+#define auxL_addclass(L, ...) \
+	(auxL_newclass((L), __VA_ARGS__), lua_pop((L), 1))
 
 #define auxL_EDYLD -2
 #define auxL_EOPENSSL -1
@@ -1368,7 +1466,7 @@ static int ossl_version(lua_State *L) {
 	return 1;
 } /* ossl_version() */
 
-static const luaL_Reg ossl_globals[] = {
+static const auxL_Reg ossl_globals[] = {
 	{ "version", &ossl_version },
 	{ NULL,      NULL },
 };
@@ -1540,7 +1638,7 @@ static const auxL_IntegerReg ssleay_version[] = {
 int luaopen__openssl(lua_State *L) {
 	size_t i;
 
-	luaL_newlib(L, ossl_globals);
+	auxL_newlib(L, ossl_globals, 0);
 
 	for (i = 0; i < countof(opensslconf_no); i++) {
 		if (*opensslconf_no[i]) {
@@ -2097,7 +2195,7 @@ sslerr:
 } /* bn_tohex() */
 
 
-static const luaL_Reg bn_methods[] = {
+static const auxL_Reg bn_methods[] = {
 	{ "add",     &bn__add },
 	{ "sub",     &bn__sub },
 	{ "mul",     &bn__mul },
@@ -2116,7 +2214,7 @@ static const luaL_Reg bn_methods[] = {
 	{ NULL,      NULL },
 };
 
-static const luaL_Reg bn_metatable[] = {
+static const auxL_Reg bn_metatable[] = {
 	{ "__add",      &bn__add },
 	{ "__sub",      &bn__sub },
 	{ "__mul",      &bn__mul },
@@ -2136,7 +2234,7 @@ static const luaL_Reg bn_metatable[] = {
 };
 
 
-static const luaL_Reg bn_globals[] = {
+static const auxL_Reg bn_globals[] = {
 	{ "new",           &bn_new },
 	{ "interpose",     &bn_interpose },
 	{ "generatePrime", &bn_generatePrime },
@@ -2146,7 +2244,7 @@ static const luaL_Reg bn_globals[] = {
 int luaopen__openssl_bignum(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, bn_globals);
+	auxL_newlib(L, bn_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_bignum() */
@@ -2599,7 +2697,7 @@ static int pk_toPEM(lua_State *L) {
 			NULL,
 		};
 
-		switch (checkoption(L, i, NULL, opts)) {
+		switch (auxL_checkoption(L, i, NULL, opts, 1)) {
 		case 0: case 1: /* public, PublicKey */
 			if (!PEM_write_bio_PUBKEY(bio, key))
 				return auxL_error(L, auxL_EOPENSSL, "pkey:__tostring");
@@ -2728,26 +2826,50 @@ static const char *const pk_dsa_optlist[] = PK_DSA_OPTLIST;
 static const char *const pk_dh_optlist[] = PK_DH_OPTLIST;
 static const char *const pk_ec_optlist[] = PK_EC_OPTLIST;
 
-static int pk_checkparam(lua_State *L, int type, int index) {
+const char *const *pk_getoptlist(int type, int *_nopts, int *_optoffset) {
+	const char *const *optlist = NULL;
+	int nopts = 0, optoffset = 0;
+
 	switch (type) {
 	case EVP_PKEY_RSA:
-		return luaL_checkoption(L, index, NULL, pk_rsa_optlist) + PK_RSA_OPTOFFSET;
+		optlist = pk_rsa_optlist;
+		nopts = countof(pk_rsa_optlist) - 1;
+		optoffset = PK_RSA_OPTOFFSET;
+
+		break;
 	case EVP_PKEY_DSA:
-		return luaL_checkoption(L, index, NULL, pk_dsa_optlist) + PK_DSA_OPTOFFSET;
+		optlist = pk_dsa_optlist;
+		nopts = countof(pk_dsa_optlist) - 1;
+		optoffset = PK_DSA_OPTOFFSET;
+
+		break;
 	case EVP_PKEY_DH:
-		return luaL_checkoption(L, index, NULL, pk_dh_optlist) + PK_DH_OPTOFFSET;
+		optlist = pk_dh_optlist;
+		nopts = countof(pk_dh_optlist) - 1;
+		optoffset = PK_DH_OPTOFFSET;
+
+		break;
 	case EVP_PKEY_EC:
-		return luaL_checkoption(L, index, NULL, pk_ec_optlist) + PK_EC_OPTOFFSET;
-	default:
-		return luaL_error(L, "%d: unsupported EVP_PKEY base type", type);
+		optlist = pk_ec_optlist;
+		nopts = countof(pk_ec_optlist) - 1;
+		optoffset = PK_EC_OPTOFFSET;
+
+		break;
 	}
-} /* pk_checkparam() */
+
+	if (_nopts)
+		*_nopts = nopts;
+	if (_optoffset)
+		*_optoffset = optoffset;
+
+	return optlist;
+} /* pk_getoptlist() */
 
 #ifndef OPENSSL_NO_EC
 static EC_GROUP *ecg_dup_nil(lua_State *, const EC_GROUP *);
 #endif
 
-static void pk_pushparam(lua_State *L, void *_key, enum pk_param which) {
+static void pk_pushparam(lua_State *L, void *base_key, enum pk_param which) {
 	union {
 		RSA *rsa;
 		DH *dh;
@@ -2755,7 +2877,7 @@ static void pk_pushparam(lua_State *L, void *_key, enum pk_param which) {
 #ifndef OPENSSL_NO_EC
 		EC_KEY *ec;
 #endif
-	} key = { _key };
+	} key = { base_key };
 
 	switch (which) {
 	case PK_RSA_N:
@@ -2883,7 +3005,7 @@ static _Bool pk_bn_set_nothrow(BIGNUM **dst, BIGNUM *src) {
 		goto sslerr; \
 } while (0)
 
-static void pk_setparam(lua_State *L, void *_key, enum pk_param which, int index) {
+static void pk_setparam(lua_State *L, void *base_key, enum pk_param which, int index) {
 	union {
 		RSA *rsa;
 		DH *dh;
@@ -2891,7 +3013,7 @@ static void pk_setparam(lua_State *L, void *_key, enum pk_param which, int index
 #ifndef OPENSSL_NO_EC
 		EC_KEY *ec;
 #endif
-	} key = { _key };
+	} key = { base_key };
 
 	switch (which) {
 	case PK_RSA_N:
@@ -3014,76 +3136,51 @@ sslerr:
 
 
 static int pk_getParameters(lua_State *L) {
-	EVP_PKEY *_key = checksimple(L, 1, PKEY_CLASS);
-	int type = EVP_PKEY_base_id(_key);
-	void *key;
-	int otop, index, tindex;
+	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
+	int base_type = EVP_PKEY_base_id(key);
+	void *base_key;
+	const char *const *optlist;
+	int nopts, optoffset, otop, index, tindex;
 
-	if (!(key = EVP_PKEY_get0(_key)))
+	if (!(base_key = EVP_PKEY_get0(key)))
 		goto sslerr;
 
+	if (!(optlist = pk_getoptlist(base_type, &nopts, &optoffset)))
+		return luaL_error(L, "%d: unsupported EVP_PKEY base type", base_type);
+
 	if (lua_isnoneornil(L, 2)) {
-		const char *const *optlist;
-		const char *const *opt;
-
-		switch (type) {
-		case EVP_PKEY_RSA:
-			optlist = pk_rsa_optlist;
-			luaL_checkstack(L, countof(pk_rsa_optlist), "");
-
-			break;
-		case EVP_PKEY_DSA:
-			optlist = pk_dsa_optlist;
-			luaL_checkstack(L, countof(pk_dsa_optlist), "");
-
-			break;
-		case EVP_PKEY_DH:
-			optlist = pk_dh_optlist;
-			luaL_checkstack(L, countof(pk_dh_optlist), "");
-
-			break;
-		case EVP_PKEY_EC:
-			optlist = pk_ec_optlist;
-			luaL_checkstack(L, countof(pk_ec_optlist), "");
-
-			break;
-		default:
-			return luaL_error(L, "%d: unsupported EVP_PKEY base type", type);
-		}
-
 		/*
 		 * Use special "{" parameter to tell loop to push table.
 		 * Subsequent parameters will be assigned as fields.
-		 *
-		 * NOTE: optlist arrays are NULL-terminated. luaL_checkstack()
-		 * calls above left room for "{".
 		 */
 		lua_pushstring(L, "{");
-
-		for (opt = optlist; *opt; opt++) {
-			lua_pushstring(L, *opt);
+		luaL_checkstack(L, nopts, NULL);
+		for (const char *const *optname = optlist; *optname; optname++) {
+			lua_pushstring(L, *optname);
 		}
 	}
 
 	otop = lua_gettop(L);
 
 	/* provide space for results and working area */
-	luaL_checkstack(L, (otop - 1) + LUA_MINSTACK, "");
+	luaL_checkstack(L, (otop - 1) + LUA_MINSTACK, NULL);
 
 	/* no table index, yet */
 	tindex = 0;
 
 	for (index = 2; index <= otop; index++) {
-		const char *opt = luaL_checkstring(L, index);
+		const char *optname = luaL_checkstring(L, index);
+		int optid;
 
-		if (*opt == '{') {
+		if (*optname == '{') {
 			lua_newtable(L);
 			tindex = lua_gettop(L);
 		} else {
-			pk_pushparam(L, key, pk_checkparam(L, type, index));
+			optid = luaL_checkoption(L, index, NULL, optlist) + optoffset;
+			pk_pushparam(L, base_key, optid);
 
 			if (tindex) {
-				lua_setfield(L, tindex, opt);
+				lua_setfield(L, tindex, optname);
 			}
 		}
 	}
@@ -3095,45 +3192,23 @@ sslerr:
 
 
 static int pk_setParameters(lua_State *L) {
-	EVP_PKEY *_key = checksimple(L, 1, PKEY_CLASS);
-	int type = EVP_PKEY_base_id(_key);
-	void *key;
+	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
+	int base_type = EVP_PKEY_base_id(key);
+	void *base_key;
 	const char *const *optlist;
 	int optindex, optoffset;
 
 	luaL_checktype(L, 2, LUA_TTABLE);
 
-	if (!(key = EVP_PKEY_get0(_key)))
+	if (!(base_key = EVP_PKEY_get0(key)))
 		goto sslerr;
 
-	switch (type) {
-	case EVP_PKEY_RSA:
-		optlist = pk_rsa_optlist;
-		optoffset = PK_RSA_OPTOFFSET;
-
-		break;
-	case EVP_PKEY_DSA:
-		optlist = pk_dsa_optlist;
-		optoffset = PK_DSA_OPTOFFSET;
-
-		break;
-	case EVP_PKEY_DH:
-		optlist = pk_dh_optlist;
-		optoffset = PK_DH_OPTOFFSET;
-
-		break;
-	case EVP_PKEY_EC:
-		optlist = pk_ec_optlist;
-		optoffset = PK_EC_OPTOFFSET;
-
-		break;
-	default:
-		return luaL_error(L, "%d: unsupported EVP_PKEY base type", type);
-	}
+	if (!(optlist = pk_getoptlist(base_type, NULL, &optoffset)))
+		return luaL_error(L, "%d: unsupported EVP_PKEY base type", base_type);
 
 	for (optindex = 0; optlist[optindex]; optindex++) {
 		if (getfield(L, 2, optlist[optindex])) {
-			pk_setparam(L, key, optindex + optoffset, -1);
+			pk_setparam(L, base_key, optindex + optoffset, -1);
 			lua_pop(L, 1);
 		}
 	}
@@ -3170,6 +3245,55 @@ static int pk__tostring(lua_State *L) {
 } /* pk__tostring() */
 
 
+static int pk__index(lua_State *L) {
+	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
+	void *base_key;
+	const char *const *optlist;
+	int optoffset, listoffset;
+
+	lua_pushvalue(L, lua_upvalueindex(1));
+	lua_pushvalue(L, 2);
+	lua_gettable(L, -2);
+
+	if (!lua_isnil(L, -1))
+		return 1;
+
+	if (!lua_isstring(L, 2))
+		return 0;
+	if (!(base_key = EVP_PKEY_get0(key)))
+		return 0;
+	if (!(optlist = pk_getoptlist(EVP_PKEY_base_id(key), NULL, &optoffset)))
+		return 0;
+	if (-1 == (listoffset = auxL_testoption(L, 2, NULL, optlist, 0)))
+		return 0;
+
+	pk_pushparam(L, base_key, listoffset + optoffset);
+
+	return 1;
+} /* pk__index() */
+
+
+static int pk__newindex(lua_State *L) {
+	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
+	void *base_key;
+	const char *const *optlist;
+	int optoffset, listoffset;
+
+	if (!lua_isstring(L, 2))
+		return 0;
+	if (!(base_key = EVP_PKEY_get0(key)))
+		return 0;
+	if (!(optlist = pk_getoptlist(EVP_PKEY_base_id(key), NULL, &optoffset)))
+		return 0;
+	if (-1 == (listoffset = auxL_testoption(L, 2, NULL, optlist, 0)))
+		return 0;
+
+	pk_setparam(L, base_key, listoffset + optoffset, 3);
+
+	return 0;
+} /* pk__newindex() */
+
+
 static int pk__gc(lua_State *L) {
 	EVP_PKEY **ud = luaL_checkudata(L, 1, PKEY_CLASS);
 
@@ -3182,7 +3306,7 @@ static int pk__gc(lua_State *L) {
 } /* pk__gc() */
 
 
-static const luaL_Reg pk_methods[] = {
+static const auxL_Reg pk_methods[] = {
 	{ "type",          &pk_type },
 	{ "setPublicKey",  &pk_setPublicKey },
 	{ "setPrivateKey", &pk_setPrivateKey },
@@ -3194,23 +3318,38 @@ static const luaL_Reg pk_methods[] = {
 	{ NULL,            NULL },
 };
 
-static const luaL_Reg pk_metatable[] = {
+static const auxL_Reg pk_metatable[] = {
 	{ "__tostring", &pk__tostring },
+	{ "__index",    &pk__index, 1 },
+	{ "__newindex", &pk__newindex, 1 },
 	{ "__gc",       &pk__gc },
 	{ NULL,         NULL },
 };
 
 
-static const luaL_Reg pk_globals[] = {
+static const auxL_Reg pk_globals[] = {
 	{ "new",       &pk_new },
 	{ "interpose", &pk_interpose },
 	{ NULL,        NULL },
 };
 
+static void pk_luainit(lua_State *L, _Bool reset) {
+	if (!auxL_newmetatable(L, PKEY_CLASS, reset))
+		return;
+	auxL_setfuncs(L, pk_metatable, 0);
+	auxL_newlib(L, pk_methods, 0);
+	for (char **k = (char *[]){ "__index", "__newindex", 0 }; *k; k++) {
+		lua_getfield(L, -2, *k); /* closure */
+		lua_pushvalue(L, -2);   /* method table */
+		lua_setupvalue(L, -2, 1);
+	}
+	lua_pop(L, 2);
+} /* pk_luainit() */
+
 int luaopen__openssl_pkey(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, pk_globals);
+	auxL_newlib(L, pk_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_pkey() */
@@ -3391,18 +3530,18 @@ static int ecg__gc(lua_State *L) {
 	return 0;
 } /* ecg__gc() */
 
-static const luaL_Reg ecg_methods[] = {
+static const auxL_Reg ecg_methods[] = {
 	{ "tostring", &ecg_tostring },
 	{ NULL,       NULL },
 };
 
-static const luaL_Reg ecg_metatable[] = {
+static const auxL_Reg ecg_metatable[] = {
 	{ "__tostring", &ecg__tostring },
 	{ "__gc",       &ecg__gc },
 	{ NULL,         NULL },
 };
 
-static const luaL_Reg ecg_globals[] = {
+static const auxL_Reg ecg_globals[] = {
 	{ "new",       &ecg_new },
 	{ "interpose", &ecg_interpose },
 	{ NULL,        NULL },
@@ -3414,7 +3553,7 @@ int luaopen__openssl_ec_group(lua_State *L) {
 #ifndef OPENSSL_NO_EC
 	initall(L);
 
-	luaL_newlib(L, ecg_globals);
+	auxL_newlib(L, ecg_globals, 0);
 
 	return 1;
 #else
@@ -3597,13 +3736,13 @@ static int xn__tostring(lua_State *L) {
 } /* xn__tostring() */
 
 
-static const luaL_Reg xn_methods[] = {
+static const auxL_Reg xn_methods[] = {
 	{ "add", &xn_add },
 	{ "all", &xn_all },
 	{ NULL,  NULL },
 };
 
-static const luaL_Reg xn_metatable[] = {
+static const auxL_Reg xn_metatable[] = {
 	{ "__pairs",    &xn__pairs },
 	{ "__gc",       &xn__gc },
 	{ "__tostring", &xn__tostring },
@@ -3611,7 +3750,7 @@ static const luaL_Reg xn_metatable[] = {
 };
 
 
-static const luaL_Reg xn_globals[] = {
+static const auxL_Reg xn_globals[] = {
 	{ "new",       &xn_new },
 	{ "interpose", &xn_interpose },
 	{ NULL,        NULL },
@@ -3620,7 +3759,7 @@ static const luaL_Reg xn_globals[] = {
 int luaopen__openssl_x509_name(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, xn_globals);
+	auxL_newlib(L, xn_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_x509_name() */
@@ -3853,19 +3992,19 @@ static int gn__gc(lua_State *L) {
 } /* gn__gc() */
 
 
-static const luaL_Reg gn_methods[] = {
+static const auxL_Reg gn_methods[] = {
 	{ "add", &gn_add },
 	{ NULL,  NULL },
 };
 
-static const luaL_Reg gn_metatable[] = {
+static const auxL_Reg gn_metatable[] = {
 	{ "__pairs", &gn__pairs },
 	{ "__gc",    &gn__gc },
 	{ NULL,      NULL },
 };
 
 
-static const luaL_Reg gn_globals[] = {
+static const auxL_Reg gn_globals[] = {
 	{ "new",       &gn_new },
 	{ "interpose", &gn_interpose },
 	{ NULL,        NULL },
@@ -3874,7 +4013,7 @@ static const luaL_Reg gn_globals[] = {
 int luaopen__openssl_x509_altname(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, gn_globals);
+	auxL_newlib(L, gn_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_x509_altname() */
@@ -4077,7 +4216,7 @@ static int xe__gc(lua_State *L) {
 } /* xe__gc() */
 
 
-static const luaL_Reg xe_methods[] = {
+static const auxL_Reg xe_methods[] = {
 	{ "getID",        &xe_getID },
 	{ "getName",      &xe_getName },
 	{ "getShortName", &xe_getShortName },
@@ -4088,13 +4227,13 @@ static const luaL_Reg xe_methods[] = {
 	{ NULL,           NULL },
 };
 
-static const luaL_Reg xe_metatable[] = {
+static const auxL_Reg xe_metatable[] = {
 	{ "__gc", &xe__gc },
 	{ NULL,   NULL },
 };
 
 
-static const luaL_Reg xe_globals[] = {
+static const auxL_Reg xe_globals[] = {
 	{ "new",       &xe_new },
 	{ "interpose", &xe_interpose },
 	{ NULL,        NULL },
@@ -4111,7 +4250,7 @@ static const auxL_IntegerReg xe_textopts[] = {
 int luaopen__openssl_x509_extension(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, xe_globals);
+	auxL_newlib(L, xe_globals, 0);
 	auxL_setintegers(L, xe_textopts);
 
 	return 1;
@@ -4683,7 +4822,7 @@ static int xc_getBasicConstraint(lua_State *L) {
 		int n = 0, i, top;
 
 		for (i = 2, top = lua_gettop(L); i <= top; i++) {
-			switch (checkoption(L, i, 0, (const char *[]){ "CA", "pathLen", "pathLenConstraint", NULL })) {
+			switch (auxL_checkoption(L, i, 0, (const char *[]){ "CA", "pathLen", "pathLenConstraint", NULL }, 1)) {
 			case 0:
 				lua_pushboolean(L, CA);
 				n++;
@@ -4739,7 +4878,7 @@ static int xc_setBasicConstraint(lua_State *L) {
 	} else {
 		lua_settop(L, 3);
 
-		switch (checkoption(L, 2, 0, (const char *[]){ "CA", "pathLen", "pathLenConstraint", NULL })) {
+		switch (auxL_checkoption(L, 2, 0, (const char *[]){ "CA", "pathLen", "pathLenConstraint", NULL }, 1)) {
 		case 0:
 			luaL_checktype(L, 3, LUA_TBOOLEAN);
 			CA = lua_toboolean(L, 3);
@@ -5080,7 +5219,7 @@ static int xc__gc(lua_State *L) {
 } /* xc__gc() */
 
 
-static const luaL_Reg xc_methods[] = {
+static const auxL_Reg xc_methods[] = {
 	{ "getVersion",    &xc_getVersion },
 	{ "setVersion",    &xc_setVersion },
 	{ "getSerial",     &xc_getSerial },
@@ -5119,14 +5258,14 @@ static const luaL_Reg xc_methods[] = {
 	{ NULL,            NULL },
 };
 
-static const luaL_Reg xc_metatable[] = {
+static const auxL_Reg xc_metatable[] = {
 	{ "__tostring", &xc__tostring },
 	{ "__gc",       &xc__gc },
 	{ NULL,         NULL },
 };
 
 
-static const luaL_Reg xc_globals[] = {
+static const auxL_Reg xc_globals[] = {
 	{ "new",       &xc_new },
 	{ "interpose", &xc_interpose },
 	{ NULL,        NULL },
@@ -5135,7 +5274,7 @@ static const luaL_Reg xc_globals[] = {
 int luaopen__openssl_x509_cert(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, xc_globals);
+	auxL_newlib(L, xc_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_x509_cert() */
@@ -5315,7 +5454,7 @@ static int xr__gc(lua_State *L) {
 	return 0;
 } /* xr__gc() */
 
-static const luaL_Reg xr_methods[] = {
+static const auxL_Reg xr_methods[] = {
 	{ "getVersion",   &xr_getVersion },
 	{ "setVersion",   &xr_setVersion },
 	{ "getSubject",   &xr_getSubject },
@@ -5327,14 +5466,14 @@ static const luaL_Reg xr_methods[] = {
 	{ NULL,           NULL },
 };
 
-static const luaL_Reg xr_metatable[] = {
+static const auxL_Reg xr_metatable[] = {
 	{ "__tostring", &xr__tostring },
 	{ "__gc",       &xr__gc },
 	{ NULL,         NULL },
 };
 
 
-static const luaL_Reg xr_globals[] = {
+static const auxL_Reg xr_globals[] = {
 	{ "new",       &xr_new },
 	{ "interpose", &xr_interpose },
 	{ NULL,        NULL },
@@ -5343,7 +5482,7 @@ static const luaL_Reg xr_globals[] = {
 int luaopen__openssl_x509_csr(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, xr_globals);
+	auxL_newlib(L, xr_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_x509_csr() */
@@ -5706,7 +5845,7 @@ static int xx__gc(lua_State *L) {
 	return 0;
 } /* xx__gc() */
 
-static const luaL_Reg xx_methods[] = {
+static const auxL_Reg xx_methods[] = {
 	{ "getVersion",     &xx_getVersion },
 	{ "setVersion",     &xx_setVersion },
 	{ "getLastUpdate",  &xx_getLastUpdate },
@@ -5725,14 +5864,14 @@ static const luaL_Reg xx_methods[] = {
 	{ NULL,             NULL },
 };
 
-static const luaL_Reg xx_metatable[] = {
+static const auxL_Reg xx_metatable[] = {
 	{ "__tostring", &xx__tostring },
 	{ "__gc",       &xx__gc },
 	{ NULL,         NULL },
 };
 
 
-static const luaL_Reg xx_globals[] = {
+static const auxL_Reg xx_globals[] = {
 	{ "new",       &xx_new },
 	{ "interpose", &xx_interpose },
 	{ NULL,        NULL },
@@ -5741,7 +5880,7 @@ static const luaL_Reg xx_globals[] = {
 int luaopen__openssl_x509_crl(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, xx_globals);
+	auxL_newlib(L, xx_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_x509_crl() */
@@ -5878,19 +6017,19 @@ static int xl__gc(lua_State *L) {
 } /* xl__gc() */
 
 
-static const luaL_Reg xl_methods[] = {
+static const auxL_Reg xl_methods[] = {
 	{ "add", &xl_add },
 	{ NULL,  NULL },
 };
 
-static const luaL_Reg xl_metatable[] = {
+static const auxL_Reg xl_metatable[] = {
 	{ "__pairs",  &xl__pairs },
 	{ "__ipairs", &xl__pairs },
 	{ "__gc",     &xl__gc },
 	{ NULL,       NULL },
 };
 
-static const luaL_Reg xl_globals[] = {
+static const auxL_Reg xl_globals[] = {
 	{ "new",       &xl_new },
 	{ "interpose", &xl_interpose },
 	{ NULL,        NULL },
@@ -5899,7 +6038,7 @@ static const luaL_Reg xl_globals[] = {
 int luaopen__openssl_x509_chain(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, xl_globals);
+	auxL_newlib(L, xl_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_x509_chain() */
@@ -6043,18 +6182,18 @@ static int xs__gc(lua_State *L) {
 } /* xs__gc() */
 
 
-static const luaL_Reg xs_methods[] = {
+static const auxL_Reg xs_methods[] = {
 	{ "add",    &xs_add },
 	{ "verify", &xs_verify },
 	{ NULL,     NULL },
 };
 
-static const luaL_Reg xs_metatable[] = {
+static const auxL_Reg xs_metatable[] = {
 	{ "__gc", &xs__gc },
 	{ NULL,   NULL },
 };
 
-static const luaL_Reg xs_globals[] = {
+static const auxL_Reg xs_globals[] = {
 	{ "new",       &xs_new },
 	{ "interpose", &xs_interpose },
 	{ NULL,        NULL },
@@ -6063,7 +6202,7 @@ static const luaL_Reg xs_globals[] = {
 int luaopen__openssl_x509_store(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, xs_globals);
+	auxL_newlib(L, xs_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_x509_store() */
@@ -6114,17 +6253,17 @@ static int stx__gc(lua_State *L) {
 } /* stx__gc() */
 
 
-static const luaL_Reg stx_methods[] = {
+static const auxL_Reg stx_methods[] = {
 	{ "add", &stx_add },
 	{ NULL,  NULL },
 };
 
-static const luaL_Reg stx_metatable[] = {
+static const auxL_Reg stx_metatable[] = {
 	{ "__gc", &stx__gc },
 	{ NULL,   NULL },
 };
 
-static const luaL_Reg stx_globals[] = {
+static const auxL_Reg stx_globals[] = {
 	{ "new",       &stx_new },
 	{ "interpose", &stx_interpose },
 	{ NULL,        NULL },
@@ -6133,7 +6272,7 @@ static const luaL_Reg stx_globals[] = {
 int luaopen__openssl_x509_store_context(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, stx_globals);
+	auxL_newlib(L, stx_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_x509_store_context() */
@@ -6234,18 +6373,18 @@ static int p12__gc(lua_State *L) {
 } /* p12__gc() */
 
 
-static const luaL_Reg p12_methods[] = {
+static const auxL_Reg p12_methods[] = {
 	{ "tostring", &p12__tostring },
 	{ NULL,         NULL },
 };
 
-static const luaL_Reg p12_metatable[] = {
+static const auxL_Reg p12_metatable[] = {
 	{ "__tostring", &p12__tostring },
 	{ "__gc",       &p12__gc },
 	{ NULL,         NULL },
 };
 
-static const luaL_Reg p12_globals[] = {
+static const auxL_Reg p12_globals[] = {
 	{ "new",       &p12_new },
 	{ "interpose", &p12_interpose },
 	{ NULL,        NULL },
@@ -6254,7 +6393,7 @@ static const luaL_Reg p12_globals[] = {
 int luaopen__openssl_pkcs12(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, p12_globals);
+	auxL_newlib(L, p12_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_pkcs12() */
@@ -6294,7 +6433,7 @@ static int sx_new(lua_State *L) {
 	lua_settop(L, 2);
 	srv = lua_toboolean(L, 2);
 
-	switch (checkoption(L, 1, "TLS", opts)) {
+	switch (auxL_checkoption(L, 1, "TLS", opts, 1)) {
 	case 0: /* SSL */
 		method = (srv)? &SSLv23_server_method : &SSLv23_client_method;
 		options = SSL_OP_NO_SSLv2;
@@ -6350,7 +6489,7 @@ static int sx_new(lua_State *L) {
 		break;
 #endif
 	default:
-		return badoption(L, 1, NULL);
+		return luaL_argerror(L, 1, "invalid option");
 	}
 
 	ud = prepsimple(L, SSL_CTX_CLASS);
@@ -6671,7 +6810,7 @@ static int sx__gc(lua_State *L) {
 } /* sx__gc() */
 
 
-static const luaL_Reg sx_methods[] = {
+static const auxL_Reg sx_methods[] = {
 	{ "setOptions",       &sx_setOptions },
 	{ "getOptions",       &sx_getOptions },
 	{ "clearOptions",     &sx_clearOptions },
@@ -6691,12 +6830,12 @@ static const luaL_Reg sx_methods[] = {
 	{ NULL, NULL },
 };
 
-static const luaL_Reg sx_metatable[] = {
+static const auxL_Reg sx_metatable[] = {
 	{ "__gc", &sx__gc },
 	{ NULL,   NULL },
 };
 
-static const luaL_Reg sx_globals[] = {
+static const auxL_Reg sx_globals[] = {
 	{ "new",       &sx_new },
 	{ "interpose", &sx_interpose },
 	{ NULL,        NULL },
@@ -6759,7 +6898,7 @@ static const auxL_IntegerReg sx_option[] = {
 int luaopen__openssl_ssl_context(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, sx_globals);
+	auxL_newlib(L, sx_globals, 0);
 	auxL_setintegers(L, sx_verify);
 	auxL_setintegers(L, sx_option);
 
@@ -7005,7 +7144,7 @@ static int ssl__gc(lua_State *L) {
 } /* ssl__gc() */
 
 
-static const luaL_Reg ssl_methods[] = {
+static const auxL_Reg ssl_methods[] = {
 	{ "setOptions",       &ssl_setOptions },
 	{ "getOptions",       &ssl_getOptions },
 	{ "clearOptions",     &ssl_clearOptions },
@@ -7025,12 +7164,12 @@ static const luaL_Reg ssl_methods[] = {
 	{ NULL,            NULL },
 };
 
-static const luaL_Reg ssl_metatable[] = {
+static const auxL_Reg ssl_metatable[] = {
 	{ "__gc", &ssl__gc },
 	{ NULL,   NULL },
 };
 
-static const luaL_Reg ssl_globals[] = {
+static const auxL_Reg ssl_globals[] = {
 	{ "new",       &ssl_new },
 	{ "interpose", &ssl_interpose },
 	{ NULL,        NULL },
@@ -7053,7 +7192,7 @@ static const auxL_IntegerReg ssl_version[] = {
 int luaopen__openssl_ssl(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, ssl_globals);
+	auxL_newlib(L, ssl_globals, 0);
 	auxL_setintegers(L, ssl_version);
 	auxL_setintegers(L, sx_verify);
 	auxL_setintegers(L, sx_option);
@@ -7149,18 +7288,18 @@ static int md__gc(lua_State *L) {
 } /* md__gc() */
 
 
-static const luaL_Reg md_methods[] = {
+static const auxL_Reg md_methods[] = {
 	{ "update", &md_update },
 	{ "final",  &md_final },
 	{ NULL,     NULL },
 };
 
-static const luaL_Reg md_metatable[] = {
+static const auxL_Reg md_metatable[] = {
 	{ "__gc", &md__gc },
 	{ NULL,   NULL },
 };
 
-static const luaL_Reg md_globals[] = {
+static const auxL_Reg md_globals[] = {
 	{ "new",       &md_new },
 	{ "interpose", &md_interpose },
 	{ NULL,        NULL },
@@ -7169,7 +7308,7 @@ static const luaL_Reg md_globals[] = {
 int luaopen__openssl_digest(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, md_globals);
+	auxL_newlib(L, md_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_digest() */
@@ -7251,18 +7390,18 @@ static int hmac__gc(lua_State *L) {
 } /* hmac__gc() */
 
 
-static const luaL_Reg hmac_methods[] = {
+static const auxL_Reg hmac_methods[] = {
 	{ "update", &hmac_update },
 	{ "final",  &hmac_final },
 	{ NULL,     NULL },
 };
 
-static const luaL_Reg hmac_metatable[] = {
+static const auxL_Reg hmac_metatable[] = {
 	{ "__gc", &hmac__gc },
 	{ NULL,   NULL },
 };
 
-static const luaL_Reg hmac_globals[] = {
+static const auxL_Reg hmac_globals[] = {
 	{ "new",       &hmac_new },
 	{ "interpose", &hmac_interpose },
 	{ NULL,        NULL },
@@ -7271,7 +7410,7 @@ static const luaL_Reg hmac_globals[] = {
 int luaopen__openssl_hmac(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, hmac_globals);
+	auxL_newlib(L, hmac_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_hmac() */
@@ -7452,7 +7591,7 @@ static int cipher__gc(lua_State *L) {
 } /* cipher__gc() */
 
 
-static const luaL_Reg cipher_methods[] = {
+static const auxL_Reg cipher_methods[] = {
 	{ "encrypt", &cipher_encrypt },
 	{ "decrypt", &cipher_decrypt },
 	{ "update",  &cipher_update },
@@ -7460,12 +7599,12 @@ static const luaL_Reg cipher_methods[] = {
 	{ NULL,      NULL },
 };
 
-static const luaL_Reg cipher_metatable[] = {
+static const auxL_Reg cipher_metatable[] = {
 	{ "__gc", &cipher__gc },
 	{ NULL,   NULL },
 };
 
-static const luaL_Reg cipher_globals[] = {
+static const auxL_Reg cipher_globals[] = {
 	{ "new",       &cipher_new },
 	{ "interpose", &cipher_interpose },
 	{ NULL,        NULL },
@@ -7474,7 +7613,7 @@ static const luaL_Reg cipher_globals[] = {
 int luaopen__openssl_cipher(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, cipher_globals);
+	auxL_newlib(L, cipher_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_cipher() */
@@ -7803,7 +7942,7 @@ static int rand_uniform(lua_State *L) {
 } /* rand_uniform() */
 
 
-static const luaL_Reg rand_globals[] = {
+static const auxL_Reg rand_globals[] = {
 	{ "stir",    &rand_stir },
 	{ "add",     &rand_add },
 	{ "bytes",   &rand_bytes },
@@ -7817,10 +7956,9 @@ int luaopen__openssl_rand(lua_State *L) {
 
 	initall(L);
 
-	luaL_newlibtable(L, rand_globals);
 	st = lua_newuserdata(L, sizeof *st);
 	memset(st, 0, sizeof *st);
-	luaL_setfuncs(L, rand_globals, 1);
+	auxL_newlib(L, rand_globals, 1);
 
 	return 1;
 } /* luaopen__openssl_rand() */
@@ -7855,7 +7993,7 @@ static int de5_set_odd_parity(lua_State *L) {
 	return 1;
 } /* de5_set_odd_parity() */
 
-static const luaL_Reg des_globals[] = {
+static const auxL_Reg des_globals[] = {
 	{ "string_to_key",  &de5_string_to_key },
 	{ "set_odd_parity", &de5_set_odd_parity },
 	{ NULL,            NULL },
@@ -7864,7 +8002,7 @@ static const luaL_Reg des_globals[] = {
 int luaopen__openssl_des(lua_State *L) {
 	initall(L);
 
-	luaL_newlib(L, des_globals);
+	auxL_newlib(L, des_globals, 0);
 
 	return 1;
 } /* luaopen__openssl_des() */
@@ -8009,24 +8147,24 @@ static void initall(lua_State *L) {
 
 	ex_newstate(L);
 
-	addclass(L, BIGNUM_CLASS, bn_methods, bn_metatable);
-	addclass(L, PKEY_CLASS, pk_methods, pk_metatable);
+	auxL_addclass(L, BIGNUM_CLASS, bn_methods, bn_metatable, 0);
+	pk_luainit(L, 0);
 #ifndef OPENSSL_NO_EC
-	addclass(L, EC_GROUP_CLASS, ecg_methods, ecg_metatable);
+	auxL_addclass(L, EC_GROUP_CLASS, ecg_methods, ecg_metatable, 0);
 #endif
-	addclass(L, X509_NAME_CLASS, xn_methods, xn_metatable);
-	addclass(L, X509_GENS_CLASS, gn_methods, gn_metatable);
-	addclass(L, X509_EXT_CLASS, xe_methods, xe_metatable);
-	addclass(L, X509_CERT_CLASS, xc_methods, xc_metatable);
-	addclass(L, X509_CSR_CLASS, xr_methods, xr_metatable);
-	addclass(L, X509_CRL_CLASS, xx_methods, xx_metatable);
-	addclass(L, X509_CHAIN_CLASS, xl_methods, xl_metatable);
-	addclass(L, X509_STORE_CLASS, xs_methods, xs_metatable);
-	addclass(L, PKCS12_CLASS, p12_methods, p12_metatable);
-	addclass(L, SSL_CTX_CLASS, sx_methods, sx_metatable);
-	addclass(L, SSL_CLASS, ssl_methods, ssl_metatable);
-	addclass(L, DIGEST_CLASS, md_methods, md_metatable);
-	addclass(L, HMAC_CLASS, hmac_methods, hmac_metatable);
-	addclass(L, CIPHER_CLASS, cipher_methods, cipher_metatable);
+	auxL_addclass(L, X509_NAME_CLASS, xn_methods, xn_metatable, 0);
+	auxL_addclass(L, X509_GENS_CLASS, gn_methods, gn_metatable, 0);
+	auxL_addclass(L, X509_EXT_CLASS, xe_methods, xe_metatable, 0);
+	auxL_addclass(L, X509_CERT_CLASS, xc_methods, xc_metatable, 0);
+	auxL_addclass(L, X509_CSR_CLASS, xr_methods, xr_metatable, 0);
+	auxL_addclass(L, X509_CRL_CLASS, xx_methods, xx_metatable, 0);
+	auxL_addclass(L, X509_CHAIN_CLASS, xl_methods, xl_metatable, 0);
+	auxL_addclass(L, X509_STORE_CLASS, xs_methods, xs_metatable, 0);
+	auxL_addclass(L, PKCS12_CLASS, p12_methods, p12_metatable, 0);
+	auxL_addclass(L, SSL_CTX_CLASS, sx_methods, sx_metatable, 0);
+	auxL_addclass(L, SSL_CLASS, ssl_methods, ssl_metatable, 0);
+	auxL_addclass(L, DIGEST_CLASS, md_methods, md_metatable, 0);
+	auxL_addclass(L, HMAC_CLASS, hmac_methods, hmac_metatable, 0);
+	auxL_addclass(L, CIPHER_CLASS, cipher_methods, cipher_metatable, 0);
 } /* initall() */
 
