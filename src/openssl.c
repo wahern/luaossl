@@ -778,7 +778,7 @@ static inline size_t auxL_liblen(const auxL_Reg *l) {
 	lua_createtable((L), 0, countof((l)) - 1)
 
 #define auxL_newlib(L, l, nups) \
-	(auxL_newlibtable((L), (l)), auxL_setfuncs((L), (l), (nups)))
+	(auxL_newlibtable((L), (l)), lua_insert((L), -(nups + 1)), auxL_setfuncs((L), (l), (nups)))
 
 static void auxL_setfuncs(lua_State *L, const auxL_Reg *l, int nups) {
 	for (; l->name; l++) {
