@@ -285,22 +285,15 @@ static void *testsimple(lua_State *L, int index, const char *tname) {
 } /* testsimple() */
 
 
+static int auxL_swapmetatable(lua_State *, const char *);
+static int auxL_swapmetasubtable(lua_State *, const char *, const char *);
+
 static int interpose(lua_State *L, const char *mt) {
-	luaL_getmetatable(L, mt);
-
-	if (!strncmp("__", luaL_checkstring(L, 1), 2))
-		lua_pushvalue(L, -1);
-	else
-		lua_getfield(L, -1, "__index");
-
-	lua_pushvalue(L, -4); /* push method name */
-	lua_gettable(L, -2);  /* push old method */
-
-	lua_pushvalue(L, -5); /* push method name */
-	lua_pushvalue(L, -5); /* push new method */
-	lua_settable(L, -4);  /* replace old method */
-
-	return 1; /* return old method */
+	if (!strncmp("__", luaL_checkstring(L, -2), 2)) {
+		return auxL_swapmetatable(L, mt);
+	} else {
+		return auxL_swapmetasubtable(L, mt, "__index");
+	}
 } /* interpose() */
 
 static int auxL_checkoption(lua_State *, int, const char *, const char *const *, _Bool);
@@ -862,6 +855,49 @@ static _Bool auxL_newclass(lua_State *L, const char *name, const auxL_Reg *metho
 
 #define auxL_addclass(L, ...) \
 	(auxL_newclass((L), __VA_ARGS__), lua_pop((L), 1))
+
+static int auxL_swaptable(lua_State *L, int index) {
+	index = lua_absindex(L, index);
+
+	lua_pushvalue(L, -2);   /* push key */
+	lua_gettable(L, index); /* push old value */
+
+	lua_pushvalue(L, -3);   /* push key */
+	lua_pushvalue(L, -3);   /* push new value */
+	lua_settable(L, index); /* replace old value */
+
+	lua_replace(L, -3);
+	lua_pop(L, 1);
+
+	return 1; /* return old value */
+} /* auxL_swaptable() */
+
+static int auxL_swapmetatable(lua_State *L, const char *name) {
+	luaL_getmetatable(L, name);
+
+	lua_pushvalue(L, -3);
+	lua_pushvalue(L, -3);
+	auxL_swaptable(L, -3);
+
+	lua_replace(L, -4);
+	lua_pop(L, 2);
+
+	return 1;
+} /* auxL_swapmetatable() */
+
+static int auxL_swapmetasubtable(lua_State *L, const char *name, const char *subname) {
+	luaL_getmetatable(L, name);
+	lua_getfield(L, -1, subname);
+
+	lua_pushvalue(L, -4);
+	lua_pushvalue(L, -4);
+	auxL_swaptable(L, -3);
+
+	lua_replace(L, -5);
+	lua_pop(L, 3);
+
+	return 1;
+} /* auxL_swapmetasubtable() */
 
 #define auxL_EDYLD -2
 #define auxL_EOPENSSL -1
@@ -2551,7 +2587,19 @@ done:
 
 
 static int pk_interpose(lua_State *L) {
-	return interpose(L, PKEY_CLASS);
+	lua_settop(L, 2);
+
+	luaL_getmetatable(L, PKEY_CLASS);
+	if (!strncmp("__", luaL_checkstring(L, 1), 2)) {
+		lua_insert(L, 1);
+	} else {
+		lua_getfield(L, -1, "__index");
+		lua_getupvalue(L, -1, 1);
+		lua_insert(L, 1);
+		lua_pop(L, 2);
+	}
+
+	return auxL_swaptable(L, 1);
 } /* pk_interpose() */
 
 
