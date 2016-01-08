@@ -289,7 +289,7 @@ static int auxL_swapmetatable(lua_State *, const char *);
 static int auxL_swapmetasubtable(lua_State *, const char *, const char *);
 
 static int interpose(lua_State *L, const char *mt) {
-	if (!strncmp("__", luaL_checkstring(L, -2), 2)) {
+	if (!strncmp("__", luaL_checkstring(L, lua_absindex(L, -2)), 2)) {
 		return auxL_swapmetatable(L, mt);
 	} else {
 		return auxL_swapmetasubtable(L, mt, "__index");
