@@ -3202,7 +3202,7 @@ static int pk_getParameters(lua_State *L) {
 		 * Subsequent parameters will be assigned as fields.
 		 */
 		lua_pushstring(L, "{");
-		luaL_checkstack(L, nopts, NULL);
+		luaL_checkstack(L, nopts, "too many arguments");
 		for (const char *const *optname = optlist; *optname; optname++) {
 			lua_pushstring(L, *optname);
 		}
@@ -3211,7 +3211,7 @@ static int pk_getParameters(lua_State *L) {
 	otop = lua_gettop(L);
 
 	/* provide space for results and working area */
-	luaL_checkstack(L, (otop - 1) + LUA_MINSTACK, NULL);
+	luaL_checkstack(L, (otop - 1) + LUA_MINSTACK, "too many arguments");
 
 	/* no table index, yet */
 	tindex = 0;
