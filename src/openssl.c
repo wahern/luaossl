@@ -29,7 +29,7 @@
 #include <strings.h>      /* strcasecmp(3) */
 #include <math.h>         /* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
 #include <time.h>         /* struct tm time_t strptime(3) time(2) */
-#include <ctype.h>        /* tolower(3) */
+#include <ctype.h>        /* isdigit(3), isxdigit(3), tolower(3) */
 #include <errno.h>        /* ENOMEM ENOTSUP EOVERFLOW errno */
 #include <assert.h>       /* assert */
 
@@ -1757,6 +1757,17 @@ static int bn_new(lua_State *L) {
 } /* bn_new() */
 
 
+static int bn_fromBinary(lua_State *L) {
+	size_t len;
+	const char *s = luaL_checklstring(L, 1, &len);
+	BIGNUM *bn = bn_push(L);
+	if (!BN_bin2bn((const unsigned char*)s, len, bn)) {
+		auxL_error(L, auxL_EOPENSSL, "bignum");
+	}
+	return 1;
+} /* bn_fromBinary() */
+
+
 static int bn_interpose(lua_State *L) {
 	return interpose(L, BIGNUM_CLASS);
 } /* bn_interpose() */
@@ -1832,8 +1843,9 @@ static _Bool f2bn(BIGNUM **bn, double f) {
 
 static BIGNUM *(checkbig)(lua_State *L, int index, _Bool *lvalue) {
 	BIGNUM **bn;
-	const char *dec;
-	size_t len;
+	const char *str;
+	size_t len, i;
+	_Bool neg, hex;
 
 	index = lua_absindex(L, index);
 
@@ -1841,14 +1853,36 @@ static BIGNUM *(checkbig)(lua_State *L, int index, _Bool *lvalue) {
 	case LUA_TSTRING:
 		*lvalue = 0;
 
-		dec = lua_tolstring(L, index, &len);
+		str = lua_tolstring(L, index, &len);
 
-		luaL_argcheck(L, len > 0 && *dec, index, "invalid big number string");
+		neg = (str[0] == '-');
+		hex = (str[neg] == '0' && (str[neg+1] == 'x' || str[neg+1] == 'X'));
+
+		if (hex) {
+			luaL_argcheck(L, len > 2+(size_t)neg, index, "invalid hex string");
+			for (i = 2+neg; i < len; i++) {
+				if (!isxdigit(str[i]))
+					luaL_argerror(L, 1, "invalid hex string");
+			}
+		} else {
+			luaL_argcheck(L, len > neg, index, "invalid decimal string");
+			for (i = neg; i < len; i++) {
+				if (!isdigit(str[i]))
+					luaL_argerror(L, 1, "invalid decimal string");
+			}
+		}
 
 		bn = prepsimple(L, BIGNUM_CLASS);
 
-		if (!BN_dec2bn(bn, dec))
-			auxL_error(L, auxL_EOPENSSL, "bignum");
+		if (hex) {
+			if (!BN_hex2bn(bn, str+2+neg))
+				auxL_error(L, auxL_EOPENSSL, "bignum");
+			if (neg)
+				BN_set_negative(*bn, 1);
+		} else {
+			if (!BN_dec2bn(bn, str))
+				auxL_error(L, auxL_EOPENSSL, "bignum");
+		}
 
 		lua_replace(L, index);
 
@@ -2273,6 +2307,7 @@ static const auxL_Reg bn_metatable[] = {
 static const auxL_Reg bn_globals[] = {
 	{ "new",           &bn_new },
 	{ "interpose",     &bn_interpose },
+	{ "fromBinary",    &bn_fromBinary },
 	{ "generatePrime", &bn_generatePrime },
 	{ NULL,            NULL },
 };
