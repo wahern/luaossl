@@ -4328,6 +4328,7 @@ static const auxL_IntegerReg xe_textopts[] = {
 	{ "ERROR_UNKNOWN", X509V3_EXT_ERROR_UNKNOWN },
 	{ "PARSE_UNKNOWN", X509V3_EXT_PARSE_UNKNOWN },
 	{ "DUMP_UNKNOWN", X509V3_EXT_DUMP_UNKNOWN },
+	{ NULL, 0 },
 };
 
 int luaopen__openssl_x509_extension(lua_State *L) {
