@@ -2281,6 +2281,10 @@ static const auxL_Reg bn_methods[] = {
 	{ "toBinary",  &bn_toBinary },
 	{ "toDecimal", &bn_toDecimal },
 	{ "toHex",     &bn_toHex },
+	/* deprecated */
+	{ "tobin",     &bn_toBinary },
+	{ "todec",     &bn_toDecimal },
+	{ "tohex",     &bn_toHex },
 	{ NULL,        NULL },
 };
 
