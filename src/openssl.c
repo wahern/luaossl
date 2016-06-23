@@ -5516,6 +5516,7 @@ static int xr_setExtensionByNid(lua_State *L, X509_REQ *csr, int target_nid, voi
 
 	// Delete the old extensions attribute, so that the one we just added takes priority
 	if (has_attrs) {
+		attr = NULL;
 		for (pnid = X509_REQ_get_extension_nids(); *pnid != NID_undef; pnid++) {
 			idx = X509_REQ_get_attr_by_NID(csr, *pnid, -1);
 			if (idx == -1)
