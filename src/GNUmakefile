@@ -88,6 +88,7 @@ LUAC$(1)_$(d) = $$(or $$(call LUAPATH_$(d), $(1), luac), true)
 MODS$(1)_$(d) = \
 	$$(DESTDIR)$(2)/_openssl.so \
 	$$(DESTDIR)$(3)/openssl.lua \
+	$$(DESTDIR)$(3)/openssl/auxlib.lua \
 	$$(DESTDIR)$(3)/openssl/bignum.lua \
 	$$(DESTDIR)$(3)/openssl/pkey.lua \
 	$$(DESTDIR)$(3)/openssl/pubkey.lua \
