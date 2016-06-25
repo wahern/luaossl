@@ -597,6 +597,14 @@ Returns the subject distinguished name as an \module{x509.name} object.
 
 Sets the subject distinguished name. $name$ should be an \module{x509.name} object.
 
+\subsubsection[\fn{csr:getSubjectAlt}]{\fn{csr:getSubjectAlt()}}
+
+Returns the subject alternative name as an \module{x509.altname} object.
+
+\subsubsection[\fn{csr:setSubjectAlt}]{\fn{csr:setSubjectAlt($name$)}}
+
+Sets the subject alternative names. $name$ should be an \module{x509.altname} object.
+
 \subsubsection[\fn{csr:getPublicKey}]{\fn{csr:getPublicKey()}}
 
 Returns the public key component as an \module{openssl.pkey} object.
