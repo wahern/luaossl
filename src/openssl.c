@@ -5490,33 +5490,40 @@ static int xr_setPublicKey(lua_State *L) {
 
 static int xr_setExtensionByNid(lua_State *L, X509_REQ *csr, int target_nid, void* value) {
 	STACK_OF(X509_EXTENSION) *sk = NULL;
-	X509_ATTRIBUTE *attr;
-	int has_attrs=0, idx, *pnid;
+	int has_attrs=0;
 
-	// Replace existing if it's there. Extensions are stored in a CSR in an interesting way:
-	//
-	// They are stored as a list under either (most likely) the "official"
-	// NID_ext_req or under NID_ms_ext_req which means everything is stored
-	// under a list in a single "attribute" so we can't use X509_REQ_add1_attr
-	// or similar.
-	//
-	// Instead we have to get the extensions, find and replace the SAN if it's
-	// in there, then *replace* the extensions in the list of attributes. (If
-	// we just try to add it the old ones are found first and don't take
-	// priority)
-
+	/*
+	 * Replace existing if it's there. Extensions are stored in a CSR in
+	 * an interesting way:
+	 *
+	 * They are stored as a list under either (most likely) the
+	 * "official" NID_ext_req or under NID_ms_ext_req which means
+	 * everything is stored under a list in a single "attribute" so we
+	 * can't use X509_REQ_add1_attr or similar.
+	 *
+	 * Instead we have to get the extensions, find and replace the SAN
+	 * if it's in there, then *replace* the extensions in the list of
+	 * attributes. (If we just try to add it the old ones are found
+	 * first and don't take priority.)
+	 */
 	has_attrs = X509_REQ_get_attr_count(csr);
-	sk = X509_REQ_get_extensions(csr);
 
+	sk = X509_REQ_get_extensions(csr);
 	if (!X509V3_add1_i2d(&sk, target_nid, value, 0, X509V3_ADD_REPLACE))
 		goto error;
-
 	if (X509_REQ_add_extensions(csr, sk) == 0)
 		goto error;
+	sk_X509_EXTENSION_pop_free(sk, X509_EXTENSION_free);
+	sk = NULL;
 
-	// Delete the old extensions attribute, so that the one we just added takes priority
+	/*
+	 * Delete the old extensions attribute, so that the one we just
+	 * added takes priority.
+	 */
 	if (has_attrs) {
-		attr = NULL;
+		X509_ATTRIBUTE *attr = NULL;
+		int idx, *pnid;
+
 		for (pnid = X509_REQ_get_extension_nids(); *pnid != NID_undef; pnid++) {
 			idx = X509_REQ_get_attr_by_NID(csr, *pnid, -1);
 			if (idx == -1)
@@ -5530,16 +5537,19 @@ static int xr_setExtensionByNid(lua_State *L, X509_REQ *csr, int target_nid, voi
 			goto error;
 	}
 
-	// We have to mark the encoded form as invalid, otherwise when we write it
-	// out again it will use the loaded version
+	/*
+	 * We have to mark the encoded form as invalid, otherwise when we
+	 * write it out again it will use the loaded version.
+	 */
 	csr->req_info->enc.modified = 1;
 
-	sk_X509_EXTENSION_pop_free(sk, X509_EXTENSION_free);
 	lua_pushboolean(L, 1);
+
 	return 1;
 error:
 	if (sk)
 		sk_X509_EXTENSION_pop_free(sk, X509_EXTENSION_free);
+
 	return auxL_error(L, auxL_EOPENSSL, "x509.csr.setExtensionByNid");
 } /* xr_setExtensionByNid() */
 
@@ -5547,20 +5557,23 @@ error:
 static int xr_setSubjectAlt(lua_State *L) {
 	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
 	GENERAL_NAMES *gens = checksimple(L, 2, X509_GENS_CLASS);
+
 	return xr_setExtensionByNid(L, csr, NID_subject_alt_name, gens);
 } /* xr_setSubjectAlt */
 
 
 static int xr_getSubjectAlt(lua_State *L) {
 	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
+	STACK_OF(X509_EXTENSION) *exts;
 	GENERAL_NAMES *gens;
-	STACK_OF(X509_EXTENSION) *exts = X509_REQ_get_extensions(csr);
 
+	exts = X509_REQ_get_extensions(csr);
 	gens = X509V3_get_d2i(exts, NID_subject_alt_name, NULL, NULL);
 	sk_X509_EXTENSION_pop_free(exts, X509_EXTENSION_free);
 	if (!gens) goto error;
 
 	gn_dup(L, gens);
+
 	return 1;
 error:
 	return 0;
