@@ -7812,7 +7812,7 @@ static struct randL_state *randL_getstate(lua_State *L) {
 } /* randL_getstate() */
 
 #ifndef HAVE_SYS_SYSCTL_H
-#define HAVE_SYS_SYSCTL_H (!defined __sun && !defined _AIX)
+#define HAVE_SYS_SYSCTL_H (BSD || __GLIBC__)
 #endif
 
 #if HAVE_SYS_SYSCTL_H
@@ -7820,7 +7820,7 @@ static struct randL_state *randL_getstate(lua_State *L) {
 #endif
 
 #ifndef HAVE_RANDOM_UUID
-#define HAVE_RANDOM_UUID (defined __linux) /* RANDOM_UUID is an enum, not macro */
+#define HAVE_RANDOM_UUID (HAVE_SYS_SYSCTL_H && defined __linux) /* RANDOM_UUID is an enum, not macro */
 #endif
 
 #ifndef HAVE_KERN_URND
