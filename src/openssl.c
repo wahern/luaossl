@@ -1861,13 +1861,13 @@ static BIGNUM *(checkbig)(lua_State *L, int index, _Bool *lvalue) {
 		if (hex) {
 			luaL_argcheck(L, len > 2+(size_t)neg, index, "invalid hex string");
 			for (i = 2+neg; i < len; i++) {
-				if (!isxdigit(str[i]))
+				if (!isxdigit((unsigned char)str[i]))
 					luaL_argerror(L, 1, "invalid hex string");
 			}
 		} else {
 			luaL_argcheck(L, len > neg, index, "invalid decimal string");
 			for (i = neg; i < len; i++) {
-				if (!isdigit(str[i]))
+				if (!isdigit((unsigned char)str[i]))
 					luaL_argerror(L, 1, "invalid decimal string");
 			}
 		}
