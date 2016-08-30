@@ -51,7 +51,7 @@
 #define HAVE_ARC4RANDOM
 #endif
 
-#if defined(__FreeBSD_kernel__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+#if defined(__FreeBSD_kernel__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(BSD)
 #define HAVE_ARC4RANDOM
 #endif
 
