@@ -7844,7 +7844,7 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 
 		arc4random(data, n);
 
-		RAND_add(data, n, n);
+		RAND_seed(data, n);
 
 		count += n;
 	}
@@ -7858,7 +7858,7 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 			break;
 		}
 
-		RAND_add(data, n, n);
+		RAND_seed(data, n);
 
 		count += n;
 	}
@@ -7871,7 +7871,7 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 		if (0 != sysctl(mib, countof(mib), data, &n, (void *)0, 0))
 			break;
 
-		RAND_add(data, n, n);
+		RAND_seed(data, n);
 
 		count += n;
 	}
@@ -7906,7 +7906,7 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 
 				goto error;
 			default:
-				RAND_add(data, n, n);
+				RAND_seed(data, n);
 
 				count += n;
 			}
