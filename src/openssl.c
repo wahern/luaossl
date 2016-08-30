@@ -48,6 +48,19 @@
 
 #if __APPLE__
 #include <mach/mach_time.h> /* mach_absolute_time() */
+#define HAVE_ARC4RANDOM
+#endif
+
+#if defined(__FreeBSD_kernel__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+#define HAVE_ARC4RANDOM
+#endif
+
+#if defined(__linux__)
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#define HAVE_GETRANDOM
+#include <linux/random.h>
+#endif
 #endif
 
 #include <openssl/opensslconf.h>
@@ -7811,46 +7824,34 @@ static struct randL_state *randL_getstate(lua_State *L) {
 	return lua_touserdata(L, lua_upvalueindex(1));
 } /* randL_getstate() */
 
-#ifndef HAVE_SYS_SYSCTL_H
-#define HAVE_SYS_SYSCTL_H (BSD || __GLIBC__)
-#endif
-
-#if HAVE_SYS_SYSCTL_H
-#include <sys/sysctl.h> /* CTL_KERN KERN_RANDOM RANDOM_UUID KERN_URND KERN_ARND sysctl(2) */
-#endif
-
-#ifndef HAVE_RANDOM_UUID
-#define HAVE_RANDOM_UUID (HAVE_SYS_SYSCTL_H && defined __linux) /* RANDOM_UUID is an enum, not macro */
-#endif
-
-#ifndef HAVE_KERN_URND
-#define HAVE_KERN_URND (defined KERN_URND)
-#endif
-
-#ifndef HAVE_KERN_ARND
-#define HAVE_KERN_ARND (defined KERN_ARND)
-#endif
 
 static int randL_stir(struct randL_state *st, unsigned rqstd) {
 	unsigned count = 0;
 	int error;
 	unsigned char data[256];
-#if HAVE_RANDOM_UUID || HAVE_KERN_URND || HAVE_KERN_ARND
-#if HAVE_RANDOM_UUID
-	int mib[] = { CTL_KERN, KERN_RANDOM, RANDOM_UUID };
-#elif HAVE_KERN_URND
-	int mib[] = { CTL_KERN, KERN_URND };
-#else
-	int mib[] = { CTL_KERN, KERN_ARND };
-#endif
-
-	while (count < rqstd) {
+#if HAVE_ARC4RANDOM
+	while (count < rqst) {
 		size_t n = MIN(rqstd - count, sizeof data);
 
-		if (0 != sysctl(mib, countof(mib), data, &n, (void *)0, 0))
-			break;
+		arc4random(data, n);
 
 		RAND_add(data, n, n);
+
+		count += n;
+	}
+#endif
+
+#if HAVE_GETRANDOM
+	while (count < rqst) {
+ 		size_t n = MIN(rqstd - count, sizeof data);
+
+		n = getrandom(data, n, 0);
+
+		if (n == -1) {
+ 			break;
+		}
+
+ 		RAND_add(data, n, n);
 
 		count += n;
 	}
