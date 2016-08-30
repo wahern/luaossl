@@ -59,6 +59,7 @@
 #include <linux/version.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
 #define HAVE_GETRANDOM
+#include <sys/syscall.h>
 #include <linux/random.h>
 #else
 #define HAVE_SYS_SYSCTL_H
@@ -7852,7 +7853,7 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 	while (count < rqstd) {
  		size_t n = MIN(rqstd - count, sizeof data);
 
-		n = getrandom(data, n, 0);
+		n = syscall(SYS_getrandom, data, n, 0);
 
 		if (n == -1) {
 			break;
