@@ -60,6 +60,8 @@
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
 #define HAVE_GETRANDOM
 #include <linux/random.h>
+#else
+#define HAVE_SYS_SYSCTL_H
 #endif
 #endif
 
@@ -7824,13 +7826,20 @@ static struct randL_state *randL_getstate(lua_State *L) {
 	return lua_touserdata(L, lua_upvalueindex(1));
 } /* randL_getstate() */
 
+#if HAVE_SYS_SYSCTL_H
+#include <sys/sysctl.h> /* CTL_KERN KERN_RANDOM RANDOM_UUID KERN_URND KERN_ARND sysctl(2) */
+#endif
+
+#ifndef HAVE_RANDOM_UUID
+#define HAVE_RANDOM_UUID (HAVE_SYS_SYSCTL_H && defined __linux__) /* RANDOM_UUID is an enum, not macro */
+#endif
 
 static int randL_stir(struct randL_state *st, unsigned rqstd) {
 	unsigned count = 0;
 	int error;
 	unsigned char data[256];
-#if HAVE_ARC4RANDOM
-	while (count < rqst) {
+#if defined(HAVE_ARC4RANDOM)
+	while (count < rqstd) {
 		size_t n = MIN(rqstd - count, sizeof data);
 
 		arc4random(data, n);
@@ -7839,22 +7848,34 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 
 		count += n;
 	}
-#endif
-
-#if HAVE_GETRANDOM
-	while (count < rqst) {
+#elif defined(HAVE_GETRANDOM)
+	while (count < rqstd) {
  		size_t n = MIN(rqstd - count, sizeof data);
 
 		n = getrandom(data, n, 0);
 
 		if (n == -1) {
- 			break;
+			break;
 		}
 
- 		RAND_add(data, n, n);
+		RAND_add(data, n, n);
 
 		count += n;
 	}
+#elif HAVE_RANDOM_UUID
+	int mib[] = { CTL_KERN, KERN_RANDOM, RANDOM_UUID };
+
+	while (count < rqstd) {
+		size_t n = MIN(rqstd - count, sizeof data);
+
+		if (0 != sysctl(mib, countof(mib), data, &n, (void *)0, 0))
+			break;
+
+		RAND_add(data, n, n);
+
+		count += n;
+	}
+
 #endif
 
 	if (count < rqstd) {
