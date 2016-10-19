@@ -23,6 +23,10 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.
  * ==========================================================================
  */
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <limits.h>       /* INT_MAX INT_MIN LLONG_MAX LLONG_MIN UCHAR_MAX ULLONG_MAX */
 #include <stdint.h>       /* uintptr_t */
 #include <string.h>       /* memset(3) strerror_r(3) */
@@ -48,22 +52,6 @@
 
 #if __APPLE__
 #include <mach/mach_time.h> /* mach_absolute_time() */
-#define HAVE_ARC4RANDOM
-#endif
-
-#if defined(__FreeBSD_kernel__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(BSD)
-#define HAVE_ARC4RANDOM
-#endif
-
-#if defined(__linux__)
-#include <linux/version.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
-#define HAVE_GETRANDOM
-#include <sys/syscall.h>
-#include <linux/random.h>
-#else
-#define HAVE_SYS_SYSCTL_H
-#endif
 #endif
 
 #include <openssl/opensslconf.h>
@@ -94,10 +82,6 @@
 
 #define LIBRESSL_PREREQ(M, m, p) \
 	(LIBRESSL_VERSION_NUMBER >= (((M) << 28) | ((m) << 20) | ((p) << 12)))
-
-#ifndef HAVE_DLADDR
-#define HAVE_DLADDR (!defined _AIX) /* TODO: https://root.cern.ch/drupal/content/aix-and-dladdr */
-#endif
 
 #ifndef HAVE_SSL_CTX_SET_ALPN_PROTOS
 #define HAVE_SSL_CTX_SET_ALPN_PROTOS OPENSSL_PREREQ(1, 0, 2)
@@ -7827,19 +7811,20 @@ static struct randL_state *randL_getstate(lua_State *L) {
 	return lua_touserdata(L, lua_upvalueindex(1));
 } /* randL_getstate() */
 
-#if HAVE_SYS_SYSCTL_H
-#include <sys/sysctl.h> /* CTL_KERN KERN_RANDOM RANDOM_UUID KERN_URND KERN_ARND sysctl(2) */
+#if HAVE_SYS_SYSCALL_H
+#include <sys/syscall.h> /* SYS_getrandom syscall(2) */
 #endif
 
-#ifndef HAVE_RANDOM_UUID
-#define HAVE_RANDOM_UUID (HAVE_SYS_SYSCTL_H && defined __linux__) /* RANDOM_UUID is an enum, not macro */
+#if HAVE_SYS_SYSCTL_H
+#include <sys/sysctl.h> /* CTL_KERN KERN_RANDOM RANDOM_UUID sysctl(2) */
 #endif
 
 static int randL_stir(struct randL_state *st, unsigned rqstd) {
 	unsigned count = 0;
 	int error;
 	unsigned char data[256];
-#if defined(HAVE_ARC4RANDOM)
+
+#if HAVE_ARC4RANDOM
 	while (count < rqstd) {
 		size_t n = MIN(rqstd - count, sizeof data);
 
@@ -7849,11 +7834,14 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 
 		count += n;
 	}
-#elif defined(HAVE_GETRANDOM)
-	while (count < rqstd) {
- 		size_t n = MIN(rqstd - count, sizeof data);
+#endif
 
-		n = syscall(SYS_getrandom, data, n, 0);
+#if HAVE_SYSCALL && HAVE_DECL_SYS_GETRANDOM
+	while (count < rqstd) {
+		size_t lim = MIN(rqstd - count, sizeof data);
+		int n;
+
+		n = syscall(SYS_getrandom, data, lim, 0);
 
 		if (n == -1) {
 			break;
@@ -7863,10 +7851,11 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 
 		count += n;
 	}
-#elif HAVE_RANDOM_UUID
-	int mib[] = { CTL_KERN, KERN_RANDOM, RANDOM_UUID };
+#endif
 
+#if HAVE_SYS_SYSCTL_H && HAVE_DECL_RANDOM_UUID
 	while (count < rqstd) {
+		int mib[] = { CTL_KERN, KERN_RANDOM, RANDOM_UUID };
 		size_t n = MIN(rqstd - count, sizeof data);
 
 		if (0 != sysctl(mib, countof(mib), data, &n, (void *)0, 0))
@@ -7945,7 +7934,12 @@ error:;
 #elif defined __sun
 	/*
 	 * NOTE: Linux requires -lrt for clock_gettime, and in any event
-	 * already has RANDOM_UUID. The BSDs have KERN_URND and KERN_ARND.
+	 * should have RANDOM_UUID or getrandom. (Though, some middle-aged
+	 * kernels might have neither). The BSDs have arc4random which
+	 * should be using KERN_URND, KERN_ARND, and more recently
+	 * getentropy. (Though, again, some older BSD kernels used an
+	 * arc4random implementation that opened /dev/urandom.)
+	 *
 	 * Just do this for Solaris to keep things simple. We've already
 	 * crossed the line of what can be reasonably accomplished on
 	 * unreasonable platforms.
