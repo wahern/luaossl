@@ -7824,11 +7824,11 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 	int error;
 	unsigned char data[256];
 
-#if HAVE_ARC4RANDOM
+#if HAVE_ARC4RANDOM_BUF
 	while (count < rqstd) {
 		size_t n = MIN(rqstd - count, sizeof data);
 
-		arc4random(data, n);
+		arc4random_buf(data, n);
 
 		RAND_seed(data, n);
 
