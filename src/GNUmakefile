@@ -20,7 +20,7 @@ OS_$(d) = $(shell $(d)/../mk/vendor.os)
 CC_$(d) = $(shell env CC="$(CC) "$(d)/../mk/vendor.cc)
 LUAPATH_$(d) = $(shell env CC="$(CC)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" $(<D)/../mk/luapath -krxm3 -I$(DESTDIR)$(includedir) -I/usr/include -I/usr/local/include -P$(DESTDIR)$(bindir) -P$(bindir) -L$(DESTDIR)$(libdir) -L$(libdir) -v$(1) $(2))
 
-CPPFLAGS_$(d) = $(CPPFLAGS_$(abspath $(@D)/../..)) -DLUA_COMPAT_APIINTCASTS
+CPPFLAGS_$(d) = $(CPPFLAGS_$(abspath $(@D)/../..)) -DLUA_COMPAT_APIINTCASTS -DHAVE_CONFIG_H
 CFLAGS_$(d) = $(CFLAGS_$(abspath $(@D)/../..))
 LDFLAGS_$(d) = $(LDFLAGS_$(abspath $(@D)/../..))
 SOFLAGS_$(d) = $(SOFLAGS_$(abspath $(@D)/../..))
@@ -41,6 +41,8 @@ endif
 #
 # C O M P I L A T I O N  R U L E S
 #
+$(d)/config.h: $(abspath $(d)/..)/config.h
+	$(CP) $< $@
 
 define BUILD_$(d)
 
@@ -49,7 +51,7 @@ define BUILD_$(d)
 $$(d)/$(1)/openssl.so: $$(d)/$(1)/openssl.o
 	$$(CC) -o $$@ $$^ $$(SOFLAGS_$$(abspath $$(@D)/..)) $$(SOFLAGS) $$(LDFLAGS_$$(abspath $$(@D)/..)) $$(LDFLAGS)
 
-$$(d)/$(1)/openssl.o: $$(d)/openssl.c $$(d)/compat52.h
+$$(d)/$(1)/openssl.o: $$(d)/openssl.c $$(d)/compat52.h $$(d)/config.h
 	test "$$(notdir $$(@D))" = "$$(call LUAPATH_$$(<D), $$(notdir $$(@D)), version)"
 	$$(MKDIR) -p $$(@D)
 	$$(CC) $$(CFLAGS_$$(<D)) $$(CFLAGS) $$(call LUAPATH_$$(<D), $$(notdir $$(@D)), cppflags) $$(CPPFLAGS_$$(<D)) $$(CPPFLAGS) -c -o $$@ $$<
