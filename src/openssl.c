@@ -48,6 +48,22 @@
 
 #if __APPLE__
 #include <mach/mach_time.h> /* mach_absolute_time() */
+#define HAVE_ARC4RANDOM
+#endif
+
+#if defined(__FreeBSD_kernel__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(BSD)
+#define HAVE_ARC4RANDOM
+#endif
+
+#if defined(__linux__)
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#define HAVE_GETRANDOM
+#include <sys/syscall.h>
+#include <linux/random.h>
+#else
+#define HAVE_SYS_SYSCTL_H
+#endif
 #endif
 
 #include <openssl/opensslconf.h>
@@ -7811,38 +7827,44 @@ static struct randL_state *randL_getstate(lua_State *L) {
 	return lua_touserdata(L, lua_upvalueindex(1));
 } /* randL_getstate() */
 
-#ifndef HAVE_SYS_SYSCTL_H
-#define HAVE_SYS_SYSCTL_H (BSD || __GLIBC__)
-#endif
-
 #if HAVE_SYS_SYSCTL_H
 #include <sys/sysctl.h> /* CTL_KERN KERN_RANDOM RANDOM_UUID KERN_URND KERN_ARND sysctl(2) */
 #endif
 
 #ifndef HAVE_RANDOM_UUID
-#define HAVE_RANDOM_UUID (HAVE_SYS_SYSCTL_H && defined __linux) /* RANDOM_UUID is an enum, not macro */
-#endif
-
-#ifndef HAVE_KERN_URND
-#define HAVE_KERN_URND (defined KERN_URND)
-#endif
-
-#ifndef HAVE_KERN_ARND
-#define HAVE_KERN_ARND (defined KERN_ARND)
+#define HAVE_RANDOM_UUID (HAVE_SYS_SYSCTL_H && defined __linux__) /* RANDOM_UUID is an enum, not macro */
 #endif
 
 static int randL_stir(struct randL_state *st, unsigned rqstd) {
 	unsigned count = 0;
 	int error;
 	unsigned char data[256];
-#if HAVE_RANDOM_UUID || HAVE_KERN_URND || HAVE_KERN_ARND
-#if HAVE_RANDOM_UUID
+#if defined(HAVE_ARC4RANDOM)
+	while (count < rqstd) {
+		size_t n = MIN(rqstd - count, sizeof data);
+
+		arc4random(data, n);
+
+		RAND_seed(data, n);
+
+		count += n;
+	}
+#elif defined(HAVE_GETRANDOM)
+	while (count < rqstd) {
+ 		size_t n = MIN(rqstd - count, sizeof data);
+
+		n = syscall(SYS_getrandom, data, n, 0);
+
+		if (n == -1) {
+			break;
+		}
+
+		RAND_seed(data, n);
+
+		count += n;
+	}
+#elif HAVE_RANDOM_UUID
 	int mib[] = { CTL_KERN, KERN_RANDOM, RANDOM_UUID };
-#elif HAVE_KERN_URND
-	int mib[] = { CTL_KERN, KERN_URND };
-#else
-	int mib[] = { CTL_KERN, KERN_ARND };
-#endif
 
 	while (count < rqstd) {
 		size_t n = MIN(rqstd - count, sizeof data);
@@ -7850,10 +7872,11 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 		if (0 != sysctl(mib, countof(mib), data, &n, (void *)0, 0))
 			break;
 
-		RAND_add(data, n, n);
+		RAND_seed(data, n);
 
 		count += n;
 	}
+
 #endif
 
 	if (count < rqstd) {
@@ -7884,7 +7907,7 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 
 				goto error;
 			default:
-				RAND_add(data, n, n);
+				RAND_seed(data, n);
 
 				count += n;
 			}
