@@ -133,6 +133,9 @@ endif
 #
 include $(d)/src/GNUmakefile
 
+$(d)/config.h: $(d)/config.h.guess
+	$(CP) $< $@
+
 
 #
 # C L E A N  R U L E S
