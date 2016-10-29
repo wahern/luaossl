@@ -1336,7 +1336,7 @@ static int compat_EVP_PKEY_get_default_digest_nid(EVP_PKEY *key, int *nid) {
 		*nid = EVP_MD_nid(EVP_ecdsa());
 		break;
 	default:
-		*nid = EVP_MD_nid(EVP_md_null());
+		*nid = EVP_MD_nid(EVP_sha1());
 		break;
 	}
 
@@ -3391,6 +3391,26 @@ static int pk_toPEM(lua_State *L) {
 } /* pk_toPEM() */
 
 
+static int pk_getDefaultDigestName(lua_State *L) {
+	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
+	int nid;
+	char txt[256];
+	size_t len;
+
+	if (!(EVP_PKEY_get_default_digest_nid(key, &nid) > 0))
+		return auxL_error(L, auxL_EOPENSSL, "pkey:getDefaultDigestName");
+
+	if (!(len = auxS_nid2txt(txt, sizeof txt, nid)))
+		return auxL_error(L, auxL_EOPENSSL, "pkey:getDefaultDigestName");
+	if (len > sizeof txt)
+		return auxL_error(L, EOVERFLOW, "pkey:getDefaultDigestName");
+
+	lua_pushlstring(L, txt, len);
+
+	return 1;
+} /* pk_getDefaultDigestName() */
+
+
 enum pk_param  {
 #define PK_RSA_OPTLIST { "n", "e", "d", "p", "q", "dmp1", "dmq1", "iqmp", NULL }
 #define PK_RSA_OPTOFFSET PK_RSA_N
@@ -3944,6 +3964,7 @@ static const auxL_Reg pk_methods[] = {
 	{ "setPrivateKey", &pk_setPrivateKey },
 	{ "sign",          &pk_sign },
 	{ "verify",        &pk_verify },
+	{ "getDefaultDigestName", &pk_getDefaultDigestName },
 	{ "toPEM",         &pk_toPEM },
 	{ "getParameters", &pk_getParameters },
 	{ "setParameters", &pk_setParameters },
@@ -5730,18 +5751,16 @@ static const EVP_MD *xc_signature(lua_State *L, int index, EVP_PKEY *key) {
 	if ((id = luaL_optstring(L, index, NULL))) {
 		if (!(md = EVP_get_digestbyname(id)))
 			goto unknown;
-
-		return md;
+	} else {
+		if (!(EVP_PKEY_get_default_digest_nid(key, &nid) > 0))
+			goto unknown;
+		if (!(md = EVP_get_digestbynid(nid)))
+			goto unknown;
 	}
-
-	if (!(EVP_PKEY_get_default_digest_nid(key, &nid) > 0))
-		goto unknown;
-	if (!(md = EVP_get_digestbynid(nid)))
-		goto unknown;
 
 	return md;
 unknown:
-	return EVP_md_null();
+	return EVP_sha1();
 } /* xc_signature() */
 
 static int xc_sign(lua_State *L) {

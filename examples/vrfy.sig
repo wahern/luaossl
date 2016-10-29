@@ -13,16 +13,18 @@ local digest = require"openssl.digest"
 local function genkey(type)
 	type = string.upper(type or (not openssl.NO_EC and "EC") or "RSA")
 
+	local key
 	if type == "RSA" then
-		return pkey.new{ type = "RSA", bits = 1024 }, "sha256"
+		return pkey.new{ type = "RSA", bits = 1024 }
 	elseif type == "DSA" then
-		return pkey.new{ type = "DSA", bits = 1024 }, "dss1"
+		return pkey.new{ type = "DSA", bits = 1024 }
 	else
-		return pkey.new{ type = "EC", curve = "prime192v1" }, "ecdsa-with-SHA1"
+		return pkey.new{ type = "EC", curve = "prime192v1" }
 	end
 end
 
-local key, hash = genkey(keytype)
+local key = genkey(keytype)
+local hash = key:getDefaultDigestName()
 
 -- digest our message using an appropriate digest ("ecdsa-with-SHA1" for EC;
 -- "dss1" for DSA; and "sha1", "sha256", etc for RSA).
@@ -45,6 +47,7 @@ local function tohex(b)
 	return x
 end
 
-print("okay", pub:verify(sig, data))
-print("type", pub:type())
-print("sig", tohex(sig))
+print("verified", pub:verify(sig, data))
+print("key-type", pub:type())
+print("hash-type", hash)
+print("signature", tohex(sig))
