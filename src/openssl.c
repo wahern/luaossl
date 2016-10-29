@@ -83,6 +83,12 @@
 #define LIBRESSL_PREREQ(M, m, p) \
 	(LIBRESSL_VERSION_NUMBER >= (((M) << 28) | ((m) << 20) | ((p) << 12)))
 
+#if defined(LIBRESSL_VERSION_NUMBER) || OPENSSL_VERSION_NUMBER<0x10100000L
+#define X509_up_ref(c)       CRYPTO_add(&c->references, 1, CRYPTO_LOCK_X509)
+#define X509_STORE_up_ref(s) CRYPTO_add(&s->references, 1, CRYPTO_LOCK_X509_STORE);
+#define SSL_up_ref(s)        CRYPTO_add(&s->references, 1, CRYPTO_LOCK_SSL);
+#endif
+
 #ifndef HAVE_DH_GET0_KEY
 #define HAVE_DH_GET0_KEY 0
 #endif
@@ -1184,6 +1190,7 @@ static void compat_DSA_set0_pqg(DSA *d, BIGNUM *p, BIGNUM *q, BIGNUM *g) {
 #define EVP_PKEY_id(key) ((key)->type)
 #endif
 
+#if defined(LIBRESSL_VERSION_NUMBER) || OPENSSL_VERSION_NUMBER<0x10100000L
 #if !HAVE_EVP_PKEY_BASE_ID
 #define EVP_PKEY_base_id(key) compat_EVP_PKEY_base_id((key))
 
@@ -1191,7 +1198,7 @@ static int compat_EVP_PKEY_base_id(EVP_PKEY *key) {
 	return EVP_PKEY_type(EVP_PKEY_id(key));
 } /* compat_EVP_PKEY_base_id() */
 #endif
-
+#endif
 
 #if !HAVE_EVP_PKEY_GET0
 #define EVP_PKEY_get0(key) compat_EVP_PKEY_get0((key))
@@ -1332,7 +1339,7 @@ static void compat_RSA_set0_key(RSA *r, BIGNUM *n, BIGNUM *e, BIGNUM *d) {
 static void (compat_X509_STORE_free)(X509_STORE *store) {
 	int i;
 
-	i = CRYPTO_add(&store->references, -1, CRYPTO_LOCK_X509_STORE);
+	i = X509_STORE_up_ref(store);
 
         if (i > 0)
                 return;
@@ -1370,7 +1377,7 @@ static void (compat_SSL_CTX_set1_cert_store)(SSL_CTX *ctx, X509_STORE *store) {
 	SSL_CTX_set_cert_store(ctx, store);
 
 	if (n == store->references)
-		CRYPTO_add(&store->references, 1, CRYPTO_LOCK_X509_STORE);
+		X509_STORE_up_ref(store);
 } /* compat_SSL_CTX_set1_cert_store() */
 #endif
 #endif
@@ -1429,7 +1436,7 @@ static int compat_init(void) {
 	if (!(compat.tmp.store = X509_STORE_new()))
 		goto sslerr;
 
-	CRYPTO_add(&compat.tmp.store->references, 1, CRYPTO_LOCK_X509_STORE);
+	X509_STORE_up_ref(compat.tmp.store);
 	X509_STORE_free(compat.tmp.store);
 
 	if (compat.tmp.store) {
@@ -6383,7 +6390,7 @@ static void xl_dup(lua_State *L, STACK_OF(X509) *src, _Bool copy) {
 		for (i = 0; i < n; i++) {
 			if (!(crt = sk_X509_value(*dst, i)))
 				continue;
-			CRYPTO_add(&crt->references, 1, CRYPTO_LOCK_X509);
+			X509_up_ref(crt);
 		}
 	}
 
@@ -6587,7 +6594,7 @@ static int xs_verify(lua_State *L) {
 		for (i = 0; i < n; i++) {
 			if (!(elm = sk_X509_value(chain, i)))
 				continue;
-			CRYPTO_add(&elm->references, 1, CRYPTO_LOCK_X509);
+			X509_up_ref(elm);
 		}
 	}
 
@@ -7374,7 +7381,7 @@ int luaopen__openssl_ssl_context(lua_State *L) {
 static SSL *ssl_push(lua_State *L, SSL *ssl) {
 	SSL **ud = prepsimple(L, SSL_CLASS);
 
-	CRYPTO_add(&(ssl)->references, 1, CRYPTO_LOCK_SSL);
+	SSL_up_ref(ssl);
 	*ud = ssl;
 
 	return *ud;
