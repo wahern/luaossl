@@ -143,6 +143,22 @@
 #define HAVE_DTLSV1_2_SERVER_METHOD HAVE_DTLSV1_2_CLIENT_METHOD
 #endif
 
+#ifndef HAVE_EVP_CIPHER_CTX_FREE
+#define HAVE_EVP_CIPHER_CTX_FREE OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_EVP_CIPHER_CTX_NEW
+#define HAVE_EVP_CIPHER_CTX_NEW OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_EVP_MD_CTX_FREE
+#define HAVE_EVP_MD_CTX_FREE OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_EVP_MD_CTX_NEW
+#define HAVE_EVP_MD_CTX_NEW OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HAVE_EVP_PKEY_GET_DEFAULT_DIGEST_NID
 #define HAVE_EVP_PKEY_GET_DEFAULT_DIGEST_NID OPENSSL_PREREQ(0,9,9)
 #endif
@@ -165,6 +181,14 @@
 
 #ifndef HAVE_GENERAL_NAME_SET0_VALUE
 #define HAVE_GENERAL_NAME_SET0_VALUE OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_HMAC_CTX_FREE
+#define HAVE_HMAC_CTX_FREE OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_HMAC_CTX_NEW
+#define HAVE_HMAC_CTX_NEW OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_I2D_RE_X509_REQ_TBS
@@ -243,6 +267,10 @@
 #define HAVE_X509_UP_REF OPENSSL_PREREQ(1,1,0)
 #endif
 
+#ifndef HMAC_INIT_EX_INT
+#define HMAC_INIT_EX_INT OPENSSL_PREREQ(1,0,0)
+#endif
+
 #ifndef STRERROR_R_CHAR_P
 #define STRERROR_R_CHAR_P (defined __GLIBC__ && (_GNU_SOURCE || !(_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600)))
 #endif
@@ -281,9 +309,9 @@
 #define PKCS12_CLASS     "PKCS12*"
 #define SSL_CTX_CLASS    "SSL_CTX*"
 #define SSL_CLASS        "SSL*"
-#define DIGEST_CLASS     "EVP_MD_CTX"     /* not a pointer */
-#define HMAC_CLASS       "HMAC_CTX"       /* not a pointer */
-#define CIPHER_CLASS     "EVP_CIPHER_CTX" /* not a pointer */
+#define DIGEST_CLASS     "EVP_MD_CTX*"
+#define HMAC_CLASS       "HMAC_CTX*"
+#define CIPHER_CLASS     "EVP_CIPHER_CTX*"
 
 
 #if __GNUC__
@@ -1248,6 +1276,38 @@ static void compat_DSA_set0_pqg(DSA *d, BIGNUM *p, BIGNUM *q, BIGNUM *g) {
 } /* compat_DSA_set0_pqg() */
 #endif
 
+#if !HAVE_EVP_CIPHER_CTX_FREE
+#define EVP_CIPHER_CTX_free(ctx) compat_EVP_CIPHER_CTX_free((ctx))
+
+static void compat_EVP_CIPHER_CTX_free(EVP_CIPHER_CTX *ctx) {
+	EVP_CIPHER_CTX_cleanup(ctx);
+	OPENSSL_free(ctx);
+} /* compat_EVP_CIPHER_CTX_free() */
+#endif
+
+#if !HAVE_EVP_CIPHER_CTX_NEW
+#define EVP_CIPHER_CTX_new() compat_EVP_CIPHER_CTX_new()
+
+static EVP_CIPHER_CTX *compat_EVP_CIPHER_CTX_new(void) {
+	EVP_CIPHER_CTX *ctx;
+
+	if (!(ctx = OPENSSL_malloc(sizeof *ctx)))
+		return NULL;
+	memset(ctx, 0, sizeof *ctx);
+	EVP_CIPHER_CTX_init(ctx);
+
+	return ctx;
+} /* compat_EVP_CIPHER_CTX_new() */
+#endif
+
+#if !HAVE_EVP_MD_CTX_FREE
+#define EVP_MD_CTX_free(md) EVP_MD_CTX_destroy((md))
+#endif
+
+#if !HAVE_EVP_MD_CTX_NEW
+#define EVP_MD_CTX_new(md) EVP_MD_CTX_create()
+#endif
+
 #if !HAVE_EVP_PKEY_ID
 #define EVP_PKEY_id(key) ((key)->type)
 #endif
@@ -1379,6 +1439,29 @@ static void GENERAL_NAME_set0_value(GENERAL_NAME *name, int type, void *value) {
 		break;
 	}
 } /* compat_GENERAL_NAME_set0_value() */
+#endif
+
+#if !HAVE_HMAC_CTX_FREE
+#define HMAC_CTX_free(ctx) compat_HMAC_CTX_free((ctx))
+
+static void compat_HMAC_CTX_free(HMAC_CTX *ctx) {
+	HMAC_CTX_cleanup(ctx);
+	OPENSSL_free(ctx);
+} /* compat_HMAC_CTX_free() */
+#endif
+
+#if !HAVE_HMAC_CTX_NEW
+#define HMAC_CTX_new() compat_HMAC_CTX_new()
+
+static HMAC_CTX *compat_HMAC_CTX_new(void) {
+	HMAC_CTX *ctx;
+
+	if (!(ctx = OPENSSL_malloc(sizeof *ctx)))
+		return NULL;
+	memset(ctx, 0, sizeof *ctx);
+
+	return ctx;
+} /* compat_HMAC_CTX_new() */
 #endif
 
 #if !HAVE_RSA_GET0_CRT_PARAMS
@@ -3157,7 +3240,7 @@ static int pk_setPrivateKey(lua_State *L) {
 
 static int pk_sign(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
-	EVP_MD_CTX *md = luaL_checkudata(L, 2, DIGEST_CLASS);
+	EVP_MD_CTX *md = checksimple(L, 2, DIGEST_CLASS);
 	luaL_Buffer B;
 	unsigned n;
 
@@ -3181,7 +3264,7 @@ static int pk_verify(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
 	size_t len;
 	const void *sig = luaL_checklstring(L, 2, &len);
-	EVP_MD_CTX *md = luaL_checkudata(L, 3, DIGEST_CLASS);
+	EVP_MD_CTX *md = checksimple(L, 3, DIGEST_CLASS);
 
 	switch (EVP_VerifyFinal(md, sig, len, key)) {
 	case 0: /* WRONG */
@@ -7874,13 +7957,10 @@ static const EVP_MD *md_optdigest(lua_State *L, int index) {
 
 static int md_new(lua_State *L) {
 	const EVP_MD *type = md_optdigest(L, 1);
-	EVP_MD_CTX *ctx;
+	EVP_MD_CTX **ctx;
 
-	ctx = prepudata(L, sizeof *ctx, DIGEST_CLASS, NULL);
-
-	EVP_MD_CTX_init(ctx);
-
-	if (!EVP_DigestInit_ex(ctx, type, NULL))
+	ctx = prepsimple(L, DIGEST_CLASS, NULL);
+	if (!(*ctx = EVP_MD_CTX_new()) || !EVP_DigestInit_ex(*ctx, type, NULL))
 		return auxL_error(L, auxL_EOPENSSL, "digest.new");
 
 	return 1;
@@ -7908,7 +7988,7 @@ static void md_update_(lua_State *L, EVP_MD_CTX *ctx, int from, int to) {
 
 
 static int md_update(lua_State *L) {
-	EVP_MD_CTX *ctx = luaL_checkudata(L, 1, DIGEST_CLASS);
+	EVP_MD_CTX *ctx = checksimple(L, 1, DIGEST_CLASS);
 
 	md_update_(L, ctx, 2, lua_gettop(L));
 
@@ -7919,7 +7999,7 @@ static int md_update(lua_State *L) {
 
 
 static int md_final(lua_State *L) {
-	EVP_MD_CTX *ctx = luaL_checkudata(L, 1, DIGEST_CLASS);
+	EVP_MD_CTX *ctx = checksimple(L, 1, DIGEST_CLASS);
 	unsigned char md[EVP_MAX_MD_SIZE];
 	unsigned len;
 
@@ -7935,9 +8015,10 @@ static int md_final(lua_State *L) {
 
 
 static int md__gc(lua_State *L) {
-	EVP_MD_CTX *ctx = luaL_checkudata(L, 1, DIGEST_CLASS);
+	EVP_MD_CTX **ctx = luaL_checkudata(L, 1, DIGEST_CLASS);
 
-	EVP_MD_CTX_cleanup(ctx);
+	EVP_MD_CTX_free(*ctx);
+	*ctx = NULL;
 
 	return 0;
 } /* md__gc() */
@@ -7978,16 +8059,25 @@ static int hmac_new(lua_State *L) {
 	const void *key;
 	size_t len;
 	const EVP_MD *type;
-	HMAC_CTX *ctx;
+	HMAC_CTX **ctx;
 
 	key = luaL_checklstring(L, 1, &len);
 	type = md_optdigest(L, 2);
 
-	ctx = prepudata(L, sizeof *ctx, HMAC_CLASS, NULL);
+	ctx = prepsimple(L, HMAC_CLASS, NULL);
+	if (!(*ctx = HMAC_CTX_new()))
+		goto eossl;
 
-	HMAC_Init_ex(ctx, key, len, type, NULL);
+#if HMAC_INIT_EX_INT
+	if (!HMAC_Init_ex(*ctx, key, len, type, NULL))
+		goto eossl;
+#else
+	HMAC_Init_ex(*ctx, key, len, type, NULL);
+#endif
 
 	return 1;
+eossl:
+	return auxL_error(L, auxL_EOPENSSL, "hmac.new");
 } /* hmac_new() */
 
 
@@ -8011,7 +8101,7 @@ static void hmac_update_(lua_State *L, HMAC_CTX *ctx, int from, int to) {
 
 
 static int hmac_update(lua_State *L) {
-	HMAC_CTX *ctx = luaL_checkudata(L, 1, HMAC_CLASS);
+	HMAC_CTX *ctx = checksimple(L, 1, HMAC_CLASS);
 
 	hmac_update_(L, ctx, 2, lua_gettop(L));
 
@@ -8022,7 +8112,7 @@ static int hmac_update(lua_State *L) {
 
 
 static int hmac_final(lua_State *L) {
-	HMAC_CTX *ctx = luaL_checkudata(L, 1, HMAC_CLASS);
+	HMAC_CTX *ctx = checksimple(L, 1, HMAC_CLASS);
 	unsigned char hmac[EVP_MAX_MD_SIZE];
 	unsigned len;
 
@@ -8037,9 +8127,10 @@ static int hmac_final(lua_State *L) {
 
 
 static int hmac__gc(lua_State *L) {
-	HMAC_CTX *ctx = luaL_checkudata(L, 1, HMAC_CLASS);
+	HMAC_CTX **ctx = luaL_checkudata(L, 1, HMAC_CLASS);
 
-	HMAC_CTX_cleanup(ctx);
+	HMAC_CTX_free(*ctx);
+	*ctx = NULL;
 
 	return 0;
 } /* hmac__gc() */
@@ -8089,23 +8180,26 @@ static const EVP_CIPHER *cipher_checktype(lua_State *L, int index) {
 
 static int cipher_new(lua_State *L) {
 	const EVP_CIPHER *type;
-	EVP_CIPHER_CTX *ctx;
+	EVP_CIPHER_CTX **ctx;
 	unsigned char key[EVP_MAX_KEY_LENGTH] = { 0 };
 
 	type = cipher_checktype(L, 1);
 
-	ctx = prepudata(L, sizeof *ctx, CIPHER_CLASS, NULL);
-	EVP_CIPHER_CTX_init(ctx);
+	ctx = prepsimple(L, CIPHER_CLASS, NULL);
+	if (!(*ctx = EVP_CIPHER_CTX_new()))
+		goto eossl;
 
 	/*
 	 * NOTE: For some ciphers like AES calling :update or :final without
 	 * setting a key causes a SEGV. Set a dummy key here. Same solution
 	 * as used by Ruby OSSL.
 	 */
-	if (!EVP_CipherInit_ex(ctx, type, NULL, key, NULL, -1))
-		return auxL_error(L, auxL_EOPENSSL, "cipher.new");
+	if (!EVP_CipherInit_ex(*ctx, type, NULL, key, NULL, -1))
+		goto eossl;
 
 	return 1;
+eossl:
+	return auxL_error(L, auxL_EOPENSSL, "cipher.new");
 } /* cipher_new() */
 
 
@@ -8115,7 +8209,7 @@ static int cipher_interpose(lua_State *L) {
 
 
 static int cipher_init(lua_State *L, _Bool encrypt) {
-	EVP_CIPHER_CTX *ctx = luaL_checkudata(L, 1, CIPHER_CLASS);
+	EVP_CIPHER_CTX *ctx = checksimple(L, 1, CIPHER_CLASS);
 	const void *key, *iv;
 	size_t n, m;
 
@@ -8187,7 +8281,7 @@ static _Bool cipher_update_(lua_State *L, EVP_CIPHER_CTX *ctx, luaL_Buffer *B, i
 
 
 static int cipher_update(lua_State *L) {
-	EVP_CIPHER_CTX *ctx = luaL_checkudata(L, 1, CIPHER_CLASS);
+	EVP_CIPHER_CTX *ctx = checksimple(L, 1, CIPHER_CLASS);
 	luaL_Buffer B;
 
 	luaL_buffinit(L, &B);
@@ -8207,7 +8301,7 @@ sslerr:
 
 
 static int cipher_final(lua_State *L) {
-	EVP_CIPHER_CTX *ctx = luaL_checkudata(L, 1, CIPHER_CLASS);
+	EVP_CIPHER_CTX *ctx = checksimple(L, 1, CIPHER_CLASS);
 	luaL_Buffer B;
 	size_t block;
 	int out;
@@ -8238,9 +8332,10 @@ sslerr:
 
 
 static int cipher__gc(lua_State *L) {
-	EVP_CIPHER_CTX *ctx = luaL_checkudata(L, 1, CIPHER_CLASS);
+	EVP_CIPHER_CTX **ctx = luaL_checkudata(L, 1, CIPHER_CLASS);
 
-	EVP_CIPHER_CTX_cleanup(ctx);
+	EVP_CIPHER_CTX_free(*ctx);
+	*ctx = NULL;
 
 	return 0;
 } /* cipher__gc() */
