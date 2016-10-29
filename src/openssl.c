@@ -143,6 +143,10 @@
 #define HAVE_GENERAL_NAME_SET0_VALUE OPENSSL_PREREQ(1,1,0)
 #endif
 
+#ifndef HAVE_I2D_RE_X509_REQ_TBS
+#define HAVE_I2D_RE_X509_REQ_TBS OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HAVE_RSA_GET0_CRT_PARAMS
 #define HAVE_RSA_GET0_CRT_PARAMS OPENSSL_PREREQ(1,1,0)
 #endif
@@ -5954,7 +5958,11 @@ static int xr_setExtensionByNid(lua_State *L, X509_REQ *csr, int target_nid, voi
 	 * We have to mark the encoded form as invalid, otherwise when we
 	 * write it out again it will use the loaded version.
 	 */
+#if HAVE_I2D_RE_X509_REQ_TBS
+	(void)i2d_re_X509_REQ_tbs(csr, NULL); /* sets csr->req_info->enc.modified */
+#else
 	csr->req_info->enc.modified = 1;
+#endif
 
 	lua_pushboolean(L, 1);
 
