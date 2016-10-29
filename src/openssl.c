@@ -83,12 +83,64 @@
 #define LIBRESSL_PREREQ(M, m, p) \
 	(LIBRESSL_VERSION_NUMBER >= (((M) << 28) | ((m) << 20) | ((p) << 12)))
 
+#ifndef HAVE_DH_GET0_KEY
+#define HAVE_DH_GET0_KEY 0
+#endif
+
+#ifndef HAVE_DH_GET0_PQG
+#define HAVE_DH_GET0_PQG 0
+#endif
+
+#ifndef HAVE_DSA_GET0_KEY
+#define HAVE_DSA_GET0_KEY 0
+#endif
+
+#ifndef HAVE_DSA_GET0_PQG
+#define HAVE_DSA_GET0_PQG 0
+#endif
+
+#ifndef HAVE_EVP_PKEY_ID
+#define HAVE_EVP_PKEY_ID 0
+#endif
+
+#ifndef HAVE_RSA_GET0_CRT_PARAMS
+#define HAVE_RSA_GET0_CRT_PARAMS 0
+#endif
+
+#ifndef HAVE_RSA_GET0_FACTORS
+#define HAVE_RSA_GET0_FACTORS 0
+#endif
+
+#ifndef HAVE_RSA_GET0_KEY
+#define HAVE_RSA_GET0_KEY 0
+#endif
+
+#ifndef HAVE_RSA_SET0_CRT_PARAMS
+#define HAVE_RSA_SET0_CRT_PARAMS 0
+#endif
+
+#ifndef HAVE_RSA_SET0_FACTORS
+#define HAVE_RSA_SET0_FACTORS 0
+#endif
+
+#ifndef HAVE_RSA_SET0_KEY
+#define HAVE_RSA_SET0_KEY 0
+#endif
+
 #ifndef HAVE_SSL_CTX_SET_ALPN_PROTOS
 #define HAVE_SSL_CTX_SET_ALPN_PROTOS (OPENSSL_PREREQ(1, 0, 2) || LIBRESSL_PREREQ(2, 1, 3))
 #endif
 
 #ifndef HAVE_SSL_CTX_SET_ALPN_SELECT_CB
 #define HAVE_SSL_CTX_SET_ALPN_SELECT_CB HAVE_SSL_CTX_SET_ALPN_PROTOS
+#endif
+
+#ifndef HAVE_SSL_CTX_SET1_CERT_STORE
+#define HAVE_SSL_CTX_SET1_CERT_STORE (HAVE_SSL_CTX_set1_cert_store || 0) /* backwards compatible with old macro name */
+#endif
+
+#ifndef HAVE_SSL_CTX_CERT_STORE
+#define HAVE_SSL_CTX_CERT_STORE 1
 #endif
 
 #ifndef HAVE_SSL_SET_ALPN_PROTOS
@@ -121,6 +173,10 @@
 
 #ifndef HAVE_DTLSV1_2_SERVER_METHOD
 #define HAVE_DTLSV1_2_SERVER_METHOD HAVE_DTLSV1_2_CLIENT_METHOD
+#endif
+
+#ifndef HAVE_X509_STORE_REFERENCES
+#define HAVE_X509_STORE_REFERENCES 1
 #endif
 
 #ifndef STRERROR_R_CHAR_P
@@ -487,6 +543,13 @@ static const char *aux_strerror_r(int error, char *dst, size_t lim) {
  * Auxiliary OpenSSL API routines
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static void auxS_bn_free_and_set0(BIGNUM **dst, BIGNUM *src) {
+	if (*dst) {
+		BN_clear_free(*dst);
+	}
+	*dst = src;
+} /* auxS_bn_free_and_set0() */
 
 static size_t auxS_nid2sn(void *dst, size_t lim, int nid) {
 	const char *sn;
@@ -1021,11 +1084,111 @@ static struct {
 	.X509_STORE_free = &X509_STORE_free,
 };
 
+#if !HAVE_DH_GET0_KEY
+#define DH_get0_key(...) compat_DH_get0_key(__VA_ARGS__)
+
+static void compat_DH_get0_key(const DH *d, const BIGNUM **pub_key, const BIGNUM **priv_key) {
+	if (pub_key)
+		*pub_key = d->pub_key;
+	if (priv_key)
+		*priv_key = d->priv_key;
+} /* compat_DH_get0_key() */
+#endif
+
+#if !HAVE_DH_GET0_PQG
+#define DH_get0_pqg(...) compat_DH_get0_pqg(__VA_ARGS__)
+
+static void compat_DH_get0_pqg(const DH *d, const BIGNUM **p, const BIGNUM **q, const BIGNUM **g) {
+	if (p)
+		*p = d->p;
+	if (q)
+		*q = d->q;
+	if (g)
+		*g = d->g;
+} /* compat_DH_get0_pqg() */
+#endif
+
+#if !HAVE_DH_SET0_KEY
+#define DH_set0_key(...) compat_DH_set0_key(__VA_ARGS__)
+
+static void compat_DH_set0_key(DH *d, BIGNUM *pub_key, BIGNUM *priv_key) {
+	if (pub_key)
+		auxS_bn_free_and_set0(&d->pub_key, pub_key);
+	if (priv_key)
+		auxS_bn_free_and_set0(&d->priv_key, priv_key);
+} /* compat_DH_set0_key() */
+#endif
+
+#if !HAVE_DH_SET0_PQG
+#define DH_set0_pqg(...) compat_DH_set0_pqg(__VA_ARGS__)
+
+static void compat_DH_set0_pqg(DH *d, BIGNUM *p, BIGNUM *q, BIGNUM *g) {
+	if (p)
+		auxS_bn_free_and_set0(&d->p, p);
+	if (q)
+		auxS_bn_free_and_set0(&d->q, q);
+	if (g)
+		auxS_bn_free_and_set0(&d->g, g);
+} /* compat_DH_set0_pqg() */
+#endif
+
+#if !HAVE_DSA_GET0_KEY
+#define DSA_get0_key(...) compat_DSA_get0_key(__VA_ARGS__)
+
+static void compat_DSA_get0_key(const DSA *d, const BIGNUM **pub_key, const BIGNUM **priv_key) {
+	if (pub_key)
+		*pub_key = d->pub_key;
+	if (priv_key)
+		*priv_key = d->priv_key;
+} /* compat_DSA_get0_key() */
+#endif
+
+#if !HAVE_DSA_GET0_PQG
+#define DSA_get0_pqg(...) compat_DSA_get0_pqg(__VA_ARGS__)
+
+static void compat_DSA_get0_pqg(const DSA *d, const BIGNUM **p, const BIGNUM **q, const BIGNUM **g) {
+	if (p)
+		*p = d->p;
+	if (q)
+		*q = d->q;
+	if (g)
+		*g = d->g;
+} /* compat_DSA_get0_pqg() */
+#endif
+
+#if !HAVE_DSA_SET0_KEY
+#define DSA_set0_key(...) compat_DSA_set0_key(__VA_ARGS__)
+
+static void compat_DSA_set0_key(DSA *d, BIGNUM *pub_key, BIGNUM *priv_key) {
+	if (pub_key)
+		auxS_bn_free_and_set0(&d->pub_key, pub_key);
+	if (priv_key)
+		auxS_bn_free_and_set0(&d->priv_key, priv_key);
+} /* compat_DSA_set0_key() */
+#endif
+
+#if !HAVE_DSA_SET0_PQG
+#define DSA_set0_pqg(...) compat_DSA_set0_pqg(__VA_ARGS__)
+
+static void compat_DSA_set0_pqg(DSA *d, BIGNUM *p, BIGNUM *q, BIGNUM *g) {
+	if (p)
+		auxS_bn_free_and_set0(&d->p, p);
+	if (q)
+		auxS_bn_free_and_set0(&d->q, q);
+	if (g)
+		auxS_bn_free_and_set0(&d->g, g);
+} /* compat_DSA_set0_pqg() */
+#endif
+
+#if !HAVE_EVP_PKEY_ID
+#define EVP_PKEY_id(key) ((key)->type)
+#endif
+
 #if !HAVE_EVP_PKEY_BASE_ID
 #define EVP_PKEY_base_id(key) compat_EVP_PKEY_base_id((key))
 
 static int compat_EVP_PKEY_base_id(EVP_PKEY *key) {
-	return EVP_PKEY_type(key->type);
+	return EVP_PKEY_type(EVP_PKEY_id(key));
 } /* compat_EVP_PKEY_base_id() */
 #endif
 
@@ -1065,6 +1228,80 @@ static void *compat_EVP_PKEY_get0(EVP_PKEY *key) {
 } /* compat_EVP_PKEY_get0() */
 #endif
 
+#if !HAVE_RSA_GET0_CRT_PARAMS
+#define RSA_get0_crt_params(...) compat_RSA_get0_crt_params(__VA_ARGS__)
+
+static void compat_RSA_get0_crt_params(const RSA *r, const BIGNUM **dmp1, const BIGNUM **dmq1, const BIGNUM **iqmp) {
+	if (dmp1)
+		*dmp1 = r->dmp1;
+	if (dmq1)
+		*dmq1 = r->dmq1;
+	if (iqmp)
+		*iqmp = r->iqmp;
+} /* compat_RSA_get0_crt_params() */
+#endif
+
+#if !HAVE_RSA_GET0_FACTORS
+#define RSA_get0_factors(...) compat_RSA_get0_factors(__VA_ARGS__)
+
+static void compat_RSA_get0_factors(const RSA *r, const BIGNUM **p, const BIGNUM **q) {
+	if (p)
+		*p = r->p;
+	if (q)
+		*q = r->q;
+} /* compat_RSA_get0_factors() */
+#endif
+
+#if !HAVE_RSA_GET0_KEY
+#define RSA_get0_key(...) compat_RSA_get0_key(__VA_ARGS__)
+
+static void compat_RSA_get0_key(const RSA *r, const BIGNUM **n, const BIGNUM **e, const BIGNUM **d) {
+	if (n)
+		*n = r->n;
+	if (e)
+		*e = r->e;
+	if (d)
+		*d = r->d;
+} /* compat_RSA_get0_key() */
+#endif
+
+#if !HAVE_RSA_SET0_CRT_PARAMS
+#define RSA_set0_crt_params(...) compat_RSA_set0_crt_params(__VA_ARGS__)
+
+static void compat_RSA_set0_crt_params(RSA *r, BIGNUM *dmp1, BIGNUM *dmq1, BIGNUM *iqmp) {
+	if (dmp1)
+		auxS_bn_free_and_set0(&r->dmp1, dmp1);
+	if (dmq1)
+		auxS_bn_free_and_set0(&r->dmq1, dmq1);
+	if (iqmp)
+		auxS_bn_free_and_set0(&r->iqmp, iqmp);
+} /* compat_RSA_set0_crt_params() */
+#endif
+
+#if !HAVE_RSA_SET0_FACTORS
+#define RSA_set0_factors(...) compat_RSA_set0_factors(__VA_ARGS__)
+
+static void compat_RSA_set0_factors(RSA *r, BIGNUM *p, BIGNUM *q) {
+	if (p)
+		auxS_bn_free_and_set0(&r->p, p);
+	if (q)
+		auxS_bn_free_and_set0(&r->q, q);
+} /* compat_RSA_set0_factors() */
+#endif
+
+#if !HAVE_RSA_SET0_KEY
+#define RSA_set0_key(...) compat_RSA_set0_key(__VA_ARGS__)
+
+static void compat_RSA_set0_key(RSA *r, BIGNUM *n, BIGNUM *e, BIGNUM *d) {
+	if (n)
+		auxS_bn_free_and_set0(&r->n, n);
+	if (e)
+		auxS_bn_free_and_set0(&r->e, e);
+	if (d)
+		auxS_bn_free_and_set0(&r->d, d);
+} /* compat_RSA_set0_key() */
+#endif
+
 #if !HAVE_X509_GET0_EXT
 #define X509_get0_ext(crt, i) X509_get_ext((crt), (i))
 #endif
@@ -1081,13 +1318,18 @@ static void *compat_EVP_PKEY_get0(EVP_PKEY *key) {
 #define X509_EXTENSION_get0_data(ext) X509_EXTENSION_get_data((ext))
 #endif
 
+#if HAVE_X509_STORE_REFERENCES
 /*
  * X509_STORE_free in OpenSSL versions < 1.0.2 doesn't obey reference count
  */
 #define X509_STORE_free(store) \
 	(compat.X509_STORE_free)((store))
 
-static void compat_X509_STORE_free(X509_STORE *store) {
+/* to support preprocessor detection below */
+#define compat_X509_STORE_free(store) \
+	compat_X509_STORE_free((store))
+
+static void (compat_X509_STORE_free)(X509_STORE *store) {
 	int i;
 
 	i = CRYPTO_add(&store->references, -1, CRYPTO_LOCK_X509_STORE);
@@ -1097,12 +1339,21 @@ static void compat_X509_STORE_free(X509_STORE *store) {
 
 	(X509_STORE_free)(store);
 } /* compat_X509_STORE_free() */
+#endif
 
-#if !HAVE_SSL_CTX_set1_cert_store
+#if !HAVE_SSL_CTX_SET1_CERT_STORE
+#if !HAVE_SSL_CTX_CERT_STORE || !HAVE_X509_STORE_REFERENCES
+#define SSL_CTX_set1_cert_store(ctx, store) \
+	SSL_CTX_set_cert_store((ctx), (store))
+#else
 #define SSL_CTX_set1_cert_store(ctx, store) \
 	compat_SSL_CTX_set1_cert_store((ctx), (store))
 
-static void compat_SSL_CTX_set1_cert_store(SSL_CTX *ctx, X509_STORE *store) {
+/* to support preprocessor detection below */
+#define compat_SSL_CTX_set1_cert_store(ctx, store) \
+	compat_SSL_CTX_set1_cert_store((ctx), (store))
+
+static void (compat_SSL_CTX_set1_cert_store)(SSL_CTX *ctx, X509_STORE *store) {
 	int n;
 
 	/*
@@ -1122,6 +1373,9 @@ static void compat_SSL_CTX_set1_cert_store(SSL_CTX *ctx, X509_STORE *store) {
 		CRYPTO_add(&store->references, 1, CRYPTO_LOCK_X509_STORE);
 } /* compat_SSL_CTX_set1_cert_store() */
 #endif
+#endif
+
+#if HAVE_SSL_CTX_CERT_STORE
 
 static void compat_init_SSL_CTX_onfree(void *_ctx, void *data NOTUSED, CRYPTO_EX_DATA *ad NOTUSED, int idx NOTUSED, long argl NOTUSED, void *argp NOTUSED) {
 	SSL_CTX *ctx = _ctx;
@@ -1131,6 +1385,8 @@ static void compat_init_SSL_CTX_onfree(void *_ctx, void *data NOTUSED, CRYPTO_EX
 		ctx->cert_store = NULL;
 	}
 } /* compat_init_SSL_CTX_onfree() */
+
+#endif
 
 /* helper routine to determine if X509_STORE_free obeys reference count */
 static void compat_init_X509_STORE_onfree(void *store, void *data NOTUSED, CRYPTO_EX_DATA *ad NOTUSED, int idx NOTUSED, long argl NOTUSED, void *argp NOTUSED) {
@@ -1161,6 +1417,7 @@ static int compat_init(void) {
 	if ((error = dl_anchor()))
 		goto epilog;
 
+#if defined compat_X509_STORE_free
 	/*
 	 * Test if X509_STORE_free obeys reference counts by installing an
 	 * onfree callback.
@@ -1210,6 +1467,7 @@ static int compat_init(void) {
 
 		compat.flags |= COMPAT_X509_STORE_FREE_BUG;
 	}
+#endif
 
 	done = 1;
 epilog:
@@ -2640,7 +2898,7 @@ static int pk_interpose(lua_State *L) {
 
 static int pk_type(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
-	int nid = key->type;
+	int nid = EVP_PKEY_id(key);
 
 	auxL_pushnid(L, nid);
 
@@ -2802,7 +3060,7 @@ static int pk_toPEM(lua_State *L) {
 #if 0
 		case 4: case 5: /* params, Parameters */
 			/* EVP_PKEY_base_id not in OS X */
-			switch (EVP_PKEY_type(key->type)) {
+			switch (EVP_PKEY_base_id(key)) {
 			case EVP_PKEY_RSA:
 				break;
 			case EVP_PKEY_DSA: {
@@ -2845,7 +3103,7 @@ static int pk_toPEM(lua_State *L) {
 			}
 #endif
 			default:
-				return luaL_error(L, "%d: unsupported EVP_PKEY base type", EVP_PKEY_type(key->type));
+				return luaL_error(L, "%d: unsupported EVP_PKEY base type", EVP_PKEY_base_id(key));
 			}
 
 			lua_pushlstring(L, pem, len);
@@ -2961,82 +3219,100 @@ static void pk_pushparam(lua_State *L, void *base_key, enum pk_param which) {
 		EC_KEY *ec;
 #endif
 	} key = { base_key };
+	const BIGNUM *i;
 
 	switch (which) {
 	case PK_RSA_N:
 		/* RSA public modulus n */
-		bn_dup_nil(L, key.rsa->n);
+		RSA_get0_key(key.rsa, &i, NULL, NULL);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_RSA_E:
 		/* RSA public exponent e */
-		bn_dup_nil(L, key.rsa->e);
+		RSA_get0_key(key.rsa, NULL, &i, NULL);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_RSA_D:
 		/* RSA secret exponent d */
-		bn_dup_nil(L, key.rsa->d);
+		RSA_get0_key(key.rsa, NULL, NULL, &i);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_RSA_P:
 		/* RSA secret prime p */
-		bn_dup_nil(L, key.rsa->p);
+		RSA_get0_factors(key.rsa, &i, NULL);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_RSA_Q:
 		/* RSA secret prime q with p < q */
-		bn_dup_nil(L, key.rsa->q);
+		RSA_get0_factors(key.rsa, NULL, &i);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_RSA_DMP1:
 		/* exponent1 */
-		bn_dup_nil(L, key.rsa->dmp1);
+		RSA_get0_crt_params(key.rsa, &i, NULL, NULL);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_RSA_DMQ1:
 		/* exponent2 */
-		bn_dup_nil(L, key.rsa->dmq1);
+		RSA_get0_crt_params(key.rsa, NULL, &i, NULL);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_RSA_IQMP:
 		/* coefficient */
-		bn_dup_nil(L, key.rsa->iqmp);
+		RSA_get0_crt_params(key.rsa, NULL, NULL, &i);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_DSA_P:
-		bn_dup_nil(L, key.dsa->p);
+		DSA_get0_pqg(key.dsa, &i, NULL, NULL);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_DSA_Q:
-		bn_dup_nil(L, key.dsa->q);
+		DSA_get0_pqg(key.dsa, NULL, &i, NULL);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_DSA_G:
-		bn_dup_nil(L, key.dsa->g);
+		DSA_get0_pqg(key.dsa, NULL, NULL, &i);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_DSA_PUB_KEY:
-		bn_dup_nil(L, key.dsa->pub_key);
+		DSA_get0_key(key.dsa, &i, NULL);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_DSA_PRIV_KEY:
-		bn_dup_nil(L, key.dsa->priv_key);
+		DSA_get0_key(key.dsa, NULL, &i);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_DH_P:
-		bn_dup_nil(L, key.dh->p);
+		DH_get0_pqg(key.dh, &i, NULL, NULL);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_DH_G:
-		bn_dup_nil(L, key.dh->g);
+		DH_get0_pqg(key.dh, NULL, NULL, &i);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_DH_PUB_KEY:
-		bn_dup_nil(L, key.dh->pub_key);
+		DH_get0_key(key.dh, &i, NULL);
+		bn_dup_nil(L, i);
 
 		break;
 	case PK_DH_PRIV_KEY:
-		bn_dup_nil(L, key.dh->priv_key);
+		DH_get0_key(key.dh, NULL, &i);
+		bn_dup_nil(L, i);
 
 		break;
 #ifndef OPENSSL_NO_EC
@@ -3069,22 +3345,9 @@ static void pk_pushparam(lua_State *L, void *base_key, enum pk_param which) {
 } /* pk_pushparam() */
 
 
-static _Bool pk_bn_set_nothrow(BIGNUM **dst, BIGNUM *src) {
-	BIGNUM *tmp;
-
-	if (!(tmp = BN_dup(src)))
-		return 0;
-
-	if (*dst)
-		BN_clear_free(*dst);
-	*dst = tmp;
-
-	return 1;
-} /* pk_bn_set_nothrow() */
-
-#define pk_bn_set(L, dst, index) do { \
-	BIGNUM *n = checkbig((L), (index)); \
-	if (!pk_bn_set_nothrow((dst), n)) \
+#define pk_setparam_bn_dup(L, index, dst) do { \
+	BIGNUM *tmp = checkbig((L), (index)); \
+	if (!(*dst = BN_dup(tmp))) \
 		goto sslerr; \
 } while (0)
 
@@ -3097,74 +3360,92 @@ static void pk_setparam(lua_State *L, void *base_key, enum pk_param which, int i
 		EC_KEY *ec;
 #endif
 	} key = { base_key };
+	BIGNUM *i;
 
 	switch (which) {
 	case PK_RSA_N:
-		pk_bn_set(L, &key.rsa->n, index);
+		pk_setparam_bn_dup(L, index, &i);
+		RSA_set0_key(key.rsa, i, NULL, NULL);
 
 		break;
 	case PK_RSA_E:
-		pk_bn_set(L, &key.rsa->e, index);
+		pk_setparam_bn_dup(L, index, &i);
+		RSA_set0_key(key.rsa, NULL, i, NULL);
 
 		break;
 	case PK_RSA_D:
-		pk_bn_set(L, &key.rsa->d, index);
+		pk_setparam_bn_dup(L, index, &i);
+		RSA_set0_key(key.rsa, NULL, NULL, i);
 
 		break;
 	case PK_RSA_P:
-		pk_bn_set(L, &key.rsa->p, index);
+		pk_setparam_bn_dup(L, index, &i);
+		RSA_set0_factors(key.rsa, i, NULL);
 
 		break;
 	case PK_RSA_Q:
-		pk_bn_set(L, &key.rsa->q, index);
+		pk_setparam_bn_dup(L, index, &i);
+		RSA_set0_factors(key.rsa, NULL, i);
 
 		break;
 	case PK_RSA_DMP1:
-		pk_bn_set(L, &key.rsa->dmp1, index);
+		pk_setparam_bn_dup(L, index, &i);
+		RSA_set0_crt_params(key.rsa, i, NULL, NULL);
 
 		break;
 	case PK_RSA_DMQ1:
-		pk_bn_set(L, &key.rsa->dmq1, index);
+		pk_setparam_bn_dup(L, index, &i);
+		RSA_set0_crt_params(key.rsa, NULL, i, NULL);
 
 		break;
 	case PK_RSA_IQMP:
-		pk_bn_set(L, &key.rsa->iqmp, index);
+		pk_setparam_bn_dup(L, index, &i);
+		RSA_set0_crt_params(key.rsa, NULL, NULL, i);
 
 		break;
 	case PK_DSA_P:
-		pk_bn_set(L, &key.dsa->p, index);
+		pk_setparam_bn_dup(L, index, &i);
+		DSA_set0_pqg(key.dsa, i, NULL, NULL);
 
 		break;
 	case PK_DSA_Q:
-		pk_bn_set(L, &key.dsa->q, index);
+		pk_setparam_bn_dup(L, index, &i);
+		DSA_set0_pqg(key.dsa, NULL, i, NULL);
 
 		break;
 	case PK_DSA_G:
-		pk_bn_set(L, &key.dsa->g, index);
+		pk_setparam_bn_dup(L, index, &i);
+		DSA_set0_pqg(key.dsa, NULL, NULL, i);
 
 		break;
 	case PK_DSA_PUB_KEY:
-		pk_bn_set(L, &key.dsa->pub_key, index);
+		pk_setparam_bn_dup(L, index, &i);
+		DSA_set0_key(key.dsa, i, NULL);
 
 		break;
 	case PK_DSA_PRIV_KEY:
-		pk_bn_set(L, &key.dsa->priv_key, index);
+		pk_setparam_bn_dup(L, index, &i);
+		DSA_set0_key(key.dsa, NULL, i);
 
 		break;
 	case PK_DH_P:
-		pk_bn_set(L, &key.dh->p, index);
+		pk_setparam_bn_dup(L, index, &i);
+		DH_set0_pqg(key.dh, i, NULL, NULL);
 
 		break;
 	case PK_DH_G:
-		pk_bn_set(L, &key.dh->g, index);
+		pk_setparam_bn_dup(L, index, &i);
+		DH_set0_pqg(key.dh, NULL, NULL, i);
 
 		break;
 	case PK_DH_PUB_KEY:
-		pk_bn_set(L, &key.dh->pub_key, index);
+		pk_setparam_bn_dup(L, index, &i);
+		DH_set0_key(key.dh, i, NULL);
 
 		break;
 	case PK_DH_PRIV_KEY:
-		pk_bn_set(L, &key.dh->priv_key, index);
+		pk_setparam_bn_dup(L, index, &i);
+		DH_set0_key(key.dh, NULL, i);
 
 		break;
 #ifndef OPENSSL_NO_EC
@@ -5180,7 +5461,7 @@ static const EVP_MD *xc_signature(lua_State *L, int index, EVP_PKEY *key) {
 	if ((id = luaL_optstring(L, index, NULL)))
 		return ((md = EVP_get_digestbyname(id)))? md : EVP_md_null();
 
-	switch (EVP_PKEY_type(key->type)) {
+	switch (EVP_PKEY_base_id(key)) {
 	case EVP_PKEY_RSA:
 		return EVP_sha1();
 	case EVP_PKEY_DSA:
