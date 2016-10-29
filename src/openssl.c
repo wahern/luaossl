@@ -83,52 +83,88 @@
 #define LIBRESSL_PREREQ(M, m, p) \
 	(LIBRESSL_VERSION_NUMBER >= (((M) << 28) | ((m) << 20) | ((p) << 12)))
 
+#ifndef HAVE_ASN1_STRING_GET0_DATA
+#define HAVE_ASN1_STRING_GET0_DATA OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HAVE_DH_GET0_KEY
-#define HAVE_DH_GET0_KEY 0
+#define HAVE_DH_GET0_KEY OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_DH_GET0_PQG
-#define HAVE_DH_GET0_PQG 0
+#define HAVE_DH_GET0_PQG OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_DH_SET0_KEY
+#define HAVE_DH_SET0_KEY OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_DH_SET0_PQG
+#define HAVE_DH_SET0_PQG OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_DSA_GET0_KEY
-#define HAVE_DSA_GET0_KEY 0
+#define HAVE_DSA_GET0_KEY OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_DSA_GET0_PQG
-#define HAVE_DSA_GET0_PQG 0
+#define HAVE_DSA_GET0_PQG OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_DSA_SET0_KEY
+#define HAVE_DSA_SET0_KEY OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_DSA_SET0_PQG
+#define HAVE_DSA_SET0_PQG OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_EVP_PKEY_BASE_ID
+#define HAVE_EVP_PKEY_BASE_ID OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_EVP_PKEY_GET0
+#define HAVE_EVP_PKEY_GET0 OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_EVP_PKEY_ID
-#define HAVE_EVP_PKEY_ID 0
+#define HAVE_EVP_PKEY_ID OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_GENERAL_NAME_GET0_VALUE
+#define HAVE_GENERAL_NAME_GET0_VALUE OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_GENERAL_NAME_SET0_VALUE
+#define HAVE_GENERAL_NAME_SET0_VALUE OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_RSA_GET0_CRT_PARAMS
-#define HAVE_RSA_GET0_CRT_PARAMS 0
+#define HAVE_RSA_GET0_CRT_PARAMS OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_RSA_GET0_FACTORS
-#define HAVE_RSA_GET0_FACTORS 0
+#define HAVE_RSA_GET0_FACTORS OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_RSA_GET0_KEY
-#define HAVE_RSA_GET0_KEY 0
+#define HAVE_RSA_GET0_KEY OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_RSA_SET0_CRT_PARAMS
-#define HAVE_RSA_SET0_CRT_PARAMS 0
+#define HAVE_RSA_SET0_CRT_PARAMS OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_RSA_SET0_FACTORS
-#define HAVE_RSA_SET0_FACTORS 0
+#define HAVE_RSA_SET0_FACTORS OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_RSA_SET0_KEY
-#define HAVE_RSA_SET0_KEY 0
+#define HAVE_RSA_SET0_KEY OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_SSL_CTX_SET_ALPN_PROTOS
-#define HAVE_SSL_CTX_SET_ALPN_PROTOS (OPENSSL_PREREQ(1, 0, 2) || LIBRESSL_PREREQ(2, 1, 3))
+#define HAVE_SSL_CTX_SET_ALPN_PROTOS (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,1,3))
 #endif
 
 #ifndef HAVE_SSL_CTX_SET_ALPN_SELECT_CB
@@ -140,7 +176,7 @@
 #endif
 
 #ifndef HAVE_SSL_CTX_CERT_STORE
-#define HAVE_SSL_CTX_CERT_STORE 1
+#define HAVE_SSL_CTX_CERT_STORE (!OPENSSL_PREREQ(1,1,0))
 #endif
 
 #ifndef HAVE_SSL_SET_ALPN_PROTOS
@@ -160,7 +196,7 @@
 #endif
 
 #ifndef HAVE_DTLS_CLIENT_METHOD
-#define HAVE_DTLS_CLIENT_METHOD (OPENSSL_PREREQ(1, 0, 2) && !defined OPENSSL_NO_DTLS1)
+#define HAVE_DTLS_CLIENT_METHOD (OPENSSL_PREREQ(1,0,2) && !defined OPENSSL_NO_DTLS1)
 #endif
 
 #ifndef HAVE_DTLS_SERVER_METHOD
@@ -168,7 +204,7 @@
 #endif
 
 #ifndef HAVE_DTLSV1_2_CLIENT_METHOD
-#define HAVE_DTLSV1_2_CLIENT_METHOD (OPENSSL_PREREQ(1, 0, 2) && !defined OPENSSL_NO_DTLS1)
+#define HAVE_DTLSV1_2_CLIENT_METHOD (OPENSSL_PREREQ(1,0,2) && !defined OPENSSL_NO_DTLS1)
 #endif
 
 #ifndef HAVE_DTLSV1_2_SERVER_METHOD
@@ -176,7 +212,7 @@
 #endif
 
 #ifndef HAVE_X509_STORE_REFERENCES
-#define HAVE_X509_STORE_REFERENCES 1
+#define HAVE_X509_STORE_REFERENCES (!OPENSSL_PREREQ(1,1,0))
 #endif
 
 #ifndef STRERROR_R_CHAR_P
@@ -1084,6 +1120,10 @@ static struct {
 	.X509_STORE_free = &X509_STORE_free,
 };
 
+#if !HAVE_ASN1_STRING_GET0_DATA
+#define ASN1_STRING_get0_data(s) ASN1_STRING_data((s))
+#endif
+
 #if !HAVE_DH_GET0_KEY
 #define DH_get0_key(...) compat_DH_get0_key(__VA_ARGS__)
 
@@ -1226,6 +1266,68 @@ static void *compat_EVP_PKEY_get0(EVP_PKEY *key) {
 
 	return ptr;
 } /* compat_EVP_PKEY_get0() */
+#endif
+
+#if !HAVE_GENERAL_NAME_GET0_VALUE
+#define GENERAL_NAME_get0_value(...) \
+	compat_GENERAL_NAME_get0_value(__VA_ARGS__)
+
+static void *GENERAL_NAME_get0_value(GENERAL_NAME *name, int *type) {
+	if (type)
+		*type = name->type;
+	switch (name->type) {
+	case GEN_X400:
+	case GEN_EDIPARTY:
+		return name->d.other;
+	case GEN_OTHERNAME:
+		return name->d.otherName;
+	case GEN_EMAIL:
+	case GEN_DNS:
+	case GEN_URI:
+		return name->d.ia5;
+	case GEN_DIRNAME:
+		return name->d.dirn;
+	case GEN_IPADD:
+		return name->d.ip;
+	case GEN_RID:
+		return name->d.rid;
+	default:
+		return NULL;
+	}
+} /* compat_GENERAL_NAME_get0_value() */
+#endif
+
+#if !HAVE_GENERAL_NAME_SET0_VALUE
+#define GENERAL_NAME_set0_value(...) \
+	compat_GENERAL_NAME_set0_value(__VA_ARGS__)
+
+static void GENERAL_NAME_set0_value(GENERAL_NAME *name, int type, void *value) {
+	switch ((name->type = type)) {
+	case GEN_X400:
+	case GEN_EDIPARTY:
+		name->d.other = value;
+		break;
+	case GEN_OTHERNAME:
+		name->d.otherName = value;
+		break;
+	case GEN_EMAIL:
+	case GEN_DNS:
+	case GEN_URI:
+		name->d.ia5 = value;
+		break;
+	case GEN_DIRNAME:
+		name->d.dirn = value;
+		break;
+	case GEN_IPADD:
+		name->d.ip = value;
+		break;
+	case GEN_RID:
+		name->d.rid = value;
+		break;
+	default:
+		break;
+	}
+} /* compat_GENERAL_NAME_set0_value() */
 #endif
 
 #if !HAVE_RSA_GET0_CRT_PARAMS
@@ -4020,7 +4122,7 @@ static int xn_all(lua_State *L) {
 		lua_setfield(L, -2, "id");
 
 		len = ASN1_STRING_length(X509_NAME_ENTRY_get_data(entry));
-		lua_pushlstring(L, (char *)ASN1_STRING_data(X509_NAME_ENTRY_get_data(entry)), len);
+		lua_pushlstring(L, (char *)ASN1_STRING_get0_data(X509_NAME_ENTRY_get_data(entry)), len);
 
 		lua_setfield(L, -2, "blob");
 
@@ -4054,7 +4156,7 @@ static int xn__next(lua_State *L) {
 		lua_pushlstring(L, txt, len);
 
 		len = ASN1_STRING_length(X509_NAME_ENTRY_get_data(entry));
-		lua_pushlstring(L, (char *)ASN1_STRING_data(X509_NAME_ENTRY_get_data(entry)), len);
+		lua_pushlstring(L, (char *)ASN1_STRING_get0_data(X509_NAME_ENTRY_get_data(entry)), len);
 
 		break;
 	}
@@ -4232,7 +4334,7 @@ text:
 
 		gen->type = type;
 
-		if (!(gen->d.ia5 = M_ASN1_IA5STRING_new()))
+		if (!(gen->d.ia5 = ASN1_STRING_type_new(V_ASN1_IA5STRING)))
 			goto error;
 
 		if (!ASN1_STRING_set(gen->d.ia5, (unsigned char *)txt, len))
@@ -4253,7 +4355,7 @@ error:
 
 
 #define GN_PUSHSTRING(L, o) \
-	lua_pushlstring((L), (char *)M_ASN1_STRING_data((o)), M_ASN1_STRING_length((o)))
+	lua_pushlstring((L), (char *)ASN1_STRING_get0_data((o)), ASN1_STRING_length((o)))
 
 static int gn__next(lua_State *L) {
 	GENERAL_NAMES *gens = checksimple(L, lua_upvalueindex(1), X509_GENS_CLASS);
@@ -4290,8 +4392,8 @@ static int gn__next(lua_State *L) {
 
 			break;
 		case GEN_IPADD:
-			txt = (char *)M_ASN1_STRING_data(name->d.iPAddress);
-			len = M_ASN1_STRING_length(name->d.iPAddress);
+			txt = (char *)ASN1_STRING_get0_data(name->d.iPAddress);
+			len = ASN1_STRING_length(name->d.iPAddress);
 
 			switch (len) {
 			case 16:
@@ -4536,7 +4638,7 @@ static int xe_getLongName(lua_State *L) {
 static int xe_getData(lua_State *L) {
 	ASN1_STRING *data = X509_EXTENSION_get0_data(checksimple(L, 1, X509_EXT_CLASS));
 
-	lua_pushlstring(L, (char *)ASN1_STRING_data(data), ASN1_STRING_length(data));
+	lua_pushlstring(L, (char *)ASN1_STRING_get0_data(data), ASN1_STRING_length(data));
 
 	return 1;
 } /* xe_getData() */
@@ -4866,7 +4968,7 @@ static double timeutc(ASN1_TIME *time) {
 	if (!ASN1_TIME_check(time))
 		return 0;
 
-	cp = strncpy(buf, (const char *)ASN1_STRING_data((ASN1_STRING *)time), sizeof buf - 1);
+	cp = strncpy(buf, (const char *)ASN1_STRING_get0_data((ASN1_STRING *)time), sizeof buf - 1);
 
 	if (ASN1_STRING_type(time) == V_ASN1_GENERALIZEDTIME) {
 		if (!scan(&year, &cp, 4, 1))
@@ -5270,7 +5372,7 @@ static int xc_setBasicConstraint(lua_State *L) {
 	if (pathLen >= 0) {
 		ASN1_INTEGER_free(bs->pathlen);
 
-		if (!(bs->pathlen = M_ASN1_INTEGER_new()))
+		if (!(bs->pathlen = ASN1_STRING_type_new(V_ASN1_INTEGER)))
 			goto error;
 
 		if (!ASN1_INTEGER_set(bs->pathlen, pathLen))
