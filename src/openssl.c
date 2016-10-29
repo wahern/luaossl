@@ -119,6 +119,10 @@
 #define HAVE_DSA_SET0_PQG OPENSSL_PREREQ(1,1,0)
 #endif
 
+#ifndef HAVE_EVP_PKEY_GET_DEFAULT_DIGEST_NID
+#define HAVE_EVP_PKEY_GET_DEFAULT_DIGEST_NID OPENSSL_PREREQ(0,9,9)
+#endif
+
 #ifndef HAVE_EVP_PKEY_BASE_ID
 #define HAVE_EVP_PKEY_BASE_ID OPENSSL_PREREQ(1,1,0)
 #endif
@@ -1232,6 +1236,29 @@ static int compat_EVP_PKEY_base_id(EVP_PKEY *key) {
 } /* compat_EVP_PKEY_base_id() */
 #endif
 
+#if !HAVE_EVP_PKEY_GET_DEFAULT_DIGEST_NID
+#define EVP_PKEY_get_default_digest_nid(...) \
+	compat_EVP_PKEY_get_default_digest_nid(__VA_ARGS__)
+
+static int compat_EVP_PKEY_get_default_digest_nid(EVP_PKEY *key, int *nid) {
+	switch (EVP_PKEY_base_id(key)) {
+	case EVP_PKEY_RSA:
+		*nid = EVP_MD_nid(EVP_sha1());
+		break;
+	case EVP_PKEY_DSA:
+		*nid = EVP_MD_nid(EVP_dss1());
+		break;
+	case EVP_PKEY_EC:
+		*nid = EVP_MD_nid(EVP_ecdsa());
+		break;
+	default:
+		*nid = EVP_MD_nid(EVP_md_null());
+		break;
+	}
+
+	return 1;
+} /* compat_EVP_PKEY_get_default_digest_nid() */
+#endif
 
 #if !HAVE_EVP_PKEY_GET0
 #define EVP_PKEY_get0(key) compat_EVP_PKEY_get0((key))
@@ -5559,20 +5586,23 @@ static int xc_getPublicKeyDigest(lua_State *L) {
 static const EVP_MD *xc_signature(lua_State *L, int index, EVP_PKEY *key) {
 	const char *id;
 	const EVP_MD *md;
+	int nid;
 
-	if ((id = luaL_optstring(L, index, NULL)))
-		return ((md = EVP_get_digestbyname(id)))? md : EVP_md_null();
+	if ((id = luaL_optstring(L, index, NULL))) {
+		if (!(md = EVP_get_digestbyname(id)))
+			goto unknown;
 
-	switch (EVP_PKEY_base_id(key)) {
-	case EVP_PKEY_RSA:
-		return EVP_sha1();
-	case EVP_PKEY_DSA:
-		return EVP_dss1();
-	case EVP_PKEY_EC:
-		return EVP_ecdsa();
-	default:
-		return EVP_md_null();
+		return md;
 	}
+
+	if (!(EVP_PKEY_get_default_digest_nid(key, &nid) > 0))
+		goto unknown;
+	if (!(md = EVP_get_digestbynid(nid)))
+		goto unknown;
+
+	return md;
+unknown:
+	return EVP_md_null();
 } /* xc_signature() */
 
 static int xc_sign(lua_State *L) {
