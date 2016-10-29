@@ -195,6 +195,10 @@
 #define HAVE_RSA_SET0_KEY OPENSSL_PREREQ(1,1,0)
 #endif
 
+#ifndef HAVE_SSL_CLIENT_VERSION
+#define HAVE_SSL_CLIENT_VERSION OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HAVE_SSL_CTX_SET_ALPN_PROTOS
 #define HAVE_SSL_CTX_SET_ALPN_PROTOS (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,1,3))
 #endif
@@ -221,6 +225,14 @@
 
 #ifndef HAVE_SSL_UP_REF
 #define HAVE_SSL_UP_REF OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_SSLV2_CLIENT_METHOD
+#define HAVE_SSLV2_CLIENT_METHOD (!OPENSSL_PREREQ(1,1,0) && !defined OPENSSL_NO_SSL2)
+#endif
+
+#ifndef HAVE_SSLV2_SERVER_METHOD
+#define HAVE_SSLV2_SERVER_METHOD (!OPENSSL_PREREQ(1,1,0) && !defined OPENSSL_NO_SSL2)
 #endif
 
 #ifndef HAVE_X509_STORE_REFERENCES
@@ -1441,6 +1453,14 @@ static void compat_RSA_set0_key(RSA *r, BIGNUM *n, BIGNUM *e, BIGNUM *d) {
 	if (d)
 		auxS_bn_free_and_set0(&r->d, d);
 } /* compat_RSA_set0_key() */
+#endif
+
+#if !HAVE_SSL_CLIENT_VERSION
+#define SSL_client_version(...) compat_SSL_client_version(__VA_ARGS__)
+
+static int compat_SSL_client_version(const SSL *ssl) {
+	return ssl->client_version;
+} /* compat_SSL_client_version() */
 #endif
 
 #if !HAVE_SSL_UP_REF
@@ -7077,7 +7097,7 @@ static int sx_new(lua_State *L) {
 		method = (srv)? &SSLv23_server_method : &SSLv23_client_method;
 		options = SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3;
 		break;
-#ifndef OPENSSL_NO_SSL2
+#if HAVE_SSLV2_CLIENT_METHOD && HAVE_SSLV2_SERVER_METHOD
 	case 2: /* SSLv2 */
 		method = (srv)? &SSLv2_server_method : &SSLv2_client_method;
 		break;
@@ -7700,7 +7720,7 @@ static int ssl_getVersion(lua_State *L) {
 static int ssl_getClientVersion(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	int format = luaL_checkoption(L, 2, "d", (const char *[]){ "d", ".", "f", NULL });
-	int version = ssl->client_version;
+	int version = SSL_client_version(ssl);
 	int major, minor;
 
 	switch (format) {
