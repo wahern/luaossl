@@ -119,6 +119,30 @@
 #define HAVE_DSA_SET0_PQG OPENSSL_PREREQ(1,1,0)
 #endif
 
+#ifndef HAVE_DTLSV1_CLIENT_METHOD
+#define HAVE_DTLSV1_CLIENT_METHOD (!defined OPENSSL_NO_DTLS1)
+#endif
+
+#ifndef HAVE_DTLSV1_SERVER_METHOD
+#define HAVE_DTLSV1_SERVER_METHOD HAVE_DTLSV1_CLIENT_METHOD
+#endif
+
+#ifndef HAVE_DTLS_CLIENT_METHOD
+#define HAVE_DTLS_CLIENT_METHOD (OPENSSL_PREREQ(1,0,2) && !defined OPENSSL_NO_DTLS1)
+#endif
+
+#ifndef HAVE_DTLS_SERVER_METHOD
+#define HAVE_DTLS_SERVER_METHOD HAVE_DTLS_CLIENT_METHOD
+#endif
+
+#ifndef HAVE_DTLSV1_2_CLIENT_METHOD
+#define HAVE_DTLSV1_2_CLIENT_METHOD (OPENSSL_PREREQ(1,0,2) && !defined OPENSSL_NO_DTLS1)
+#endif
+
+#ifndef HAVE_DTLSV1_2_SERVER_METHOD
+#define HAVE_DTLSV1_2_SERVER_METHOD HAVE_DTLSV1_2_CLIENT_METHOD
+#endif
+
 #ifndef HAVE_EVP_PKEY_GET_DEFAULT_DIGEST_NID
 #define HAVE_EVP_PKEY_GET_DEFAULT_DIGEST_NID OPENSSL_PREREQ(0,9,9)
 #endif
@@ -195,32 +219,16 @@
 #define HAVE_SSL_GET0_ALPN_SELECTED HAVE_SSL_CTX_SET_ALPN_PROTOS
 #endif
 
-#ifndef HAVE_DTLSV1_CLIENT_METHOD
-#define HAVE_DTLSV1_CLIENT_METHOD (!defined OPENSSL_NO_DTLS1)
-#endif
-
-#ifndef HAVE_DTLSV1_SERVER_METHOD
-#define HAVE_DTLSV1_SERVER_METHOD HAVE_DTLSV1_CLIENT_METHOD
-#endif
-
-#ifndef HAVE_DTLS_CLIENT_METHOD
-#define HAVE_DTLS_CLIENT_METHOD (OPENSSL_PREREQ(1,0,2) && !defined OPENSSL_NO_DTLS1)
-#endif
-
-#ifndef HAVE_DTLS_SERVER_METHOD
-#define HAVE_DTLS_SERVER_METHOD HAVE_DTLS_CLIENT_METHOD
-#endif
-
-#ifndef HAVE_DTLSV1_2_CLIENT_METHOD
-#define HAVE_DTLSV1_2_CLIENT_METHOD (OPENSSL_PREREQ(1,0,2) && !defined OPENSSL_NO_DTLS1)
-#endif
-
-#ifndef HAVE_DTLSV1_2_SERVER_METHOD
-#define HAVE_DTLSV1_2_SERVER_METHOD HAVE_DTLSV1_2_CLIENT_METHOD
+#ifndef HAVE_SSL_UP_REF
+#define HAVE_SSL_UP_REF OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_X509_STORE_REFERENCES
 #define HAVE_X509_STORE_REFERENCES (!OPENSSL_PREREQ(1,1,0))
+#endif
+
+#ifndef HAVE_X509_UP_REF
+#define HAVE_X509_UP_REF OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef STRERROR_R_CHAR_P
@@ -1435,6 +1443,18 @@ static void compat_RSA_set0_key(RSA *r, BIGNUM *n, BIGNUM *e, BIGNUM *d) {
 } /* compat_RSA_set0_key() */
 #endif
 
+#if !HAVE_SSL_UP_REF
+#define SSL_up_ref(...) compat_SSL_up_ref(__VA_ARGS__)
+
+static int compat_SSL_up_ref(SSL *ssl) {
+	/* our caller should already have had a proper reference */
+	if (CRYPTO_add(&ssl->references, 1, CRYPTO_LOCK_SSL) < 2)
+		return 0; /* fail */
+
+	return 1;
+} /* compat_SSL_up_ref() */
+#endif
+
 #if !HAVE_X509_GET0_EXT
 #define X509_get0_ext(crt, i) X509_get_ext((crt), (i))
 #endif
@@ -1530,6 +1550,18 @@ static void compat_init_X509_STORE_onfree(void *store, void *data NOTUSED, CRYPT
 	/* signal that we were freed by nulling our reference */
 	compat.tmp.store = NULL;
 } /* compat_init_X509_STORE_onfree() */
+
+#if !HAVE_X509_UP_REF
+#define X509_up_ref(...) compat_X509_up_ref(__VA_ARGS__)
+
+static int compat_X509_up_ref(X509 *crt) {
+	/* our caller should already have had a proper reference */
+	if (CRYPTO_add(&crt->references, 1, CRYPTO_LOCK_X509) < 2)
+		return 0; /* fail */
+
+	return 1;
+} /* compat_X509_up_ref() */
+#endif
 
 static int compat_init(void) {
 	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -6523,7 +6555,7 @@ static void xl_dup(lua_State *L, STACK_OF(X509) *src, _Bool copy) {
 		for (i = 0; i < n; i++) {
 			if (!(crt = sk_X509_value(*dst, i)))
 				continue;
-			CRYPTO_add(&crt->references, 1, CRYPTO_LOCK_X509);
+			X509_up_ref(crt);
 		}
 	}
 
@@ -6708,8 +6740,8 @@ static int xs_verify(lua_State *L) {
 	X509_STORE *store = checksimple(L, 1, X509_STORE_CLASS);
 	X509 *crt = checksimple(L, 2, X509_CERT_CLASS);
 	STACK_OF(X509) *chain = NULL, **proof;
-	X509_STORE_CTX ctx;
-	int ok, why;
+	X509_STORE_CTX *ctx = NULL;
+	int nr = 0, ok, why;
 
 	/* pre-allocate space for a successful return */
 	lua_settop(L, 3);
@@ -6720,53 +6752,56 @@ static int xs_verify(lua_State *L) {
 		int i, n;
 
 		if (!(chain = sk_X509_dup(checksimple(L, 3, X509_CHAIN_CLASS))))
-			return auxL_error(L, auxL_EOPENSSL, "x509.store:verify");
+			goto eossl;
 
 		n = sk_X509_num(chain);
 
 		for (i = 0; i < n; i++) {
 			if (!(elm = sk_X509_value(chain, i)))
 				continue;
-			CRYPTO_add(&elm->references, 1, CRYPTO_LOCK_X509);
+			X509_up_ref(elm);
 		}
 	}
 
-	if (!X509_STORE_CTX_init(&ctx, store, crt, chain)) {
+	if (!(ctx = X509_STORE_CTX_new()) || !X509_STORE_CTX_init(ctx, store, crt, chain)) {
 		sk_X509_pop_free(chain, X509_free);
-		return auxL_error(L, auxL_EOPENSSL, "x509.store:verify");
+		goto eossl;
 	}
 
 	ERR_clear_error();
 
-	ok = X509_verify_cert(&ctx);
+	ok = X509_verify_cert(ctx);
 
 	switch (ok) {
 	case 1: /* verified */
-		*proof = X509_STORE_CTX_get1_chain(&ctx);
-
-		X509_STORE_CTX_cleanup(&ctx);
-
-		if (!*proof)
-			return auxL_error(L, auxL_EOPENSSL, "x509.store:verify");
+		if (!(*proof = X509_STORE_CTX_get1_chain(ctx)))
+			goto eossl;
 
 		lua_pushboolean(L, 1);
 		lua_pushvalue(L, -2);
+		nr = 2;
 
-		return 2;
+		break;
 	case 0: /* not verified */
-		why = X509_STORE_CTX_get_error(&ctx);
-
-		X509_STORE_CTX_cleanup(&ctx);
+		why = X509_STORE_CTX_get_error(ctx);
 
 		lua_pushboolean(L, 0);
 		lua_pushstring(L, X509_verify_cert_error_string(why));
+		nr = 2;
 
-		return 2;
+		break;
 	default:
-		X509_STORE_CTX_cleanup(&ctx);
-
-		return auxL_error(L, auxL_EOPENSSL, "x509.store:verify");
+		goto eossl;
 	}
+
+	X509_STORE_CTX_free(ctx);
+
+	return nr;
+eossl:
+	if (ctx)
+		X509_STORE_CTX_free(ctx);
+
+	return auxL_error(L, auxL_EOPENSSL, "x509.store:verify");
 } /* xs_verify() */
 
 
@@ -7514,7 +7549,7 @@ int luaopen__openssl_ssl_context(lua_State *L) {
 static SSL *ssl_push(lua_State *L, SSL *ssl) {
 	SSL **ud = prepsimple(L, SSL_CLASS);
 
-	CRYPTO_add(&(ssl)->references, 1, CRYPTO_LOCK_SSL);
+	SSL_up_ref(ssl);
 	*ud = ssl;
 
 	return *ud;
