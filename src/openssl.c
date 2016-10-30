@@ -3980,21 +3980,6 @@ static EC_GROUP *ecg_dup_nil(lua_State *L, const EC_GROUP *src) {
 	return (src)? ecg_dup(L, src) : (lua_pushnil(L), (EC_GROUP *)0);
 } /* ecg_dup_nil() */
 
-static EC_GROUP *ecg_new_by_nid(int nid) {
-	EC_GROUP *group;
-
-	if (!(group = EC_GROUP_new_by_curve_name(nid)))
-		return NULL;
-
-	/* flag as named for benefit of __tostring */
-	EC_GROUP_set_asn1_flag(group, OPENSSL_EC_NAMED_CURVE);
-
-	/* compressed points may be patented */
-	EC_GROUP_set_point_conversion_form(group, POINT_CONVERSION_UNCOMPRESSED);
-
-	return group;
-} /* ecg_new_by_nid() */
-
 static EC_GROUP *ecg_push_by_nid(lua_State *L, int nid) {
 	EC_GROUP **group = prepsimple(L, EC_GROUP_CLASS);
 
