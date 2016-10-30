@@ -13,7 +13,6 @@ local digest = require"openssl.digest"
 local function genkey(type)
 	type = string.upper(type or (not openssl.NO_EC and "EC") or "RSA")
 
-	local key
 	if type == "RSA" then
 		return pkey.new{ type = "RSA", bits = 1024 }
 	elseif type == "DSA" then
