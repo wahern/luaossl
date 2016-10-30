@@ -1788,7 +1788,13 @@ static struct ex_type {
 	[EX_SSL_CTX_ALPN_SELECT_CB] = { CRYPTO_EX_INDEX_SSL_CTX, -1, &SSL_CTX_get_ex_data, &SSL_CTX_set_ex_data },
 };
 
-static int ex_ondup(CRYPTO_EX_DATA *to NOTUSED, CRYPTO_EX_DATA *from NOTUSED, void *from_d, int idx NOTUSED, long argl NOTUSED, void *argp NOTUSED) {
+#if OPENSSL_PREREQ(1,1,0)
+typedef const CRYPTO_EX_DATA const_CRYPTO_EX_DATA;
+#else
+typedef CRYPTO_EX_DATA const_CRYPTO_EX_DATA;
+#endif
+
+static int ex_ondup(CRYPTO_EX_DATA *to NOTUSED, const_CRYPTO_EX_DATA *from NOTUSED, void *from_d, int idx NOTUSED, long argl NOTUSED, void *argp NOTUSED) {
 	struct ex_data **data = from_d;
 
 	if (*data)
