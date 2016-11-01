@@ -175,14 +175,6 @@
 #define HAVE_EVP_PKEY_ID OPENSSL_PREREQ(1,1,0)
 #endif
 
-#ifndef HAVE_GENERAL_NAME_GET0_VALUE
-#define HAVE_GENERAL_NAME_GET0_VALUE OPENSSL_PREREQ(1,1,0)
-#endif
-
-#ifndef HAVE_GENERAL_NAME_SET0_VALUE
-#define HAVE_GENERAL_NAME_SET0_VALUE OPENSSL_PREREQ(1,1,0)
-#endif
-
 #ifndef HAVE_HMAC_CTX_FREE
 #define HAVE_HMAC_CTX_FREE OPENSSL_PREREQ(1,1,0)
 #endif
@@ -1377,68 +1369,6 @@ static void *compat_EVP_PKEY_get0(EVP_PKEY *key) {
 
 	return ptr;
 } /* compat_EVP_PKEY_get0() */
-#endif
-
-#if !HAVE_GENERAL_NAME_GET0_VALUE
-#define GENERAL_NAME_get0_value(...) \
-	compat_GENERAL_NAME_get0_value(__VA_ARGS__)
-
-static void *GENERAL_NAME_get0_value(GENERAL_NAME *name, int *type) {
-	if (type)
-		*type = name->type;
-	switch (name->type) {
-	case GEN_X400:
-	case GEN_EDIPARTY:
-		return name->d.other;
-	case GEN_OTHERNAME:
-		return name->d.otherName;
-	case GEN_EMAIL:
-	case GEN_DNS:
-	case GEN_URI:
-		return name->d.ia5;
-	case GEN_DIRNAME:
-		return name->d.dirn;
-	case GEN_IPADD:
-		return name->d.ip;
-	case GEN_RID:
-		return name->d.rid;
-	default:
-		return NULL;
-	}
-} /* compat_GENERAL_NAME_get0_value() */
-#endif
-
-#if !HAVE_GENERAL_NAME_SET0_VALUE
-#define GENERAL_NAME_set0_value(...) \
-	compat_GENERAL_NAME_set0_value(__VA_ARGS__)
-
-static void GENERAL_NAME_set0_value(GENERAL_NAME *name, int type, void *value) {
-	switch ((name->type = type)) {
-	case GEN_X400:
-	case GEN_EDIPARTY:
-		name->d.other = value;
-		break;
-	case GEN_OTHERNAME:
-		name->d.otherName = value;
-		break;
-	case GEN_EMAIL:
-	case GEN_DNS:
-	case GEN_URI:
-		name->d.ia5 = value;
-		break;
-	case GEN_DIRNAME:
-		name->d.dirn = value;
-		break;
-	case GEN_IPADD:
-		name->d.ip = value;
-		break;
-	case GEN_RID:
-		name->d.rid = value;
-		break;
-	default:
-		break;
-	}
-} /* compat_GENERAL_NAME_set0_value() */
 #endif
 
 #if !HAVE_HMAC_CTX_FREE
@@ -4045,21 +3975,6 @@ static EC_GROUP *ecg_dup(lua_State *L, const EC_GROUP *src) {
 static EC_GROUP *ecg_dup_nil(lua_State *L, const EC_GROUP *src) {
 	return (src)? ecg_dup(L, src) : (lua_pushnil(L), (EC_GROUP *)0);
 } /* ecg_dup_nil() */
-
-static EC_GROUP *ecg_new_by_nid(int nid) {
-	EC_GROUP *group;
-
-	if (!(group = EC_GROUP_new_by_curve_name(nid)))
-		return NULL;
-
-	/* flag as named for benefit of __tostring */
-	EC_GROUP_set_asn1_flag(group, OPENSSL_EC_NAMED_CURVE);
-
-	/* compressed points may be patented */
-	EC_GROUP_set_point_conversion_form(group, POINT_CONVERSION_UNCOMPRESSED);
-
-	return group;
-} /* ecg_new_by_nid() */
 
 static EC_GROUP *ecg_push_by_nid(lua_State *L, int nid) {
 	EC_GROUP **group = prepsimple(L, EC_GROUP_CLASS);
