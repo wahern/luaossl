@@ -77,11 +77,33 @@
 #include "compat52.h"
 #endif
 
+#define GNUC_2VER(M, m, p) (((M) * 10000) + ((m) * 100) + (p))
+#define GNUC_PREREQ(M, m, p) (__GNUC__ > 0 && GNUC_2VER(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__) >= GNUC_2VER((M), (m), (p)))
+
+#define MSC_2VER(M, m, p) ((((M) + 6) * 10000000) + ((m) * 1000000) + (p))
+#define MSC_PREREQ(M, m, p) (_MSC_VER_FULL > 0 && _MSC_VER_FULL >= MSC_2VER((M), (m), (p)))
+
 #define OPENSSL_PREREQ(M, m, p) \
 	(OPENSSL_VERSION_NUMBER >= (((M) << 28) | ((m) << 20) | ((p) << 12)) && !defined LIBRESSL_VERSION_NUMBER)
 
 #define LIBRESSL_PREREQ(M, m, p) \
 	(LIBRESSL_VERSION_NUMBER >= (((M) << 28) | ((m) << 20) | ((p) << 12)))
+
+#ifndef __has_builtin
+#define __has_builtin(x) 0
+#endif
+
+#ifndef __has_extension
+#define __has_extension(x) 0
+#endif
+
+#ifndef HAVE___ASSUME
+#define HAVE___ASSUME MSC_PREREQ(8,0,0)
+#endif
+
+#ifndef HAVE___BUILTIN_UNREACHABLE
+#define HAVE___BUILTIN_UNREACHABLE (GNUC_PREREQ(4,5,0) || __has_builtin(__builtin_unreachable))
+#endif
 
 #ifndef HAVE_ASN1_STRING_GET0_DATA
 #define HAVE_ASN1_STRING_GET0_DATA OPENSSL_PREREQ(1,1,0)
@@ -320,6 +342,13 @@
 #define NOTUSED
 #endif
 
+#if HAVE___BUILTIN_UNREACHABLE
+#define NOTREACHED __builtin_unreachable()
+#elif HAVE___ASSUME
+#define NOTREACHED __assume(0)
+#else
+#define NOTREACHED (void)0
+#endif
 
 #define countof(a) (sizeof (a) / sizeof *(a))
 #define endof(a) (&(a)[countof(a)])
@@ -714,6 +743,23 @@ static size_t auxS_obj2txt(void *dst, size_t lim, const ASN1_OBJECT *obj) {
 	return auxS_obj2id(dst, lim, obj);
 } /* auxS_obj2txt() */
 
+static const EVP_MD *auxS_todigest(const char *name, EVP_PKEY *key, const EVP_MD *def) {
+	const EVP_MD *md;
+	int nid;
+
+	if (name) {
+		if ((md = EVP_get_digestbyname(name)))
+			return md;
+	} else if (key) {
+		if ((EVP_PKEY_get_default_digest_nid(key, &nid) > 0)) {
+			if ((md = EVP_get_digestbynid(nid)))
+				return md;
+		}
+	}
+
+	return def;
+} /* auxS_todigest() */
+
 static _Bool auxS_isoid(const char *txt) {
 	return (*txt >= '0' && *txt <= '9');
 } /* auxS_isoid() */
@@ -752,6 +798,11 @@ static _Bool auxS_txt2nid(int *nid, const char *txt) {
  * Auxiliary Lua API routines
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static int auxL_absindex(lua_State *L, int *index) {
+	*index = lua_absindex(L, *index);
+	return *index;
+} /* auxL_absindex() */
 
 typedef int auxref_t;
 typedef int auxtype_t;
@@ -1097,8 +1148,9 @@ static const char *auxL_pusherror(lua_State *L, int error, const char *fun) {
 
 static int auxL_error(lua_State *L, int error, const char *fun) {
 	auxL_pusherror(L, error, fun);
-
-	return lua_error(L);
+	lua_error(L);
+	NOTREACHED;
+	return 0;
 } /* auxL_error() */
 
 static const char *auxL_pushnid(lua_State *L, int nid) {
@@ -1112,6 +1164,24 @@ static const char *auxL_pushnid(lua_State *L, int nid) {
 
 	return lua_tostring(L, -1);
 } /* auxL_pushnid() */
+
+static const EVP_MD *auxL_optdigest(lua_State *L, int index, EVP_PKEY *key, const EVP_MD *def) {
+	const char *name = luaL_optstring(L, auxL_absindex(L, &index), NULL);
+	const EVP_MD *md;
+
+	if ((md = auxS_todigest(name, key, NULL)))
+		return md;
+
+	if (name) {
+		luaL_argerror(L, index, lua_pushfstring(L, "invalid digest type (%s)", name));
+		NOTREACHED;
+	} else if (key) {
+		luaL_argerror(L, index, lua_pushfstring(L, "no digest type for key type (%d)", EVP_PKEY_base_id(key)));
+		NOTREACHED;
+	}
+
+	return def;
+} /* auxL_optdigest() */
 
 
 /*
@@ -3400,18 +3470,11 @@ static int pk_toPEM(lua_State *L) {
 static int pk_getDefaultDigestName(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
 	int nid;
-	char txt[256];
-	size_t len;
 
 	if (!(EVP_PKEY_get_default_digest_nid(key, &nid) > 0))
 		return auxL_error(L, auxL_EOPENSSL, "pkey:getDefaultDigestName");
 
-	if (!(len = auxS_nid2txt(txt, sizeof txt, nid)))
-		return auxL_error(L, auxL_EOPENSSL, "pkey:getDefaultDigestName");
-	if (len > sizeof txt)
-		return auxL_error(L, EOVERFLOW, "pkey:getDefaultDigestName");
-
-	lua_pushlstring(L, txt, len);
+	auxL_pushnid(L, nid);
 
 	return 1;
 } /* pk_getDefaultDigestName() */
@@ -5730,6 +5793,7 @@ static int xc_setPublicKey(lua_State *L) {
 } /* xc_setPublicKey() */
 
 
+#if 0
 static int xc_getPublicKeyDigest(lua_State *L) {
 	ASN1_BIT_STRING *pk = X509_get0_pubkey_bitstr(checksimple(L, 1, X509_CERT_CLASS));
 	const char *id = luaL_optstring(L, 2, "sha1");
@@ -5747,33 +5811,53 @@ static int xc_getPublicKeyDigest(lua_State *L) {
 
 	return 1;
 } /* xc_getPublicKeyDigest() */
-
-
-static const EVP_MD *xc_signature(lua_State *L, int index, EVP_PKEY *key) {
-	const char *id;
+#else
+static int xc_getPublicKeyDigest(lua_State *L) {
+	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
+	EVP_PKEY *key;
 	const EVP_MD *md;
+	ASN1_BIT_STRING *bitstr;
+	unsigned char digest[EVP_MAX_MD_SIZE];
+	unsigned int len;
+
+	if (!(key = X509_get_pubkey(crt)))
+		return luaL_argerror(L, 1, "no public key");
+	md = auxL_optdigest(L, 2, key, NULL);
+	bitstr = X509_get0_pubkey_bitstr(crt);
+
+	if (!EVP_Digest(bitstr->data, bitstr->length, digest, &len, md, NULL))
+		return auxL_error(L, auxL_EOPENSSL, "x509.cert:getPublicKeyDigest");
+	lua_pushlstring(L, (char *)digest, len);
+
+	return 1;
+} /* xc_getPublicKeyDigest() */
+#endif
+
+
+#if 0
+/*
+ * TODO: X509_get_signature_type always seems to return NID_undef. Are we
+ * using it wrong or is it broken?
+ */
+static int xc_getSignatureName(lua_State *L) {
+	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	int nid;
 
-	if ((id = luaL_optstring(L, index, NULL))) {
-		if (!(md = EVP_get_digestbyname(id)))
-			goto unknown;
-	} else {
-		if (!(EVP_PKEY_get_default_digest_nid(key, &nid) > 0))
-			goto unknown;
-		if (!(md = EVP_get_digestbynid(nid)))
-			goto unknown;
-	}
+	if (NID_undef == (nid = X509_get_signature_type(crt)))
+		return 0;
 
-	return md;
-unknown:
-	return EVP_sha1();
-} /* xc_signature() */
+	auxL_pushnid(L, nid);
+
+	return 1;
+} /* xc_getSignatureName() */
+#endif
+
 
 static int xc_sign(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
 
-	if (!X509_sign(crt, key, xc_signature(L, 3, key)))
+	if (!X509_sign(crt, key, auxL_optdigest(L, 3, key, NULL)))
 		return auxL_error(L, auxL_EOPENSSL, "x509.cert:sign");
 
 	lua_pushboolean(L, 1);
@@ -5913,6 +5997,9 @@ static const auxL_Reg xc_methods[] = {
 	{ "getPublicKey",  &xc_getPublicKey },
 	{ "setPublicKey",  &xc_setPublicKey },
 	{ "getPublicKeyDigest", &xc_getPublicKeyDigest },
+#if 0
+	{ "getSignatureName", &xc_getSignatureName },
+#endif
 	{ "sign",          &xc_sign },
 	{ "text",          &xc_text },
 	{ "tostring",      &xc__tostring },
@@ -6166,7 +6253,7 @@ static int xr_sign(lua_State *L) {
 	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
 
-	if (!X509_REQ_sign(csr, key, xc_signature(L, 3, key)))
+	if (!X509_REQ_sign(csr, key, auxL_optdigest(L, 3, key, NULL)))
 		return auxL_error(L, auxL_EOPENSSL, "x509.csr:sign");
 
 	lua_pushboolean(L, 1);
@@ -6541,7 +6628,7 @@ static int xx_sign(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
 
-	if (!X509_CRL_sign(crl, key, xc_signature(L, 3, key)))
+	if (!X509_CRL_sign(crl, key, auxL_optdigest(L, 3, key, NULL)))
 		return auxL_error(L, auxL_EOPENSSL, "x509.crl:sign");
 
 	lua_pushboolean(L, 1);
