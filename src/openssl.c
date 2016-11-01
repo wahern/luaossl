@@ -2427,7 +2427,7 @@ static BN_CTX *getctx(lua_State *L) {
 } /* getctx() */
 
 
-static int bn_tobin(lua_State *L) {
+static int bn_toBinary(lua_State *L) {
 	BIGNUM *bn = checksimple(L, 1, BIGNUM_CLASS);
 	size_t len;
 	void *dst;
@@ -2438,7 +2438,7 @@ static int bn_tobin(lua_State *L) {
 	lua_pushlstring(L, dst, len);
 
 	return 1;
-} /* bn_tobin() */
+} /* bn_toBinary() */
 
 
 static int bn__add(lua_State *L) {
@@ -2669,7 +2669,7 @@ static int bn_isPrime(lua_State *L) {
 
 static BIO *getbio(lua_State *);
 
-static int bn_todec(lua_State *L) {
+static int bn_toDecimal(lua_State *L) {
 	BIGNUM *bn = checksimple(L, 1, BIGNUM_CLASS);
 	char *txt = NULL;
 	BIO *bio;
@@ -2694,11 +2694,11 @@ static int bn_todec(lua_State *L) {
 sslerr:
 	OPENSSL_free(txt);
 
-	return auxL_error(L, auxL_EOPENSSL, "bignum:todec");
-} /* bn_todec() */
+	return auxL_error(L, auxL_EOPENSSL, "bignum:toDecimal");
+} /* bn_toDecimal() */
 
 
-static int bn_tohex(lua_State *L) {
+static int bn_toHex(lua_State *L) {
 	BIGNUM *bn = checksimple(L, 1, BIGNUM_CLASS);
 	char *txt = NULL;
 	BIO *bio;
@@ -2723,27 +2723,31 @@ static int bn_tohex(lua_State *L) {
 sslerr:
 	OPENSSL_free(txt);
 
-	return auxL_error(L, auxL_EOPENSSL, "bignum:tohex");
-} /* bn_tohex() */
+	return auxL_error(L, auxL_EOPENSSL, "bignum:toHex");
+} /* bn_toHex() */
 
 
 static const auxL_Reg bn_methods[] = {
-	{ "add",     &bn__add },
-	{ "sub",     &bn__sub },
-	{ "mul",     &bn__mul },
-	{ "sqr",     &bn_sqr },
-	{ "idiv",    &bn__idiv },
-	{ "mod",     &bn__mod },
-	{ "nnmod",   &bn_nnmod },
-	{ "exp",     &bn__pow },
-	{ "gcd",     &bn_gcd },
-	{ "lshift",  &bn__shl },
-	{ "rshift",  &bn__shr },
-	{ "isPrime", &bn_isPrime },
-	{ "tobin",   &bn_tobin },
-	{ "todec",   &bn_todec },
-	{ "tohex",   &bn_tohex },
-	{ NULL,      NULL },
+	{ "add",       &bn__add },
+	{ "sub",       &bn__sub },
+	{ "mul",       &bn__mul },
+	{ "sqr",       &bn_sqr },
+	{ "idiv",      &bn__idiv },
+	{ "mod",       &bn__mod },
+	{ "nnmod",     &bn_nnmod },
+	{ "exp",       &bn__pow },
+	{ "gcd",       &bn_gcd },
+	{ "lshift",    &bn__shl },
+	{ "rshift",    &bn__shr },
+	{ "isPrime",   &bn_isPrime },
+	{ "toBinary",  &bn_toBinary },
+	{ "toDecimal", &bn_toDecimal },
+	{ "toHex",     &bn_toHex },
+	/* deprecated */
+	{ "tobin",     &bn_toBinary },
+	{ "todec",     &bn_toDecimal },
+	{ "tohex",     &bn_toHex },
+	{ NULL,        NULL },
 };
 
 static const auxL_Reg bn_metatable[] = {
@@ -2761,7 +2765,7 @@ static const auxL_Reg bn_metatable[] = {
 	{ "__lt",       &bn__lt },
 	{ "__le",       &bn__le },
 	{ "__gc",       &bn__gc },
-	{ "__tostring", &bn_todec },
+	{ "__tostring", &bn_toDecimal },
 	{ NULL,         NULL },
 };
 
