@@ -5793,25 +5793,6 @@ static int xc_setPublicKey(lua_State *L) {
 } /* xc_setPublicKey() */
 
 
-#if 0
-static int xc_getPublicKeyDigest(lua_State *L) {
-	ASN1_BIT_STRING *pk = X509_get0_pubkey_bitstr(checksimple(L, 1, X509_CERT_CLASS));
-	const char *id = luaL_optstring(L, 2, "sha1");
-	const EVP_MD *md;
-	unsigned char digest[EVP_MAX_MD_SIZE];
-	unsigned int len;
-
-	if (!(md = EVP_get_digestbyname(id)))
-		return luaL_error(L, "x509.cert:getPublicKeyDigest: %s: invalid digest type", id);
-
-	if (!EVP_Digest(pk->data, pk->length, digest, &len, md, NULL))
-		return auxL_error(L, auxL_EOPENSSL, "x509.cert:getPublicKeyDigest");
-
-	lua_pushlstring(L, (char *)digest, len);
-
-	return 1;
-} /* xc_getPublicKeyDigest() */
-#else
 static int xc_getPublicKeyDigest(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	EVP_PKEY *key;
@@ -5831,7 +5812,6 @@ static int xc_getPublicKeyDigest(lua_State *L) {
 
 	return 1;
 } /* xc_getPublicKeyDigest() */
-#endif
 
 
 #if 0
