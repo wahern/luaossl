@@ -772,8 +772,9 @@ NOTUSED static auxtype_t auxL_getref(lua_State *L, auxref_t ref) {
 static int auxL_testoption(lua_State *L, int index, const char *def, const char *const *optlist, _Bool nocase) {
 	const char *optname = (def)? luaL_optstring(L, index, def) : luaL_checkstring(L, index);
 	int (*optcmp)() = (nocase)? &strcasecmp : &strcmp;
+	int i;
 
-	for (int i = 0; optlist[i]; i++) {
+	for (i = 0; optlist[i]; i++) {
 		if (0 == optcmp(optlist[i], optname))
 			return i;
 	}
@@ -929,9 +930,11 @@ static inline size_t auxL_liblen(const auxL_Reg *l) {
 
 static void auxL_setfuncs(lua_State *L, const auxL_Reg *l, int nups) {
 	for (; l->name; l++) {
+		int i;
+
 		/* copy shared upvalues */
 		luaL_checkstack(L, nups, "too many upvalues");
-		for (int i = 0; i < nups; i++)
+		for (i = 0; i < nups; i++)
 			lua_pushvalue(L, -nups);
 
 		/* nil-fill local upvalues */
@@ -3741,13 +3744,15 @@ static int pk_getParameters(lua_State *L) {
 		return luaL_error(L, "%d: unsupported EVP_PKEY base type", base_type);
 
 	if (lua_isnoneornil(L, 2)) {
+		const char *const *optname;
+
 		/*
 		 * Use special "{" parameter to tell loop to push table.
 		 * Subsequent parameters will be assigned as fields.
 		 */
 		lua_pushstring(L, "{");
 		luaL_checkstack(L, nopts, "too many arguments");
-		for (const char *const *optname = optlist; *optname; optname++) {
+		for (optname = optlist; *optname; optname++) {
 			lua_pushstring(L, *optname);
 		}
 	}
@@ -3927,11 +3932,12 @@ static const auxL_Reg pk_globals[] = {
 };
 
 static void pk_luainit(lua_State *L, _Bool reset) {
+	char **k;
 	if (!auxL_newmetatable(L, PKEY_CLASS, reset))
 		return;
 	auxL_setfuncs(L, pk_metatable, 0);
 	auxL_newlib(L, pk_methods, 0);
-	for (char **k = (char *[]){ "__index", "__newindex", 0 }; *k; k++) {
+	for (k = (char *[]){ "__index", "__newindex", 0 }; *k; k++) {
 		lua_getfield(L, -2, *k); /* closure */
 		lua_pushvalue(L, -2);   /* method table */
 		lua_setupvalue(L, -2, 1);
