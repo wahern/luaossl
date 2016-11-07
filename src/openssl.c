@@ -7263,6 +7263,20 @@ static int sx_setStore(lua_State *L) {
 } /* sx_setStore() */
 
 
+static int sx_getStore(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	X509_STORE *store;
+
+	if((store = SSL_CTX_get_cert_store(ctx))) {
+		xs_push(L, store);
+	} else {
+		lua_pushnil(L);
+	}
+
+	return 1;
+} /* sx_getStore() */
+
+
 static int sx_setVerify(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	int mode = luaL_optint(L, 2, -1);
@@ -7529,6 +7543,7 @@ static const auxL_Reg sx_methods[] = {
 	{ "getOptions",       &sx_getOptions },
 	{ "clearOptions",     &sx_clearOptions },
 	{ "setStore",         &sx_setStore },
+	{ "getStore",         &sx_getStore },
 	{ "setVerify",        &sx_setVerify },
 	{ "getVerify",        &sx_getVerify },
 	{ "setCertificate",   &sx_setCertificate },
