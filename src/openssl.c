@@ -6905,6 +6905,15 @@ int luaopen__openssl_x509_store(lua_State *L) {
 
 	auxL_newlib(L, xs_globals, 0);
 
+	lua_pushstring(L, X509_get_default_cert_dir());
+	lua_setfield(L, -2, "CERT_DIR");
+	lua_pushstring(L, X509_get_default_cert_file());
+	lua_setfield(L, -2, "CERT_FILE");
+	lua_pushstring(L, X509_get_default_cert_dir_env());
+	lua_setfield(L, -2, "CERT_DIR_EVP");
+	lua_pushstring(L, X509_get_default_cert_file_env());
+	lua_setfield(L, -2, "CERT_FILE_EVP");
+
 	return 1;
 } /* luaopen__openssl_x509_store() */
 
