@@ -259,6 +259,10 @@
 #define HAVE_X509_UP_REF OPENSSL_PREREQ(1,1,0)
 #endif
 
+#ifndef HAVE_X509_STORE_UP_REF
+#define HAVE_X509_STORE_UP_REF OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HMAC_INIT_EX_INT
 #define HMAC_INIT_EX_INT OPENSSL_PREREQ(1,0,0)
 #endif
@@ -1597,6 +1601,18 @@ static int compat_X509_up_ref(X509 *crt) {
 
 	return 1;
 } /* compat_X509_up_ref() */
+#endif
+
+#if !HAVE_X509_STORE_UP_REF
+#define X509_STORE_up_ref(...) compat_X509_STORE_up_ref(__VA_ARGS__)
+
+static int compat_X509_STORE_up_ref(X509_STORE *crt) {
+	/* our caller should already have had a proper reference */
+	if (CRYPTO_add(&crt->references, 1, CRYPTO_LOCK_X509_STORE) < 2)
+		return 0; /* fail */
+
+	return 1;
+} /* compat_X509_STORE_up_ref() */
 #endif
 
 static int compat_init(void) {
@@ -6742,6 +6758,16 @@ static int xs_new(lua_State *L) {
 
 	return 1;
 } /* xs_new() */
+
+
+static X509_STORE *xs_push(lua_State *L, X509_STORE *store) {
+	X509_STORE **ud = prepsimple(L, X509_STORE_CLASS);
+
+	X509_STORE_up_ref(store);
+	*ud = store;
+
+	return *ud;
+} /* xs_push() */
 
 
 static int xs_interpose(lua_State *L) {
