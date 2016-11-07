@@ -6789,6 +6789,18 @@ static int xs_add(lua_State *L) {
 } /* xs_add() */
 
 
+static int xs_addDefaults(lua_State *L) {
+	X509_STORE *store = checksimple(L, 1, X509_STORE_CLASS);
+
+	if (!X509_STORE_set_default_paths(store))
+		return auxL_error(L, auxL_EOPENSSL, "x509.store:addDefaults");
+
+	lua_pushvalue(L, 1);
+
+	return 1;
+} /* xs_addDefaults() */
+
+
 static int xs_verify(lua_State *L) {
 	X509_STORE *store = checksimple(L, 1, X509_STORE_CLASS);
 	X509 *crt = checksimple(L, 2, X509_CERT_CLASS);
@@ -6871,9 +6883,10 @@ static int xs__gc(lua_State *L) {
 
 
 static const auxL_Reg xs_methods[] = {
-	{ "add",    &xs_add },
-	{ "verify", &xs_verify },
-	{ NULL,     NULL },
+	{ "add",         &xs_add },
+	{ "addDefaults", &xs_addDefaults },
+	{ "verify",      &xs_verify },
+	{ NULL,          NULL },
 };
 
 static const auxL_Reg xs_metatable[] = {
