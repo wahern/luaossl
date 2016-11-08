@@ -4001,10 +4001,21 @@ static void pk_luainit(lua_State *L, _Bool reset) {
 	lua_pop(L, 2);
 } /* pk_luainit() */
 
+static const auxL_IntegerReg pk_rsa_pad_opts[] = {
+	{ "RSA_PKCS1_PADDING", RSA_PKCS1_PADDING }, // PKCS#1 padding
+	{ "RSA_SSLV23_PADDING", RSA_SSLV23_PADDING }, // SSLv23 padding
+	{ "RSA_NO_PADDING", RSA_NO_PADDING }, // no padding
+	{ "RSA_PKCS1_OAEP_PADDING", RSA_PKCS1_OAEP_PADDING }, // OAEP padding (encrypt and decrypt only)
+	{ "RSA_X931_PADDING", RSA_X931_PADDING }, // (signature operations only)
+	{ "RSA_PKCS1_PSS_PADDING", RSA_PKCS1_PSS_PADDING }, // (sign and verify only)
+	{ NULL, 0 },
+};
+
 int luaopen__openssl_pkey(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, pk_globals, 0);
+	auxL_setintegers(L, pk_rsa_pad_opts);
 
 	return 1;
 } /* luaopen__openssl_pkey() */
