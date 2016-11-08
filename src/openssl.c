@@ -3225,12 +3225,15 @@ static int pk_decrypt(lua_State *L) {
 
 	lua_pushlstring(L, buf->data, outlen);
 
+	BIO_reset(*bio);
+
 	return 1;
 sslerr:
 	if (ctx) {
 		EVP_PKEY_CTX_free(ctx);
 		ctx = NULL;
 	}
+	BIO_reset(*bio);
 
 	return auxL_error(L, auxL_EOPENSSL, "pkey:decrypt");
 } /* pk_decrypt() */
@@ -3280,12 +3283,15 @@ static int pk_encrypt(lua_State *L) {
 
 	lua_pushlstring(L, buf->data, outlen);
 
+	BIO_reset(*bio);
+
 	return 1;
 sslerr:
 	if (ctx) {
 		EVP_PKEY_CTX_free(ctx);
 		ctx = NULL;
 	}
+	BIO_reset(*bio);
 
 	return auxL_error(L, auxL_EOPENSSL, "pkey:encrypt");
 } /* pk_encrypt() */
