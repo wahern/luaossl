@@ -60,6 +60,7 @@
 #include <openssl/bn.h>
 #include <openssl/asn1.h>
 #include <openssl/x509.h>
+#include <openssl/x509_vfy.h>
 #include <openssl/x509v3.h>
 #include <openssl/pkcs12.h>
 #include <openssl/evp.h>
@@ -335,6 +336,7 @@
 #define X509_CSR_CLASS   "X509_REQ*"
 #define X509_CRL_CLASS   "X509_CRL*"
 #define X509_STORE_CLASS "X509_STORE*"
+#define X509_VERIFY_PARAM_CLASS "X509_VERIFY_PARAM*"
 #define X509_STCTX_CLASS "X509_STORE_CTX*"
 #define PKCS12_CLASS     "PKCS12*"
 #define SSL_CTX_CLASS    "SSL_CTX*"
@@ -8184,6 +8186,190 @@ int luaopen__openssl_ssl(lua_State *L) {
 
 
 /*
+ * X509_VERIFY_PARAM
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static int xp_new(lua_State *L) {
+	X509_VERIFY_PARAM **ud = prepsimple(L, X509_VERIFY_PARAM_CLASS);
+
+	if (!(*ud = X509_VERIFY_PARAM_new()))
+		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param.new");
+
+	return 1;
+} /* xp_new() */
+
+
+static int xp_interpose(lua_State *L) {
+	return interpose(L, X509_VERIFY_PARAM_CLASS);
+} /* xp_interpose() */
+
+
+static const X509_PURPOSE *purpose_checktype(lua_State *L, int index) {
+	const char *purpose_name;
+	int purpose_id;
+	int purpose_idx;
+	const X509_PURPOSE *purpose;
+
+	if (lua_isnumber(L, index)) {
+		purpose_id = luaL_checkinteger(L, index);
+		purpose_idx = X509_PURPOSE_get_by_id(purpose_id);
+		if (purpose_idx < 0)
+			luaL_argerror(L, index, lua_pushfstring(L, "%d: invalid purpose", purpose_id));
+	} else {
+		purpose_name = luaL_checkstring(L, index);
+		purpose_idx = X509_PURPOSE_get_by_sname((char*)purpose_name);
+		if (purpose_idx < 0)
+			luaL_argerror(L, index, lua_pushfstring(L, "%s: invalid purpose", purpose_name));
+	}
+
+	purpose = X509_PURPOSE_get0(purpose_idx);
+	return purpose;
+} /* purpose_checktype() */
+
+
+static int xp_setPurpose(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	const X509_PURPOSE *purpose = purpose_checktype(L, 2);
+
+	if (!X509_VERIFY_PARAM_set_purpose(xp, X509_PURPOSE_get_id((X509_PURPOSE*)purpose)))
+		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param:setPurpose");
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_setPurpose() */
+
+
+static int xp_setTime(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	time_t t = luaL_checkinteger(L, 2);
+
+	X509_VERIFY_PARAM_set_time(xp, t);
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_setTime() */
+
+
+static int xp_setDepth(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	int depth = luaL_checkinteger(L, 2);
+
+	X509_VERIFY_PARAM_set_depth(xp, depth);
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_setDepth() */
+
+
+static int xp_getDepth(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+
+	int depth = X509_VERIFY_PARAM_get_depth(xp);
+
+	lua_pushinteger(L, depth);
+	return 1;
+} /* xp_getDepth() */
+
+
+static int xp_setHost(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	size_t len;
+	const char *str = luaL_optlstring(L, 2, NULL, &len); /* NULL = clear hosts */
+
+	if (!X509_VERIFY_PARAM_set1_host(xp, str, len))
+		/* Note: openssl doesn't set an error as it should for some cases */
+		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param:setHost");
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_setHost() */
+
+
+static int xp_addHost(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	size_t len;
+	const char *str = luaL_checklstring(L, 2, &len);
+
+	if (!X509_VERIFY_PARAM_add1_host(xp, str, len))
+		/* Note: openssl doesn't set an error as it should for some cases */
+		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param:addHost");
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_addHost() */
+
+
+static int xp_setEmail(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	size_t len;
+	const char *str = luaL_checklstring(L, 2, &len);
+
+	if (!X509_VERIFY_PARAM_set1_email(xp, str, len))
+		/* Note: openssl doesn't set an error as it should for some cases */
+		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param:setEmail");
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_setEmail() */
+
+
+static int xp_setIP(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	const char *str = luaL_checkstring(L, 2);
+
+	if (!X509_VERIFY_PARAM_set1_ip_asc(xp, str))
+		/* Note: openssl doesn't set an error as it should for some cases */
+		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param:setIP");
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_setIP() */
+
+
+static int xp__gc(lua_State *L) {
+	X509_VERIFY_PARAM **ud = luaL_checkudata(L, 1, X509_VERIFY_PARAM_CLASS);
+
+	X509_VERIFY_PARAM_free(*ud);
+	*ud = NULL;
+
+	return 0;
+} /* xp__gc() */
+
+
+static const auxL_Reg xp_methods[] = {
+	{ "setPurpose", &xp_setPurpose },
+	{ "setTime", &xp_setTime },
+	{ "setDepth", &xp_setDepth },
+	{ "getDepth", &xp_getDepth },
+	{ "setHost", &xp_setHost },
+	{ "addHost", &xp_addHost },
+	{ "setEmail", &xp_setEmail },
+	{ "setIP", &xp_setIP },
+	{ NULL, NULL },
+};
+
+static const auxL_Reg xp_metatable[] = {
+	{ "__gc", &xp__gc },
+	{ NULL, NULL },
+};
+
+static const auxL_Reg xp_globals[] = {
+	{ "new", &xp_new },
+	{ "interpose", &xp_interpose },
+	{ NULL, NULL },
+};
+
+int luaopen__openssl_x509_verify_param(lua_State *L) {
+	initall(L);
+
+	auxL_newlib(L, xp_globals, 0);
+
+	return 1;
+} /* luaopen__openssl_x509_verify_param() */
+
+
+/*
  * Digest - openssl.digest
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -9171,6 +9357,7 @@ static void initall(lua_State *L) {
 	auxL_addclass(L, X509_CRL_CLASS, xx_methods, xx_metatable, 0);
 	auxL_addclass(L, X509_CHAIN_CLASS, xl_methods, xl_metatable, 0);
 	auxL_addclass(L, X509_STORE_CLASS, xs_methods, xs_metatable, 0);
+	auxL_addclass(L, X509_VERIFY_PARAM_CLASS, xp_methods, xp_metatable, 0);
 	auxL_addclass(L, PKCS12_CLASS, p12_methods, p12_metatable, 0);
 	auxL_addclass(L, SSL_CTX_CLASS, sx_methods, sx_metatable, 0);
 	auxL_addclass(L, SSL_CLASS, ssl_methods, ssl_metatable, 0);
