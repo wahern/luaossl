@@ -7532,6 +7532,38 @@ static int sx_getStore(lua_State *L) {
 } /* sx_getStore() */
 
 
+static int sx_setParam(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	X509_VERIFY_PARAM *xp = checksimple(L, 2, X509_VERIFY_PARAM_CLASS);
+
+	if (!SSL_CTX_set1_param(ctx, xp))
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setParam");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_setParam() */
+
+
+static int sx_getParam(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	X509_VERIFY_PARAM **ud, *from;
+
+	/* X509_VERIFY_PARAM is not refcounted; create a new object and copy into it. */
+	ud = prepsimple(L, X509_VERIFY_PARAM_CLASS);
+	if (!(*ud = X509_VERIFY_PARAM_new()))
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:getParam");
+
+	from = SSL_CTX_get0_param(ctx);
+
+	if (!(X509_VERIFY_PARAM_set1(*ud, from)))
+		/* Note: openssl doesn't set an error as it should for some cases */
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:getParam");
+
+	return 1;
+} /* sx_getParam() */
+
+
 static int sx_setVerify(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	int mode = luaL_optint(L, 2, -1);
@@ -7799,6 +7831,8 @@ static const auxL_Reg sx_methods[] = {
 	{ "clearOptions",     &sx_clearOptions },
 	{ "setStore",         &sx_setStore },
 	{ "getStore",         &sx_getStore },
+	{ "setParam",         &sx_setParam },
+	{ "getParam",         &sx_getParam },
 	{ "setVerify",        &sx_setVerify },
 	{ "getVerify",        &sx_getVerify },
 	{ "setCertificate",   &sx_setCertificate },
