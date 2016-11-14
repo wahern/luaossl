@@ -7609,7 +7609,13 @@ static SSL *ssl_push(lua_State *L, SSL *ssl) {
 } /* ssl_push() */
 
 static int ssl_new(lua_State *L) {
-	lua_pushnil(L);
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	SSL **ud = prepsimple(L, SSL_CLASS);
+
+	*ud = SSL_new(ctx);
+
+	if (!*ud)
+		return auxL_error(L, auxL_EOPENSSL, "ssl.new");
 
 	return 1;
 } /* ssl_new() */
