@@ -286,6 +286,10 @@
 #define HAVE_SSLV2_SERVER_METHOD (!OPENSSL_PREREQ(1,1,0) && !defined OPENSSL_NO_SSL2)
 #endif
 
+#ifndef HAVE_X509_AUTH_LEVEL
+#define HAVE_X509_AUTH_LEVEL OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HAVE_X509_STORE_REFERENCES
 #define HAVE_X509_STORE_REFERENCES (!OPENSSL_PREREQ(1,1,0))
 #endif
@@ -8340,6 +8344,29 @@ static int xp_getDepth(lua_State *L) {
 } /* xp_getDepth() */
 
 
+#if HAVE_X509_AUTH_LEVEL
+static int xp_setAuthLevel(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	int auth_level = luaL_checkinteger(L, 2);
+
+	X509_VERIFY_PARAM_set_auth_level(xp, auth_level);
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_setAuthLevel() */
+
+
+static int xp_getAuthLevel(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+
+	int auth_level = X509_VERIFY_PARAM_get_auth_level(xp);
+
+	lua_pushinteger(L, auth_level);
+	return 1;
+} /* xp_getAuthLevel() */
+#endif
+
+
 static int xp_setHost(lua_State *L) {
 	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
 	size_t len;
@@ -8410,6 +8437,10 @@ static const auxL_Reg xp_methods[] = {
 	{ "setTime", &xp_setTime },
 	{ "setDepth", &xp_setDepth },
 	{ "getDepth", &xp_getDepth },
+#if HAVE_X509_AUTH_LEVEL
+	{ "setAuthLevel", &xp_setAuthLevel },
+	{ "getAuthLevel", &xp_getAuthLevel },
+#endif
 	{ "setHost", &xp_setHost },
 	{ "addHost", &xp_addHost },
 	{ "setEmail", &xp_setEmail },
