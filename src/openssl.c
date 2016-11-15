@@ -7979,6 +7979,38 @@ static int ssl_clearOptions(lua_State *L) {
 } /* ssl_clearOptions() */
 
 
+static int ssl_setParam(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	X509_VERIFY_PARAM *xp = checksimple(L, 2, X509_VERIFY_PARAM_CLASS);
+
+	if (!SSL_set1_param(ssl, xp))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setParam");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setParam() */
+
+
+static int ssl_getParam(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	X509_VERIFY_PARAM **ud, *from;
+
+	/* X509_VERIFY_PARAM is not refcounted; create a new object and copy into it. */
+	ud = prepsimple(L, X509_VERIFY_PARAM_CLASS);
+	if (!(*ud = X509_VERIFY_PARAM_new()))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:getParam");
+
+	from = SSL_get0_param(ssl);
+
+	if (!(X509_VERIFY_PARAM_set1(*ud, from)))
+		/* Note: openssl doesn't set an error as it should for some cases */
+		return auxL_error(L, auxL_EOPENSSL, "ssl:getParam");
+
+	return 1;
+} /* ssl_getParam() */
+
+
 static int ssl_getPeerCertificate(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	X509 **x509 = prepsimple(L, X509_CERT_CLASS);
@@ -8166,6 +8198,8 @@ static const auxL_Reg ssl_methods[] = {
 	{ "setOptions",       &ssl_setOptions },
 	{ "getOptions",       &ssl_getOptions },
 	{ "clearOptions",     &ssl_clearOptions },
+	{ "setParam",         &ssl_setParam },
+	{ "getParam",         &ssl_getParam },
 	{ "getPeerCertificate", &ssl_getPeerCertificate },
 	{ "getPeerChain",     &ssl_getPeerChain },
 	{ "getCipherInfo",    &ssl_getCipherInfo },
