@@ -193,6 +193,10 @@
 #define HAVE_EVP_PKEY_BASE_ID OPENSSL_PREREQ(1,1,0)
 #endif
 
+#ifndef HAVE_EVP_PKEY_CTX_NEW
+#define HAVE_EVP_PKEY_CTX_NEW (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
+#endif
+
 #ifndef HAVE_EVP_PKEY_GET0
 #define HAVE_EVP_PKEY_GET0 OPENSSL_PREREQ(1,1,0)
 #endif
@@ -223,6 +227,10 @@
 
 #ifndef HAVE_RSA_GET0_KEY
 #define HAVE_RSA_GET0_KEY OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_RSA_PKCS1_PSS_PADDING
+#define HAVE_RSA_PKCS1_PSS_PADDING (defined RSA_PKCS1_PSS_PADDING || OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
 #endif
 
 #ifndef HAVE_RSA_SET0_CRT_PARAMS
@@ -3281,7 +3289,7 @@ static int pk_setPrivateKey(lua_State *L) {
 	return 1;
 } /* pk_setPrivateKey() */
 
-
+#if HAVE_EVP_PKEY_CTX_NEW
 static int pk_decrypt(lua_State *L) {
 	size_t outlen, inlen;
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
@@ -3312,13 +3320,13 @@ static int pk_decrypt(lua_State *L) {
 	if (base_type == EVP_PKEY_RSA && !EVP_PKEY_CTX_set_rsa_padding(ctx, rsaPadding))
 		goto sslerr;
 
-	if (EVP_PKEY_decrypt(ctx, NULL, &outlen, str, inlen) <= 0)
+	if (EVP_PKEY_decrypt(ctx, NULL, &outlen, (const unsigned char *)str, inlen) <= 0)
 		goto sslerr;
 
 	if (!BUF_MEM_grow_clean(buf, outlen))
 		goto sslerr;
 
-	if (EVP_PKEY_decrypt(ctx, buf->data, &outlen, str, inlen) <= 0)
+	if (EVP_PKEY_decrypt(ctx, (unsigned char *)buf->data, &outlen, (const unsigned char *)str, inlen) <= 0)
 		goto sslerr;
 
 	EVP_PKEY_CTX_free(ctx);
@@ -3326,7 +3334,7 @@ static int pk_decrypt(lua_State *L) {
 
 	lua_pushlstring(L, buf->data, outlen);
 
-	BIO_reset(*bio);
+	BIO_reset(bio);
 
 	return 1;
 sslerr:
@@ -3334,12 +3342,13 @@ sslerr:
 		EVP_PKEY_CTX_free(ctx);
 		ctx = NULL;
 	}
-	BIO_reset(*bio);
+	BIO_reset(bio);
 
 	return auxL_error(L, auxL_EOPENSSL, "pkey:decrypt");
 } /* pk_decrypt() */
+#endif
 
-
+#if HAVE_EVP_PKEY_CTX_NEW
 static int pk_encrypt(lua_State *L) {
 	size_t outlen, inlen;
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
@@ -3370,13 +3379,13 @@ static int pk_encrypt(lua_State *L) {
 	if (base_type == EVP_PKEY_RSA && !EVP_PKEY_CTX_set_rsa_padding(ctx, rsaPadding))
 		goto sslerr;
 
-	if (EVP_PKEY_encrypt(ctx, NULL, &outlen, str, inlen) <= 0)
+	if (EVP_PKEY_encrypt(ctx, NULL, &outlen, (const unsigned char *)str, inlen) <= 0)
 		goto sslerr;
 
 	if (!BUF_MEM_grow_clean(buf, outlen))
 		goto sslerr;
 
-	if (EVP_PKEY_encrypt(ctx, buf->data, &outlen, str, inlen) <= 0)
+	if (EVP_PKEY_encrypt(ctx, (unsigned char *)buf->data, &outlen, (const unsigned char *)str, inlen) <= 0)
 		goto sslerr;
 
 	EVP_PKEY_CTX_free(ctx);
@@ -3384,7 +3393,7 @@ static int pk_encrypt(lua_State *L) {
 
 	lua_pushlstring(L, buf->data, outlen);
 
-	BIO_reset(*bio);
+	BIO_reset(bio);
 
 	return 1;
 sslerr:
@@ -3392,11 +3401,11 @@ sslerr:
 		EVP_PKEY_CTX_free(ctx);
 		ctx = NULL;
 	}
-	BIO_reset(*bio);
+	BIO_reset(bio);
 
 	return auxL_error(L, auxL_EOPENSSL, "pkey:encrypt");
 } /* pk_encrypt() */
-
+#endif
 
 static int pk_sign(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
@@ -4117,8 +4126,10 @@ static const auxL_Reg pk_methods[] = {
 	{ "type",          &pk_type },
 	{ "setPublicKey",  &pk_setPublicKey },
 	{ "setPrivateKey", &pk_setPrivateKey },
+#if HAVE_EVP_PKEY_CTX_NEW
 	{ "decrypt",       &pk_decrypt },
 	{ "encrypt",       &pk_encrypt },
+#endif
 	{ "sign",          &pk_sign },
 	{ "verify",        &pk_verify },
 	{ "getDefaultDigestName", &pk_getDefaultDigestName },
@@ -4163,7 +4174,9 @@ static const auxL_IntegerReg pk_rsa_pad_opts[] = {
 	{ "RSA_NO_PADDING", RSA_NO_PADDING }, // no padding
 	{ "RSA_PKCS1_OAEP_PADDING", RSA_PKCS1_OAEP_PADDING }, // OAEP padding (encrypt and decrypt only)
 	{ "RSA_X931_PADDING", RSA_X931_PADDING }, // (signature operations only)
+#if HAVE_RSA_PKCS1_PSS_PADDING
 	{ "RSA_PKCS1_PSS_PADDING", RSA_PKCS1_PSS_PADDING }, // (sign and verify only)
+#endif
 	{ NULL, 0 },
 };
 
