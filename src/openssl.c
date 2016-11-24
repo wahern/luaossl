@@ -1167,11 +1167,9 @@ static const EVP_MD *auxL_optdigest(lua_State *L, int index, EVP_PKEY *key, cons
 		return md;
 
 	if (name) {
-		index = lua_absindex(L, index);
 		luaL_argerror(L, index, lua_pushfstring(L, "invalid digest type (%s)", name));
 		NOTREACHED;
 	} else if (key) {
-		index = lua_absindex(L, index);
 		luaL_argerror(L, index, lua_pushfstring(L, "no digest type for key type (%d)", EVP_PKEY_base_id(key)));
 		NOTREACHED;
 	}
