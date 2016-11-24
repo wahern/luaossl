@@ -281,12 +281,12 @@
 #define HAVE_X509_STORE_REFERENCES (!OPENSSL_PREREQ(1,1,0))
 #endif
 
-#ifndef HAVE_X509_UP_REF
-#define HAVE_X509_UP_REF OPENSSL_PREREQ(1,1,0)
-#endif
-
 #ifndef HAVE_X509_STORE_UP_REF
 #define HAVE_X509_STORE_UP_REF OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_X509_UP_REF
+#define HAVE_X509_UP_REF OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HMAC_INIT_EX_INT
@@ -1629,18 +1629,6 @@ static void compat_init_X509_STORE_onfree(void *store, void *data NOTUSED, CRYPT
 	compat.tmp.store = NULL;
 } /* compat_init_X509_STORE_onfree() */
 
-#if !HAVE_X509_UP_REF
-#define X509_up_ref(...) compat_X509_up_ref(__VA_ARGS__)
-
-static int compat_X509_up_ref(X509 *crt) {
-	/* our caller should already have had a proper reference */
-	if (CRYPTO_add(&crt->references, 1, CRYPTO_LOCK_X509) < 2)
-		return 0; /* fail */
-
-	return 1;
-} /* compat_X509_up_ref() */
-#endif
-
 #if !HAVE_X509_STORE_UP_REF
 #define X509_STORE_up_ref(...) compat_X509_STORE_up_ref(__VA_ARGS__)
 
@@ -1651,6 +1639,18 @@ static int compat_X509_STORE_up_ref(X509_STORE *crt) {
 
 	return 1;
 } /* compat_X509_STORE_up_ref() */
+#endif
+
+#if !HAVE_X509_UP_REF
+#define X509_up_ref(...) compat_X509_up_ref(__VA_ARGS__)
+
+static int compat_X509_up_ref(X509 *crt) {
+	/* our caller should already have had a proper reference */
+	if (CRYPTO_add(&crt->references, 1, CRYPTO_LOCK_X509) < 2)
+		return 0; /* fail */
+
+	return 1;
+} /* compat_X509_up_ref() */
 #endif
 
 static int compat_init(void) {
