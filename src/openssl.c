@@ -281,6 +281,10 @@
 #define HAVE_X509_STORE_REFERENCES (!OPENSSL_PREREQ(1,1,0))
 #endif
 
+#ifndef HAVE_X509_STORE_UP_REF
+#define HAVE_X509_STORE_UP_REF OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HAVE_X509_UP_REF
 #define HAVE_X509_UP_REF OPENSSL_PREREQ(1,1,0)
 #endif
@@ -1624,6 +1628,18 @@ static void compat_init_X509_STORE_onfree(void *store, void *data NOTUSED, CRYPT
 	/* signal that we were freed by nulling our reference */
 	compat.tmp.store = NULL;
 } /* compat_init_X509_STORE_onfree() */
+
+#if !HAVE_X509_STORE_UP_REF
+#define X509_STORE_up_ref(...) compat_X509_STORE_up_ref(__VA_ARGS__)
+
+static int compat_X509_STORE_up_ref(X509_STORE *crt) {
+	/* our caller should already have had a proper reference */
+	if (CRYPTO_add(&crt->references, 1, CRYPTO_LOCK_X509_STORE) < 2)
+		return 0; /* fail */
+
+	return 1;
+} /* compat_X509_STORE_up_ref() */
+#endif
 
 #if !HAVE_X509_UP_REF
 #define X509_up_ref(...) compat_X509_up_ref(__VA_ARGS__)
@@ -6826,6 +6842,16 @@ static int xs_new(lua_State *L) {
 } /* xs_new() */
 
 
+static X509_STORE *xs_push(lua_State *L, X509_STORE *store) {
+	X509_STORE **ud = prepsimple(L, X509_STORE_CLASS);
+
+	X509_STORE_up_ref(store);
+	*ud = store;
+
+	return *ud;
+} /* xs_push() */
+
+
 static int xs_interpose(lua_State *L) {
 	return interpose(L, X509_STORE_CLASS);
 } /* xs_interpose() */
@@ -7348,6 +7374,20 @@ static int sx_setStore(lua_State *L) {
 } /* sx_setStore() */
 
 
+static int sx_getStore(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	X509_STORE *store;
+
+	if((store = SSL_CTX_get_cert_store(ctx))) {
+		xs_push(L, store);
+	} else {
+		lua_pushnil(L);
+	}
+
+	return 1;
+} /* sx_getStore() */
+
+
 static int sx_setVerify(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	int mode = luaL_optint(L, 2, -1);
@@ -7614,6 +7654,7 @@ static const auxL_Reg sx_methods[] = {
 	{ "getOptions",       &sx_getOptions },
 	{ "clearOptions",     &sx_clearOptions },
 	{ "setStore",         &sx_setStore },
+	{ "getStore",         &sx_getStore },
 	{ "setVerify",        &sx_setVerify },
 	{ "getVerify",        &sx_getVerify },
 	{ "setCertificate",   &sx_setCertificate },
