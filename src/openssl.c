@@ -739,22 +739,7 @@ static size_t auxS_obj2txt(void *dst, size_t lim, const ASN1_OBJECT *obj) {
 	return auxS_obj2id(dst, lim, obj);
 } /* auxS_obj2txt() */
 
-static const EVP_MD *auxS_todigest(const char *name, EVP_PKEY *key, const EVP_MD *def) {
-	const EVP_MD *md;
-	int nid;
-
-	if (name) {
-		if ((md = EVP_get_digestbyname(name)))
-			return md;
-	} else if (key) {
-		if ((EVP_PKEY_get_default_digest_nid(key, &nid) > 0)) {
-			if ((md = EVP_get_digestbynid(nid)))
-				return md;
-		}
-	}
-
-	return def;
-} /* auxS_todigest() */
+static const EVP_MD *auxS_todigest(const char *name, EVP_PKEY *key, const EVP_MD *def);
 
 static _Bool auxS_isoid(const char *txt) {
 	return (*txt >= '0' && *txt <= '9');
@@ -1159,23 +1144,7 @@ static const char *auxL_pushnid(lua_State *L, int nid) {
 	return lua_tostring(L, -1);
 } /* auxL_pushnid() */
 
-static const EVP_MD *auxL_optdigest(lua_State *L, int index, EVP_PKEY *key, const EVP_MD *def) {
-	const char *name = luaL_optstring(L, index, NULL);
-	const EVP_MD *md;
-
-	if ((md = auxS_todigest(name, key, NULL)))
-		return md;
-
-	if (name) {
-		luaL_argerror(L, index, lua_pushfstring(L, "invalid digest type (%s)", name));
-		NOTREACHED;
-	} else if (key) {
-		luaL_argerror(L, index, lua_pushfstring(L, "no digest type for key type (%d)", EVP_PKEY_base_id(key)));
-		NOTREACHED;
-	}
-
-	return def;
-} /* auxL_optdigest() */
+static const EVP_MD *auxL_optdigest(lua_State *L, int index, EVP_PKEY *key, const EVP_MD *def);
 
 
 /*
@@ -1754,6 +1723,53 @@ sslerr:
 
 	goto epilog;
 } /* compat_init() */
+
+
+/*
+ * Auxiliary OpenSSL API routines (with dependencies on OpenSSL compat)
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static const EVP_MD *auxS_todigest(const char *name, EVP_PKEY *key, const EVP_MD *def) {
+	const EVP_MD *md;
+	int nid;
+
+	if (name) {
+		if ((md = EVP_get_digestbyname(name)))
+			return md;
+	} else if (key) {
+		if ((EVP_PKEY_get_default_digest_nid(key, &nid) > 0)) {
+			if ((md = EVP_get_digestbynid(nid)))
+				return md;
+		}
+	}
+
+	return def;
+} /* auxS_todigest() */
+
+
+/*
+ * Auxiliary Lua API routines (with dependencies on OpenSSL compat)
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static const EVP_MD *auxL_optdigest(lua_State *L, int index, EVP_PKEY *key, const EVP_MD *def) {
+	const char *name = luaL_optstring(L, index, NULL);
+	const EVP_MD *md;
+
+	if ((md = auxS_todigest(name, key, NULL)))
+		return md;
+
+	if (name) {
+		luaL_argerror(L, index, lua_pushfstring(L, "invalid digest type (%s)", name));
+		NOTREACHED;
+	} else if (key) {
+		luaL_argerror(L, index, lua_pushfstring(L, "no digest type for key type (%d)", EVP_PKEY_base_id(key)));
+		NOTREACHED;
+	}
+
+	return def;
+} /* auxL_optdigest() */
 
 
 /*
