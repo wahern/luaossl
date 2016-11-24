@@ -6871,6 +6871,18 @@ static int xs_add(lua_State *L) {
 } /* xs_add() */
 
 
+static int xs_addDefaults(lua_State *L) {
+	X509_STORE *store = checksimple(L, 1, X509_STORE_CLASS);
+
+	if (!X509_STORE_set_default_paths(store))
+		return auxL_error(L, auxL_EOPENSSL, "x509.store:addDefaults");
+
+	lua_pushvalue(L, 1);
+
+	return 1;
+} /* xs_addDefaults() */
+
+
 static int xs_verify(lua_State *L) {
 	X509_STORE *store = checksimple(L, 1, X509_STORE_CLASS);
 	X509 *crt = checksimple(L, 2, X509_CERT_CLASS);
@@ -6953,9 +6965,10 @@ static int xs__gc(lua_State *L) {
 
 
 static const auxL_Reg xs_methods[] = {
-	{ "add",    &xs_add },
-	{ "verify", &xs_verify },
-	{ NULL,     NULL },
+	{ "add",         &xs_add },
+	{ "addDefaults", &xs_addDefaults },
+	{ "verify",      &xs_verify },
+	{ NULL,          NULL },
 };
 
 static const auxL_Reg xs_metatable[] = {
@@ -6973,6 +6986,15 @@ int luaopen__openssl_x509_store(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, xs_globals, 0);
+
+	lua_pushstring(L, X509_get_default_cert_dir());
+	lua_setfield(L, -2, "CERT_DIR");
+	lua_pushstring(L, X509_get_default_cert_file());
+	lua_setfield(L, -2, "CERT_FILE");
+	lua_pushstring(L, X509_get_default_cert_dir_env());
+	lua_setfield(L, -2, "CERT_DIR_EVP");
+	lua_pushstring(L, X509_get_default_cert_file_env());
+	lua_setfield(L, -2, "CERT_FILE_EVP");
 
 	return 1;
 } /* luaopen__openssl_x509_store() */
