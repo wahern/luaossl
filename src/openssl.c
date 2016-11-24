@@ -81,7 +81,7 @@
 #define GNUC_PREREQ(M, m, p) (__GNUC__ > 0 && GNUC_2VER(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__) >= GNUC_2VER((M), (m), (p)))
 
 #define MSC_2VER(M, m, p) ((((M) + 6) * 10000000) + ((m) * 1000000) + (p))
-#define MSC_PREREQ(M, m, p) (_MSC_VER_FULL > 0 && _MSC_VER_FULL >= MSC_2VER((M), (m), (p)))
+#define MSC_PREREQ(M, m, p) (_MSC_FULL_VER > 0 && _MSC_FULL_VER >= MSC_2VER((M), (m), (p)))
 
 #define OPENSSL_PREREQ(M, m, p) \
 	(OPENSSL_VERSION_NUMBER >= (((M) << 28) | ((m) << 20) | ((p) << 12)) && !defined LIBRESSL_VERSION_NUMBER)
@@ -97,12 +97,16 @@
 #define __has_extension(x) 0
 #endif
 
-#ifndef HAVE___ASSUME
-#define HAVE___ASSUME MSC_PREREQ(8,0,0)
+#ifndef HAVE_C___ASSUME
+#define HAVE_C___ASSUME MSC_PREREQ(8,0,0)
 #endif
 
-#ifndef HAVE___BUILTIN_UNREACHABLE
-#define HAVE___BUILTIN_UNREACHABLE (GNUC_PREREQ(4,5,0) || __has_builtin(__builtin_unreachable))
+#ifndef HAVE_C___BUILTIN_UNREACHABLE
+#define HAVE_C___BUILTIN_UNREACHABLE (GNUC_PREREQ(4,5,0) || __has_builtin(__builtin_unreachable))
+#endif
+
+#ifndef HAVE_C___DECLSPEC_NORETURN
+#define HAVE_C___DECLSPEC_NORETURN MSC_PREREQ(8,0,0)
 #endif
 
 #ifndef HAVE_ASN1_STRING_GET0_DATA
@@ -342,9 +346,9 @@
 #define NOTUSED
 #endif
 
-#if HAVE___BUILTIN_UNREACHABLE
+#if HAVE_C___BUILTIN_UNREACHABLE
 #define NOTREACHED __builtin_unreachable()
-#elif HAVE___ASSUME
+#elif HAVE_C___ASSUME
 #define NOTREACHED __assume(0)
 #else
 #define NOTREACHED (void)0
