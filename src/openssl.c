@@ -6834,17 +6834,24 @@ static int xs_interpose(lua_State *L) {
 static int xs_add(lua_State *L) {
 	X509_STORE *store = checksimple(L, 1, X509_STORE_CLASS);
 	int i, top = lua_gettop(L);
+	X509 *crt, *crt_dup;
+	X509_CRL *crl, *crl_dup;
 
 	for (i = 2; i <= top; i++) {
-		if (lua_isuserdata(L, i)) {
-			X509 *crt = checksimple(L, i, X509_CERT_CLASS);
-			X509 *dup;
-
-			if (!(dup = X509_dup(crt)))
+		if ((crt = testsimple(L, i, X509_CERT_CLASS))) {
+			if (!(crt_dup = X509_dup(crt)))
 				return auxL_error(L, auxL_EOPENSSL, "x509.store:add");
 
-			if (!X509_STORE_add_cert(store, dup)) {
-				X509_free(dup);
+			if (!X509_STORE_add_cert(store, crt_dup)) {
+				X509_free(crt_dup);
+				return auxL_error(L, auxL_EOPENSSL, "x509.store:add");
+			}
+		} else if ((crl = testsimple(L, i, X509_CRL_CLASS))) {
+			if (!(crl_dup = X509_CRL_dup(crl)))
+				return auxL_error(L, auxL_EOPENSSL, "x509.store:add");
+
+			if (!X509_STORE_add_crl(store, crl_dup)) {
+				X509_CRL_free(crl_dup);
 				return auxL_error(L, auxL_EOPENSSL, "x509.store:add");
 			}
 		} else {
