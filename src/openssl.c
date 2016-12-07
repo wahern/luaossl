@@ -7720,7 +7720,7 @@ static int ssl_getHostName(lua_State *L) {
 
 static int ssl_setHostName(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
-	const char *host = luaL_checkstring(L, 2);
+	const char *host = luaL_optstring(L, 2, NULL);
 
 	if (!SSL_set_tlsext_host_name(ssl, host))
 		return auxL_error(L, auxL_EOPENSSL, "ssl:setHostName");
