@@ -8277,6 +8277,26 @@ static int xp_interpose(lua_State *L) {
 } /* xp_interpose() */
 
 
+static int xp_inherit(lua_State *L) {
+	X509_VERIFY_PARAM *dest = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	X509_VERIFY_PARAM *src = checksimple(L, 2, X509_VERIFY_PARAM_CLASS);
+	int flags = luaL_optinteger(L, 3, 0);
+	unsigned long save_flags = dest->inh_flags;
+	int ret;
+
+	dest->inh_flags |= flags;
+	ret = X509_VERIFY_PARAM_inherit(dest, src);
+	dest->inh_flags = save_flags;
+
+	if (!ret)
+		/* Note: openssl doesn't set an error as it should for some cases */
+		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param:inherit");
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_inherit() */
+
+
 static const X509_PURPOSE *purpose_checktype(lua_State *L, int index) {
 	const char *purpose_name;
 	int purpose_id;
@@ -8433,6 +8453,7 @@ static int xp__gc(lua_State *L) {
 
 
 static const auxL_Reg xp_methods[] = {
+	{ "inherit", &xp_inherit },
 	{ "setPurpose", &xp_setPurpose },
 	{ "setTime", &xp_setTime },
 	{ "setDepth", &xp_setDepth },
@@ -8459,10 +8480,20 @@ static const auxL_Reg xp_globals[] = {
 	{ NULL, NULL },
 };
 
+static const auxL_IntegerReg xp_inherit_flags[] = {
+	{ "DEFAULT", X509_VP_FLAG_DEFAULT },
+	{ "OVERWRITE", X509_VP_FLAG_OVERWRITE },
+	{ "RESET_FLAGS", X509_VP_FLAG_RESET_FLAGS },
+	{ "LOCKED", X509_VP_FLAG_LOCKED },
+	{ "ONCE", X509_VP_FLAG_ONCE },
+	{ NULL, 0 }
+};
+
 int luaopen__openssl_x509_verify_param(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, xp_globals, 0);
+	auxL_setintegers(L, xp_inherit_flags);
 
 	return 1;
 } /* luaopen__openssl_x509_verify_param() */
