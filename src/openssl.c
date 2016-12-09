@@ -60,6 +60,7 @@
 #include <openssl/bn.h>
 #include <openssl/asn1.h>
 #include <openssl/x509.h>
+#include <openssl/x509_vfy.h>
 #include <openssl/x509v3.h>
 #include <openssl/pkcs12.h>
 #include <openssl/evp.h>
@@ -249,6 +250,10 @@
 #define HAVE_SSL_CLIENT_VERSION OPENSSL_PREREQ(1,1,0)
 #endif
 
+#ifndef HAVE_SSL_CTX_GET0_PARAM
+#define HAVE_SSL_CTX_GET0_PARAM OPENSSL_PREREQ(1,0,2)
+#endif
+
 #ifndef HAVE_SSL_CTX_SET_ALPN_PROTOS
 #define HAVE_SSL_CTX_SET_ALPN_PROTOS (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,1,3))
 #endif
@@ -261,16 +266,28 @@
 #define HAVE_SSL_CTX_SET1_CERT_STORE (HAVE_SSL_CTX_set1_cert_store || 0) /* backwards compatible with old macro name */
 #endif
 
+#ifndef HAVE_SSL_CTX_SET1_PARAM
+#define HAVE_SSL_CTX_SET1_PARAM (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,1,0))
+#endif
+
 #ifndef HAVE_SSL_CTX_CERT_STORE
 #define HAVE_SSL_CTX_CERT_STORE (!OPENSSL_PREREQ(1,1,0))
+#endif
+
+#ifndef HAVE_SSL_GET0_ALPN_SELECTED
+#define HAVE_SSL_GET0_ALPN_SELECTED HAVE_SSL_CTX_SET_ALPN_PROTOS
+#endif
+
+#ifndef HAVE_SSL_GET0_PARAM
+#define HAVE_SSL_GET0_PARAM OPENSSL_PREREQ(1,0,2)
 #endif
 
 #ifndef HAVE_SSL_SET_ALPN_PROTOS
 #define HAVE_SSL_SET_ALPN_PROTOS HAVE_SSL_CTX_SET_ALPN_PROTOS
 #endif
 
-#ifndef HAVE_SSL_GET0_ALPN_SELECTED
-#define HAVE_SSL_GET0_ALPN_SELECTED HAVE_SSL_CTX_SET_ALPN_PROTOS
+#ifndef HAVE_SSL_SET1_PARAM
+#define HAVE_SSL_SET1_PARAM OPENSSL_PREREQ(1,0,2)
 #endif
 
 #ifndef HAVE_SSL_UP_REF
@@ -295,6 +312,26 @@
 
 #ifndef HAVE_X509_UP_REF
 #define HAVE_X509_UP_REF OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_X509_VERIFY_PARAM_ADD1_HOST
+#define HAVE_X509_VERIFY_PARAM_ADD1_HOST OPENSSL_PREREQ(1,0,2)
+#endif
+
+#ifndef HAVE_X509_VERIFY_PARAM_SET_AUTH_LEVEL
+#define HAVE_X509_VERIFY_PARAM_SET_AUTH_LEVEL OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_X509_VERIFY_PARAM_SET1_EMAIL
+#define HAVE_X509_VERIFY_PARAM_SET1_EMAIL OPENSSL_PREREQ(1,0,2)
+#endif
+
+#ifndef HAVE_X509_VERIFY_PARAM_SET1_HOST
+#define HAVE_X509_VERIFY_PARAM_SET1_HOST OPENSSL_PREREQ(1,0,2)
+#endif
+
+#ifndef HAVE_X509_VERIFY_PARAM_SET1_IP_ASC
+#define HAVE_X509_VERIFY_PARAM_SET1_IP_ASC OPENSSL_PREREQ(1,0,2)
 #endif
 
 #ifndef HMAC_INIT_EX_INT
@@ -335,6 +372,7 @@
 #define X509_CSR_CLASS   "X509_REQ*"
 #define X509_CRL_CLASS   "X509_CRL*"
 #define X509_STORE_CLASS "X509_STORE*"
+#define X509_VERIFY_PARAM_CLASS "X509_VERIFY_PARAM*"
 #define X509_STCTX_CLASS "X509_STORE_CTX*"
 #define PKCS12_CLASS     "PKCS12*"
 #define SSL_CTX_CLASS    "SSL_CTX*"
@@ -1529,6 +1567,22 @@ static int compat_SSL_client_version(const SSL *ssl) {
 } /* compat_SSL_client_version() */
 #endif
 
+#if !HAVE_SSL_GET0_PARAM
+#define SSL_get0_param(ssl) compat_SSL_get0_param((ssl))
+
+static X509_VERIFY_PARAM *compat_SSL_get0_param(SSL *ssl) {
+	return ssl->param;
+} /* compat_SSL_get0_param() */
+#endif
+
+#if !HAVE_SSL_SET1_PARAM
+#define SSL_set1_param(ssl, vpm) compat_SSL_set1_param((ssl), (vpm))
+
+static int compat_SSL_set1_param(SSL *ssl, X509_VERIFY_PARAM *vpm) {
+	return X509_VERIFY_PARAM_set1(ssl->param, vpm);
+} /* compat_SSL_set1_param() */
+#endif
+
 #if !HAVE_SSL_UP_REF
 #define SSL_up_ref(...) compat_SSL_up_ref(__VA_ARGS__)
 
@@ -1539,6 +1593,22 @@ static int compat_SSL_up_ref(SSL *ssl) {
 
 	return 1;
 } /* compat_SSL_up_ref() */
+#endif
+
+#if !HAVE_SSL_CTX_GET0_PARAM
+#define SSL_CTX_get0_param(ctx) compat_SSL_CTX_get0_param((ctx))
+
+static X509_VERIFY_PARAM *compat_SSL_CTX_get0_param(SSL_CTX *ctx) {
+	return ctx->param;
+} /* compat_SSL_CTX_get0_param() */
+#endif
+
+#if !HAVE_SSL_CTX_SET1_PARAM
+#define SSL_CTX_set1_param(ctx, vpm) compat_SSL_CTX_set1_param((ctx), (vpm))
+
+static int compat_SSL_CTX_set1_param(SSL_CTX *ctx, X509_VERIFY_PARAM *vpm) {
+	return X509_VERIFY_PARAM_set1(ctx->param, vpm);
+} /* compat_SSL_CTX_set1_param() */
 #endif
 
 #if !HAVE_X509_GET0_EXT
@@ -1659,6 +1729,19 @@ static int compat_X509_up_ref(X509 *crt) {
 
 	return 1;
 } /* compat_X509_up_ref() */
+#endif
+
+#if !HAVE_X509_VERIFY_PARAM_SET1_EMAIL
+/*
+ * NB: Cannot emulate. Requires dereferencing X509_VERIFY_PARAM_ID objects,
+ * which were always opaque.
+ */
+#endif
+
+#if !HAVE_X509_VERIFY_PARAM_SET1_HOST
+/*
+ * NB: See HAVE_X509_VERIFY_PARAM_SET1_EMAIL.
+ */
 #endif
 
 static int compat_init(void) {
@@ -7530,6 +7613,38 @@ static int sx_getStore(lua_State *L) {
 } /* sx_getStore() */
 
 
+static int sx_setParam(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	X509_VERIFY_PARAM *xp = checksimple(L, 2, X509_VERIFY_PARAM_CLASS);
+
+	if (!SSL_CTX_set1_param(ctx, xp))
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setParam");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_setParam() */
+
+
+static int sx_getParam(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	X509_VERIFY_PARAM **ud, *from;
+
+	/* X509_VERIFY_PARAM is not refcounted; create a new object and copy into it. */
+	ud = prepsimple(L, X509_VERIFY_PARAM_CLASS);
+	if (!(*ud = X509_VERIFY_PARAM_new()))
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:getParam");
+
+	from = SSL_CTX_get0_param(ctx);
+
+	if (!(X509_VERIFY_PARAM_set1(*ud, from)))
+		/* Note: openssl doesn't set an error as it should for some cases */
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:getParam");
+
+	return 1;
+} /* sx_getParam() */
+
+
 static int sx_setVerify(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	int mode = luaL_optint(L, 2, -1);
@@ -7797,6 +7912,8 @@ static const auxL_Reg sx_methods[] = {
 	{ "clearOptions",     &sx_clearOptions },
 	{ "setStore",         &sx_setStore },
 	{ "getStore",         &sx_getStore },
+	{ "setParam",         &sx_setParam },
+	{ "getParam",         &sx_getParam },
 	{ "setVerify",        &sx_setVerify },
 	{ "getVerify",        &sx_getVerify },
 	{ "setCertificate",   &sx_setCertificate },
@@ -7947,6 +8064,38 @@ static int ssl_clearOptions(lua_State *L) {
 
 	return 1;
 } /* ssl_clearOptions() */
+
+
+static int ssl_setParam(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	X509_VERIFY_PARAM *xp = checksimple(L, 2, X509_VERIFY_PARAM_CLASS);
+
+	if (!SSL_set1_param(ssl, xp))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setParam");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setParam() */
+
+
+static int ssl_getParam(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	X509_VERIFY_PARAM **ud, *from;
+
+	/* X509_VERIFY_PARAM is not refcounted; create a new object and copy into it. */
+	ud = prepsimple(L, X509_VERIFY_PARAM_CLASS);
+	if (!(*ud = X509_VERIFY_PARAM_new()))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:getParam");
+
+	from = SSL_get0_param(ssl);
+
+	if (!(X509_VERIFY_PARAM_set1(*ud, from)))
+		/* Note: openssl doesn't set an error as it should for some cases */
+		return auxL_error(L, auxL_EOPENSSL, "ssl:getParam");
+
+	return 1;
+} /* ssl_getParam() */
 
 
 static int ssl_getPeerCertificate(lua_State *L) {
@@ -8136,6 +8285,8 @@ static const auxL_Reg ssl_methods[] = {
 	{ "setOptions",       &ssl_setOptions },
 	{ "getOptions",       &ssl_getOptions },
 	{ "clearOptions",     &ssl_clearOptions },
+	{ "setParam",         &ssl_setParam },
+	{ "getParam",         &ssl_getParam },
 	{ "getPeerCertificate", &ssl_getPeerCertificate },
 	{ "getPeerChain",     &ssl_getPeerChain },
 	{ "getCipherInfo",    &ssl_getCipherInfo },
@@ -8187,6 +8338,272 @@ int luaopen__openssl_ssl(lua_State *L) {
 
 	return 1;
 } /* luaopen__openssl_ssl() */
+
+
+/*
+ * X509_VERIFY_PARAM
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static int xp_new(lua_State *L) {
+	X509_VERIFY_PARAM **ud = prepsimple(L, X509_VERIFY_PARAM_CLASS);
+
+	if (!(*ud = X509_VERIFY_PARAM_new()))
+		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param.new");
+
+	return 1;
+} /* xp_new() */
+
+
+static int xp_interpose(lua_State *L) {
+	return interpose(L, X509_VERIFY_PARAM_CLASS);
+} /* xp_interpose() */
+
+
+/*
+ * NB: Per the OpenSSL source, "[t]he 'inh_flags' field determines how this
+ * function behaves". (Referring to X509_VERIFY_PARAM_inherit.) The way to
+ * set inh_flags prior to OpenSSL 1.1 was by OR'ing flags into the inh_flags
+ * member and restoring it after the call. The OpenSSL 1.1 API makes the
+ * X509_VERIFY_PARAM object opaque, X509_VERIFY_PARAM_inherit, and there's
+ * no other function to set the flags argument; therefore it's not possible
+ * to control the inherit behavior from OpenSSL 1.1.
+ *
+ * For more details see
+ * 	https://github.com/openssl/openssl/issues/2054 and the original
+ * 	https://github.com/wahern/luaossl/pull/76/commits/db6e414d68c0f94c2497d363f6131b4de1710ba9
+ */
+static int xp_inherit(lua_State *L) {
+	X509_VERIFY_PARAM *dest = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	X509_VERIFY_PARAM *src = checksimple(L, 2, X509_VERIFY_PARAM_CLASS);
+	int ret;
+
+	ret = X509_VERIFY_PARAM_inherit(dest, src);
+	if (!ret)
+		/* Note: openssl doesn't set an error as it should for some cases */
+		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param:inherit");
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_inherit() */
+
+
+static const X509_PURPOSE *purpose_checktype(lua_State *L, int index) {
+	const char *purpose_name;
+	int purpose_id;
+	int purpose_idx;
+	const X509_PURPOSE *purpose;
+
+	if (lua_isnumber(L, index)) {
+		purpose_id = luaL_checkinteger(L, index);
+		purpose_idx = X509_PURPOSE_get_by_id(purpose_id);
+		if (purpose_idx < 0)
+			luaL_argerror(L, index, lua_pushfstring(L, "%d: invalid purpose", purpose_id));
+	} else {
+		purpose_name = luaL_checkstring(L, index);
+		purpose_idx = X509_PURPOSE_get_by_sname((char*)purpose_name);
+		if (purpose_idx < 0)
+			luaL_argerror(L, index, lua_pushfstring(L, "%s: invalid purpose", purpose_name));
+	}
+
+	purpose = X509_PURPOSE_get0(purpose_idx);
+	return purpose;
+} /* purpose_checktype() */
+
+
+static int xp_setPurpose(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	const X509_PURPOSE *purpose = purpose_checktype(L, 2);
+
+	if (!X509_VERIFY_PARAM_set_purpose(xp, X509_PURPOSE_get_id((X509_PURPOSE*)purpose)))
+		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param:setPurpose");
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_setPurpose() */
+
+
+static int xp_setTime(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	time_t t = luaL_checkinteger(L, 2);
+
+	X509_VERIFY_PARAM_set_time(xp, t);
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_setTime() */
+
+
+static int xp_setDepth(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	int depth = luaL_checkinteger(L, 2);
+
+	X509_VERIFY_PARAM_set_depth(xp, depth);
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_setDepth() */
+
+
+static int xp_getDepth(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+
+	int depth = X509_VERIFY_PARAM_get_depth(xp);
+
+	lua_pushinteger(L, depth);
+	return 1;
+} /* xp_getDepth() */
+
+
+#if HAVE_X509_VERIFY_PARAM_SET_AUTH_LEVEL
+static int xp_setAuthLevel(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	int auth_level = luaL_checkinteger(L, 2);
+
+	X509_VERIFY_PARAM_set_auth_level(xp, auth_level);
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_setAuthLevel() */
+
+
+static int xp_getAuthLevel(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+
+	int auth_level = X509_VERIFY_PARAM_get_auth_level(xp);
+
+	lua_pushinteger(L, auth_level);
+	return 1;
+} /* xp_getAuthLevel() */
+#endif
+
+
+#if HAVE_X509_VERIFY_PARAM_SET1_HOST
+static int xp_setHost(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	size_t len;
+	const char *str = luaL_optlstring(L, 2, NULL, &len); /* NULL = clear hosts */
+
+	if (!X509_VERIFY_PARAM_set1_host(xp, str, len))
+		/* Note: openssl doesn't set an error as it should for some cases */
+		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param:setHost");
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_setHost() */
+#endif
+
+
+#if HAVE_X509_VERIFY_PARAM_ADD1_HOST
+static int xp_addHost(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	size_t len;
+	const char *str = luaL_checklstring(L, 2, &len);
+
+	if (!X509_VERIFY_PARAM_add1_host(xp, str, len))
+		/* Note: openssl doesn't set an error as it should for some cases */
+		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param:addHost");
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_addHost() */
+#endif
+
+
+#if HAVE_X509_VERIFY_PARAM_SET1_EMAIL
+static int xp_setEmail(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	size_t len;
+	const char *str = luaL_checklstring(L, 2, &len);
+
+	if (!X509_VERIFY_PARAM_set1_email(xp, str, len))
+		/* Note: openssl doesn't set an error as it should for some cases */
+		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param:setEmail");
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_setEmail() */
+#endif
+
+
+#if HAVE_X509_VERIFY_PARAM_SET1_IP_ASC
+static int xp_setIP(lua_State *L) {
+	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
+	const char *str = luaL_checkstring(L, 2);
+
+	if (!X509_VERIFY_PARAM_set1_ip_asc(xp, str))
+		/* Note: openssl doesn't set an error as it should for some cases */
+		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param:setIP");
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xp_setIP() */
+#endif
+
+
+static int xp__gc(lua_State *L) {
+	X509_VERIFY_PARAM **ud = luaL_checkudata(L, 1, X509_VERIFY_PARAM_CLASS);
+
+	X509_VERIFY_PARAM_free(*ud);
+	*ud = NULL;
+
+	return 0;
+} /* xp__gc() */
+
+
+static const auxL_Reg xp_methods[] = {
+	{ "inherit", &xp_inherit },
+	{ "setPurpose", &xp_setPurpose },
+	{ "setTime", &xp_setTime },
+	{ "setDepth", &xp_setDepth },
+	{ "getDepth", &xp_getDepth },
+#if HAVE_X509_VERIFY_PARAM_SET_AUTH_LEVEL
+	{ "setAuthLevel", &xp_setAuthLevel },
+	{ "getAuthLevel", &xp_getAuthLevel },
+#endif
+#if HAVE_X509_VERIFY_PARAM_SET1_HOST
+	{ "setHost", &xp_setHost },
+#endif
+#if HAVE_X509_VERIFY_PARAM_ADD1_HOST
+	{ "addHost", &xp_addHost },
+#endif
+#if HAVE_X509_VERIFY_PARAM_SET1_EMAIL
+	{ "setEmail", &xp_setEmail },
+#endif
+#if HAVE_X509_VERIFY_PARAM_SET1_IP_ASC
+	{ "setIP", &xp_setIP },
+#endif
+	{ NULL, NULL },
+};
+
+static const auxL_Reg xp_metatable[] = {
+	{ "__gc", &xp__gc },
+	{ NULL, NULL },
+};
+
+static const auxL_Reg xp_globals[] = {
+	{ "new", &xp_new },
+	{ "interpose", &xp_interpose },
+	{ NULL, NULL },
+};
+
+static const auxL_IntegerReg xp_inherit_flags[] = {
+	{ "DEFAULT", X509_VP_FLAG_DEFAULT },
+	{ "OVERWRITE", X509_VP_FLAG_OVERWRITE },
+	{ "RESET_FLAGS", X509_VP_FLAG_RESET_FLAGS },
+	{ "LOCKED", X509_VP_FLAG_LOCKED },
+	{ "ONCE", X509_VP_FLAG_ONCE },
+	{ NULL, 0 }
+};
+
+int luaopen__openssl_x509_verify_param(lua_State *L) {
+	initall(L);
+
+	auxL_newlib(L, xp_globals, 0);
+	auxL_setintegers(L, xp_inherit_flags);
+
+	return 1;
+} /* luaopen__openssl_x509_verify_param() */
 
 
 /*
@@ -9177,6 +9594,7 @@ static void initall(lua_State *L) {
 	auxL_addclass(L, X509_CRL_CLASS, xx_methods, xx_metatable, 0);
 	auxL_addclass(L, X509_CHAIN_CLASS, xl_methods, xl_metatable, 0);
 	auxL_addclass(L, X509_STORE_CLASS, xs_methods, xs_metatable, 0);
+	auxL_addclass(L, X509_VERIFY_PARAM_CLASS, xp_methods, xp_metatable, 0);
 	auxL_addclass(L, PKCS12_CLASS, p12_methods, p12_metatable, 0);
 	auxL_addclass(L, SSL_CTX_CLASS, sx_methods, sx_metatable, 0);
 	auxL_addclass(L, SSL_CLASS, ssl_methods, ssl_metatable, 0);
