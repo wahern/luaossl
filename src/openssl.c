@@ -250,6 +250,10 @@
 #define HAVE_SSL_CLIENT_VERSION OPENSSL_PREREQ(1,1,0)
 #endif
 
+#ifndef HAVE_SSL_CTX_GET0_PARAM
+#define HAVE_SSL_CTX_GET0_PARAM OPENSSL_PREREQ(1,0,2)
+#endif
+
 #ifndef HAVE_SSL_CTX_SET_ALPN_PROTOS
 #define HAVE_SSL_CTX_SET_ALPN_PROTOS (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,1,3))
 #endif
@@ -262,16 +266,28 @@
 #define HAVE_SSL_CTX_SET1_CERT_STORE (HAVE_SSL_CTX_set1_cert_store || 0) /* backwards compatible with old macro name */
 #endif
 
+#ifndef HAVE_SSL_CTX_SET1_PARAM
+#define HAVE_SSL_CTX_SET1_PARAM (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,1,0))
+#endif
+
 #ifndef HAVE_SSL_CTX_CERT_STORE
 #define HAVE_SSL_CTX_CERT_STORE (!OPENSSL_PREREQ(1,1,0))
+#endif
+
+#ifndef HAVE_SSL_GET0_ALPN_SELECTED
+#define HAVE_SSL_GET0_ALPN_SELECTED HAVE_SSL_CTX_SET_ALPN_PROTOS
+#endif
+
+#ifndef HAVE_SSL_GET0_PARAM
+#define HAVE_SSL_GET0_PARAM OPENSSL_PREREQ(1,0,2)
 #endif
 
 #ifndef HAVE_SSL_SET_ALPN_PROTOS
 #define HAVE_SSL_SET_ALPN_PROTOS HAVE_SSL_CTX_SET_ALPN_PROTOS
 #endif
 
-#ifndef HAVE_SSL_GET0_ALPN_SELECTED
-#define HAVE_SSL_GET0_ALPN_SELECTED HAVE_SSL_CTX_SET_ALPN_PROTOS
+#ifndef HAVE_SSL_SET1_PARAM
+#define HAVE_SSL_SET1_PARAM OPENSSL_PREREQ(1,0,2)
 #endif
 
 #ifndef HAVE_SSL_UP_REF
@@ -286,10 +302,6 @@
 #define HAVE_SSLV2_SERVER_METHOD (!OPENSSL_PREREQ(1,1,0) && !defined OPENSSL_NO_SSL2)
 #endif
 
-#ifndef HAVE_X509_AUTH_LEVEL
-#define HAVE_X509_AUTH_LEVEL OPENSSL_PREREQ(1,1,0)
-#endif
-
 #ifndef HAVE_X509_STORE_REFERENCES
 #define HAVE_X509_STORE_REFERENCES (!OPENSSL_PREREQ(1,1,0))
 #endif
@@ -300,6 +312,26 @@
 
 #ifndef HAVE_X509_UP_REF
 #define HAVE_X509_UP_REF OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_X509_VERIFY_PARAM_ADD1_HOST
+#define HAVE_X509_VERIFY_PARAM_ADD1_HOST OPENSSL_PREREQ(1,0,2)
+#endif
+
+#ifndef HAVE_X509_VERIFY_PARAM_SET_AUTH_LEVEL
+#define HAVE_X509_VERIFY_PARAM_SET_AUTH_LEVEL OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_X509_VERIFY_PARAM_SET1_EMAIL
+#define HAVE_X509_VERIFY_PARAM_SET1_EMAIL OPENSSL_PREREQ(1,0,2)
+#endif
+
+#ifndef HAVE_X509_VERIFY_PARAM_SET1_HOST
+#define HAVE_X509_VERIFY_PARAM_SET1_HOST OPENSSL_PREREQ(1,0,2)
+#endif
+
+#ifndef HAVE_X509_VERIFY_PARAM_SET1_IP_ASC
+#define HAVE_X509_VERIFY_PARAM_SET1_IP_ASC OPENSSL_PREREQ(1,0,2)
 #endif
 
 #ifndef HMAC_INIT_EX_INT
@@ -1535,6 +1567,22 @@ static int compat_SSL_client_version(const SSL *ssl) {
 } /* compat_SSL_client_version() */
 #endif
 
+#if !HAVE_SSL_GET0_PARAM
+#define SSL_get0_param(ssl) compat_SSL_get0_param((ssl))
+
+static X509_VERIFY_PARAM *compat_SSL_get0_param(SSL *ssl) {
+	return ssl->param;
+} /* compat_SSL_get0_param() */
+#endif
+
+#if !HAVE_SSL_SET1_PARAM
+#define SSL_set1_param(ssl, vpm) compat_SSL_set1_param((ssl), (vpm))
+
+static int compat_SSL_set1_param(SSL *ssl, X509_VERIFY_PARAM *vpm) {
+	return X509_VERIFY_PARAM_set1(ssl->param, vpm);
+} /* compat_SSL_set1_param() */
+#endif
+
 #if !HAVE_SSL_UP_REF
 #define SSL_up_ref(...) compat_SSL_up_ref(__VA_ARGS__)
 
@@ -1545,6 +1593,22 @@ static int compat_SSL_up_ref(SSL *ssl) {
 
 	return 1;
 } /* compat_SSL_up_ref() */
+#endif
+
+#if !HAVE_SSL_CTX_GET0_PARAM
+#define SSL_CTX_get0_param(ctx) compat_SSL_CTX_get0_param((ctx))
+
+static X509_VERIFY_PARAM *compat_SSL_CTX_get0_param(SSL_CTX *ctx) {
+	return ctx->param;
+} /* compat_SSL_CTX_get0_param() */
+#endif
+
+#if !HAVE_SSL_CTX_SET1_PARAM
+#define SSL_CTX_set1_param(ctx, vpm) compat_SSL_CTX_set1_param((ctx), (vpm))
+
+static int compat_SSL_CTX_set1_param(SSL_CTX *ctx, X509_VERIFY_PARAM *vpm) {
+	return X509_VERIFY_PARAM_set1(ctx->param, vpm);
+} /* compat_SSL_CTX_set1_param() */
 #endif
 
 #if !HAVE_X509_GET0_EXT
@@ -1665,6 +1729,19 @@ static int compat_X509_up_ref(X509 *crt) {
 
 	return 1;
 } /* compat_X509_up_ref() */
+#endif
+
+#if !HAVE_X509_VERIFY_PARAM_SET1_EMAIL
+/*
+ * NB: Cannot emulate. Requires dereferencing X509_VERIFY_PARAM_ID objects,
+ * which were always opaque.
+ */
+#endif
+
+#if !HAVE_X509_VERIFY_PARAM_SET1_HOST
+/*
+ * NB: See HAVE_X509_VERIFY_PARAM_SET1_EMAIL.
+ */
 #endif
 
 static int compat_init(void) {
@@ -8364,7 +8441,7 @@ static int xp_getDepth(lua_State *L) {
 } /* xp_getDepth() */
 
 
-#if HAVE_X509_AUTH_LEVEL
+#if HAVE_X509_VERIFY_PARAM_SET_AUTH_LEVEL
 static int xp_setAuthLevel(lua_State *L) {
 	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
 	int auth_level = luaL_checkinteger(L, 2);
@@ -8387,6 +8464,7 @@ static int xp_getAuthLevel(lua_State *L) {
 #endif
 
 
+#if HAVE_X509_VERIFY_PARAM_SET1_HOST
 static int xp_setHost(lua_State *L) {
 	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
 	size_t len;
@@ -8399,8 +8477,10 @@ static int xp_setHost(lua_State *L) {
 	lua_pushboolean(L, 1);
 	return 1;
 } /* xp_setHost() */
+#endif
 
 
+#if HAVE_X509_VERIFY_PARAM_ADD1_HOST
 static int xp_addHost(lua_State *L) {
 	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
 	size_t len;
@@ -8413,8 +8493,10 @@ static int xp_addHost(lua_State *L) {
 	lua_pushboolean(L, 1);
 	return 1;
 } /* xp_addHost() */
+#endif
 
 
+#if HAVE_X509_VERIFY_PARAM_SET1_EMAIL
 static int xp_setEmail(lua_State *L) {
 	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
 	size_t len;
@@ -8427,8 +8509,10 @@ static int xp_setEmail(lua_State *L) {
 	lua_pushboolean(L, 1);
 	return 1;
 } /* xp_setEmail() */
+#endif
 
 
+#if HAVE_X509_VERIFY_PARAM_SET1_IP_ASC
 static int xp_setIP(lua_State *L) {
 	X509_VERIFY_PARAM *xp = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
 	const char *str = luaL_checkstring(L, 2);
@@ -8440,6 +8524,7 @@ static int xp_setIP(lua_State *L) {
 	lua_pushboolean(L, 1);
 	return 1;
 } /* xp_setIP() */
+#endif
 
 
 static int xp__gc(lua_State *L) {
@@ -8458,14 +8543,22 @@ static const auxL_Reg xp_methods[] = {
 	{ "setTime", &xp_setTime },
 	{ "setDepth", &xp_setDepth },
 	{ "getDepth", &xp_getDepth },
-#if HAVE_X509_AUTH_LEVEL
+#if HAVE_X509_VERIFY_PARAM_SET_AUTH_LEVEL
 	{ "setAuthLevel", &xp_setAuthLevel },
 	{ "getAuthLevel", &xp_getAuthLevel },
 #endif
+#if HAVE_X509_VERIFY_PARAM_SET1_HOST
 	{ "setHost", &xp_setHost },
+#endif
+#if HAVE_X509_VERIFY_PARAM_ADD1_HOST
 	{ "addHost", &xp_addHost },
+#endif
+#if HAVE_X509_VERIFY_PARAM_SET1_EMAIL
 	{ "setEmail", &xp_setEmail },
+#endif
+#if HAVE_X509_VERIFY_PARAM_SET1_IP_ASC
 	{ "setIP", &xp_setIP },
+#endif
 	{ NULL, NULL },
 };
 
