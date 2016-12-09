@@ -8354,17 +8354,25 @@ static int xp_interpose(lua_State *L) {
 } /* xp_interpose() */
 
 
+/*
+ * NB: Per the OpenSSL source, "[t]he 'inh_flags' field determines how this
+ * function behaves". (Referring to X509_VERIFY_PARAM_inherit.) The way to
+ * set inh_flags prior to OpenSSL 1.1 was by OR'ing flags into the inh_flags
+ * member and restoring it after the call. The OpenSSL 1.1 API makes the
+ * X509_VERIFY_PARAM object opaque, X509_VERIFY_PARAM_inherit, and there's
+ * no other function to set the flags argument; therefore it's not possible
+ * to control the inherit behavior from OpenSSL 1.1.
+ *
+ * For more details see
+ * 	https://github.com/openssl/openssl/issues/2054 and the original
+ * 	https://github.com/wahern/luaossl/pull/76/commits/db6e414d68c0f94c2497d363f6131b4de1710ba9
+ */
 static int xp_inherit(lua_State *L) {
 	X509_VERIFY_PARAM *dest = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
 	X509_VERIFY_PARAM *src = checksimple(L, 2, X509_VERIFY_PARAM_CLASS);
-	int flags = luaL_optinteger(L, 3, 0);
-	unsigned long save_flags = dest->inh_flags;
 	int ret;
 
-	dest->inh_flags |= flags;
 	ret = X509_VERIFY_PARAM_inherit(dest, src);
-	dest->inh_flags = save_flags;
-
 	if (!ret)
 		/* Note: openssl doesn't set an error as it should for some cases */
 		return auxL_error(L, auxL_EOPENSSL, "x509.verify_param:inherit");
