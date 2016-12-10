@@ -8098,6 +8098,15 @@ static int ssl_getParam(lua_State *L) {
 } /* ssl_getParam() */
 
 
+static int ssl_getVerifyResult(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	long res = SSL_get_verify_result(ssl);
+	lua_pushinteger(L, res);
+	lua_pushstring(L, X509_verify_cert_error_string(res));
+	return 2;
+} /* ssl_getVerifyResult() */
+
+
 static int ssl_getPeerCertificate(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	X509 **x509 = prepsimple(L, X509_CERT_CLASS);
@@ -8287,6 +8296,7 @@ static const auxL_Reg ssl_methods[] = {
 	{ "clearOptions",     &ssl_clearOptions },
 	{ "setParam",         &ssl_setParam },
 	{ "getParam",         &ssl_getParam },
+	{ "getVerifyResult",  &ssl_getVerifyResult },
 	{ "getPeerCertificate", &ssl_getPeerCertificate },
 	{ "getPeerChain",     &ssl_getPeerChain },
 	{ "getCipherInfo",    &ssl_getCipherInfo },
