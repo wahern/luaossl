@@ -1,5 +1,6 @@
 local regress = {
 	openssl = require"openssl",
+	bignum = require"openssl.bignum",
 	pkey = require"openssl.pkey",
 	x509 = require"openssl.x509",
 	name = require"openssl.x509.name",
