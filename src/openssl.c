@@ -5950,6 +5950,40 @@ static int xc_getExtensionCount(lua_State *L) {
 } /* xc_getExtensionCount() */
 
 
+static int sk_openssl_string__gc(lua_State *L) {
+	STACK_OF(OPENSSL_STRING) **res = lua_touserdata(L, 1);
+
+	if (*res) {
+		sk_OPENSSL_STRING_free(*res);
+		*res = NULL;
+	}
+
+	return 0;
+} /* sk_openssl_string__gc() */
+
+
+static int xc_getOCSP(lua_State *L) {
+	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
+	STACK_OF(OPENSSL_STRING) **res = prepsimple(L, NULL, &sk_openssl_string__gc);
+	int num, i;
+
+	*res = X509_get1_ocsp(crt);
+	if (!*res)
+		return 0;
+
+	num = sk_OPENSSL_STRING_num(*res);
+	luaL_checkstack(L, num, "too many authorityInfoAccess");
+	for (i = 0; i < num; i++) {
+		lua_pushstring(L, sk_OPENSSL_STRING_value(*res, i));
+	}
+
+	sk_OPENSSL_STRING_free(*res);
+	*res = NULL;
+
+	return num;
+} /* xc_getOCSP */
+
+
 static int xc_isIssuedBy(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	X509 *issuer = checksimple(L, 2, X509_CERT_CLASS);
@@ -6191,6 +6225,7 @@ static const auxL_Reg xc_methods[] = {
 	{ "addExtension",  &xc_addExtension },
 	{ "getExtension",  &xc_getExtension },
 	{ "getExtensionCount", &xc_getExtensionCount },
+	{ "getOCSP",       &xc_getOCSP },
 	{ "isIssuedBy",    &xc_isIssuedBy },
 	{ "getPublicKey",  &xc_getPublicKey },
 	{ "setPublicKey",  &xc_setPublicKey },
