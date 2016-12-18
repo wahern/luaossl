@@ -8397,6 +8397,26 @@ static int ssl_getTLSextStatusType(lua_State *L) {
 #endif
 
 
+static int ssl_setTLSextStatusOCSPResp(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	OCSP_RESPONSE *or = checksimple(L, 2, OCSP_RESPONSE_CLASS);
+
+	unsigned char *resp = NULL;
+	long resp_len;
+
+	resp_len = i2d_OCSP_RESPONSE(or, &resp);
+	if (resp_len <= 0)
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setTLSextStatusOCSPResp");
+
+	if (!SSL_set_tlsext_status_ocsp_resp(ssl, resp, resp_len))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setTLSextStatusOCSPResp");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setTLSextStatusOCSPResp() */
+
+
 static int ssl_getTLSextStatusOCSPResp(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 
@@ -8456,6 +8476,7 @@ static const auxL_Reg ssl_methods[] = {
 #if HAVE_SSL_GET_TLSEXT_STATUS_TYPE
 	{ "getTLSextStatusType", &ssl_getTLSextStatusType },
 #endif
+	{ "setTLSextStatusOCSPResp", &ssl_setTLSextStatusOCSPResp },
 	{ "getTLSextStatusOCSPResp", &ssl_getTLSextStatusOCSPResp },
 	{ NULL,            NULL },
 };
