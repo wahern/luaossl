@@ -6017,23 +6017,17 @@ static int xc_getPublicKeyDigest(lua_State *L) {
 } /* xc_getPublicKeyDigest() */
 
 
-#if 0
-/*
- * TODO: X509_get_signature_type always seems to return NID_undef. Are we
- * using it wrong or is it broken?
- */
 static int xc_getSignatureName(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	int nid;
 
-	if (NID_undef == (nid = X509_get_signature_type(crt)))
+	if (NID_undef == (nid = X509_get_signature_nid(crt)))
 		return 0;
 
 	auxL_pushnid(L, nid);
 
 	return 1;
 } /* xc_getSignatureName() */
-#endif
 
 
 static int xc_sign(lua_State *L) {
@@ -6180,9 +6174,7 @@ static const auxL_Reg xc_methods[] = {
 	{ "getPublicKey",  &xc_getPublicKey },
 	{ "setPublicKey",  &xc_setPublicKey },
 	{ "getPublicKeyDigest", &xc_getPublicKeyDigest },
-#if 0
 	{ "getSignatureName", &xc_getSignatureName },
-#endif
 	{ "sign",          &xc_sign },
 	{ "text",          &xc_text },
 	{ "tostring",      &xc__tostring },
