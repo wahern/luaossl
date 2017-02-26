@@ -5305,7 +5305,12 @@ static int xc_setKeyIdentifier(lua_State *L) {
   ASN1_OBJECT_free(obj);
 
   X509V3_set_ctx_nodb(&ctx);
-  X509V3_set_ctx(&ctx, crt, crt, NULL, NULL, 0);
+  if (lua_gettop(L) == 3 && strcmp(nid, "authorityKeyIdentifier") == 0) {
+    X509 *ca = checksimple(L, 3, X509_CERT_CLASS);
+    X509V3_set_ctx(&ctx, ca, crt, NULL, NULL, 0);
+  } else {
+    X509V3_set_ctx(&ctx, crt, crt, NULL, NULL, 0);
+  }
 
   switch (auxL_checkoption(L, 2, 0, (const char *[]){ "subjectKeyIdentifier", "authorityKeyIdentifier", NULL }, 1)) {
     case 0:
