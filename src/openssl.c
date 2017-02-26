@@ -5324,7 +5324,7 @@ static int xc_setKeyIdentifier(lua_State *L) {
   }
 
   if (!ex)
-    return luaL_error(L, "x509.cert:setKeyIdentifier: cannot create key identifier %s", nid);
+    return auxL_error(L, auxL_EOPENSSL, "x509.cert:setKeyIdentifier");
 
   X509_add_ext(crt, ex, -1);
   X509_EXTENSION_free(ex);
