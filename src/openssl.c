@@ -4958,6 +4958,25 @@ static _Bool xe_new_isder(const char *value, _Bool *crit) {
 	return 0;
 } /* xs_new_isder() */
 
+static CONF* loadconf(lua_State *L, int idx) {
+	CONF *conf;
+	size_t len;
+	const char *cdata = luaL_checklstring(L, idx, &len);
+	BIO *bio = getbio(L);
+	if (BIO_write(bio, cdata, len) < 0)
+		return NULL;
+
+	if (!(conf = NCONF_new(NULL)))
+		return NULL;
+
+	if (!NCONF_load_bio(conf, bio, NULL)) {
+		NCONF_free(conf);
+		return NULL;
+	}
+
+	return conf;
+}
+
 static int xe_new(lua_State *L) {
 	const char *name = luaL_checkstring(L, 1);
 	const char *value = luaL_checkstring(L, 2);
@@ -4991,13 +5010,7 @@ static int xe_new(lua_State *L) {
 			return 1;
 		}
 
-		BIO *bio = getbio(L);
-		if (BIO_puts(bio, cdata) < 0)
-			goto error;
-
-		if (!(conf = NCONF_new(NULL)))
-			goto error;
-		if (!NCONF_load_bio(conf, bio, NULL))
+		if (!(conf = loadconf(L, 3)))
 			goto error;
 
 		ctx = &cbuf;
