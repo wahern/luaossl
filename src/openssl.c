@@ -5019,8 +5019,52 @@ static int xe_new(lua_State *L) {
 		X509V3_set_nconf(ctx, conf);
 		break;
 	}
+	case LUA_TTABLE: {
+		X509 *issuer = NULL;
+		X509 *subject = NULL;
+		X509_REQ *request = NULL;
+		X509_CRL *crl = NULL;
+		int flags = 0;
+
+		ctx = &cbuf;
+
+		if (lua_getfield(L, 3, "db") != LUA_TNIL) {
+			if (!(conf = loadconf(L, -1)))
+				goto error;
+			X509V3_set_nconf(ctx, conf);
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 3, "issuer") != LUA_TNIL) {
+			issuer = checksimple(L, -1, X509_CERT_CLASS);
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 3, "subject") != LUA_TNIL) {
+			subject = checksimple(L, -1, X509_CERT_CLASS);
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 3, "request") != LUA_TNIL) {
+			request = checksimple(L, -1, X509_CSR_CLASS);
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 3, "crl") != LUA_TNIL) {
+			crl = checksimple(L, -1, X509_CRL_CLASS);
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 3, "flags") != LUA_TNIL) {
+			flags = luaL_checkinteger(L, -1);
+		}
+		lua_pop(L, 1);
+
+		X509V3_set_ctx(ctx, issuer, subject, request, crl, flags);
+		break;
+	}
 	default:
-		return luaL_argerror(L, 3, "invalid extra parameter (expected string or nil)");
+		return luaL_argerror(L, 3, "invalid extra parameter (expected string, table or nil)");
 	}
 
 	/*
