@@ -4989,9 +4989,13 @@ static int xe_new(lua_State *L) {
 	lua_settop(L, 3);
 	ud = prepsimple(L, X509_EXT_CLASS);
 
-	if (!lua_isnil(L, 3)) {
+	switch (lua_type(L, 3)) {
+	case LUA_TNONE:
+	case LUA_TNIL:
+		break;
+	case LUA_TSTRING: {
 		size_t len;
-		const char *cdata = luaL_checklstring(L, 3, &len);
+		const char *cdata = lua_tolstring(L, 3, &len);
 		_Bool crit;
 
 		if (xe_new_isder(value, &crit)) {
@@ -5015,6 +5019,10 @@ static int xe_new(lua_State *L) {
 
 		ctx = &cbuf;
 		X509V3_set_nconf(ctx, conf);
+		break;
+	}
+	default:
+		return luaL_argerror(L, 3, "invalid extra parameter (expected string or nil)");
 	}
 
 	/*
