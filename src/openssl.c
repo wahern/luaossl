@@ -3052,7 +3052,7 @@ static int pk_new(lua_State *L) {
 	EVP_PKEY **ud;
 
 	/* #1 table or key; if key, #2 format and #3 type */
-	lua_settop(L, 3);
+	lua_settop(L, 4);
 
 	ud = prepsimple(L, PKEY_CLASS);
 
@@ -3060,8 +3060,10 @@ static int pk_new(lua_State *L) {
 		int type = EVP_PKEY_RSA;
 		unsigned bits = 1024;
 		unsigned exp = 65537;
+		unsigned generator = 2;
 		int curve = NID_X9_62_prime192v1;
 		const char *id;
+		const char *dhparam = NULL;
 		lua_Number n;
 
 		if (!lua_istable(L, 1))
@@ -3103,6 +3105,21 @@ static int pk_new(lua_State *L) {
 				luaL_argerror(L, 1, lua_pushfstring(L, "%s: invalid curve", id));
 		}
 
+		/* dhparam field can contain a PEM encoded string.
+		 * That string can be created and written to a file like so:
+		 *   `openssl dhparam -2 -out dh-2048.pem -outform PEM 2048`
+		 */
+		if (loadfield(L, 1, "dhparam", LUA_TSTRING, &dhparam)) {
+			if (!dhparam || strlen(dhparam)<200)
+				luaL_argerror(L, 1, lua_pushfstring(L, "dhparam must be a PEM encoded string"));
+		}
+
+		/* generator is the one magic number that can be passed in for DH_generate_params */
+		if (loadfield(L, 1, "generator", LUA_TNUMBER, &n)) {
+			luaL_argcheck(L, n > 0 && n <= 5, 1, lua_pushfstring(L, "%f: `generator' invalid", n));
+			generator = (unsigned)n;
+		}
+
 creat:
 		if (!(*ud = EVP_PKEY_new()))
 			return auxL_error(L, auxL_EOPENSSL, "pkey.new");
@@ -3139,9 +3156,35 @@ creat:
 		}
 		case EVP_PKEY_DH: {
 			DH *dh;
+			int codes=0;
 
-			if (!(dh = DH_generate_parameters(bits, exp, 0, 0)))
+			/* DH Parameter Generation can take a long time, therefore we look
+			 * at the "dhparam" field, provided by the user.
+			 * The "dhparam" field takes precedence over "bits"
+			 */
+			if (dhparam) {
+				BIO *bio = BIO_new_mem_buf((void*)dhparam, strlen(dhparam));
+				if (!bio) 
+					return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+
+				dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
+				BIO_free(bio);
+				if (!dh)
+					return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+			}
+			else if (!(dh = DH_generate_parameters(bits, generator, 0, 0)))
 				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+
+			/* int DH_check(const DH *dh, int *codes);
+			 * DH_check() validates Diffie-Hellman parameters. It checks that p 
+			 * is a safe prime, and that g is a suitable generator. In the case 
+			 * of an error, the bit flags DH_CHECK_P_NOT_SAFE_PRIME or 
+			 * DH_NOT_SUITABLE_GENERATOR are set in *codes.
+			 */
+			if (0 == DH_check(dh, &codes) || 0 != codes) {
+				DH_free(dh);
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+			}
 
 			if (!DH_generate_key(dh)) {
 				DH_free(dh);
@@ -3194,7 +3237,7 @@ creat:
 	} else if (lua_isstring(L, 1)) {
 		int type = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
 		int pubonly = 0, prvtonly = 0;
-		const char *opt, *data;
+		const char *opt, *data, *pwd;
 		size_t len;
 		BIO *bio;
 		EVP_PKEY *pub = NULL, *prvt = NULL;
@@ -3211,6 +3254,9 @@ creat:
 			}
 		}
 
+		/* check if password was specified */
+		pwd = luaL_optstring(L, 4, NULL);
+
 		data = luaL_checklstring(L, 1, &len);
 
 		if (!(bio = BIO_new_mem_buf((void *)data, len)))
@@ -3225,14 +3271,14 @@ creat:
 				 */
 				BIO_reset(bio);
 
-				if (!(pub = PEM_read_bio_PUBKEY(bio, NULL, 0, "")))
+				if (!(pub = PEM_read_bio_PUBKEY(bio, NULL, NULL, (void*)pwd)))
 					goterr = 1;
 			}
 
 			if (!pubonly && !prvt) {
 				BIO_reset(bio);
 
-				if (!(prvt = PEM_read_bio_PrivateKey(bio, NULL, 0, "")))
+				if (!(prvt = PEM_read_bio_PrivateKey(bio, NULL, NULL, (void*)pwd)))
 					goterr = 1;
 			}
 		}
@@ -6820,6 +6866,19 @@ static int xx_sign(lua_State *L) {
 } /* xx_sign() */
 
 
+static int xx_verify(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
+
+	if (!X509_CRL_verify(crl, key))
+		return auxL_error(L, auxL_EOPENSSL, "x509.crl:verify");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* xx_verify() */
+
+
 static int xx_text(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 
@@ -6889,6 +6948,7 @@ static const auxL_Reg xx_methods[] = {
 	{ "getExtension",   &xx_getExtension },
 	{ "getExtensionCount", &xx_getExtensionCount },
 	{ "sign",           &xx_sign },
+	{ "verify",         &xx_verify },
 	{ "text",           &xx_text },
 	{ "tostring",       &xx__tostring },
 	{ NULL,             NULL },
@@ -7127,6 +7187,15 @@ static int xs_add(lua_State *L) {
 				X509_CRL_free(crl_dup);
 				return auxL_error(L, auxL_EOPENSSL, "x509.store:add");
 			}
+
+			/* When a CRL was added, enable CRL checking (entire chain) */
+			/* FIXME: do we want this done automatically or not? */
+			X509_VERIFY_PARAM *param = X509_VERIFY_PARAM_new();
+			X509_VERIFY_PARAM_set_flags(param, X509_V_FLAG_CRL_CHECK);
+			X509_VERIFY_PARAM_set_flags(param, X509_V_FLAG_CRL_CHECK_ALL);
+			X509_STORE_set1_param(store, param);
+			X509_VERIFY_PARAM_free(param);
+
 		} else {
 			const char *path = luaL_checkstring(L, i);
 			struct stat st;
@@ -7416,6 +7485,61 @@ static int p12_interpose(lua_State *L) {
 } /* p12_interpose() */
 
 
+static int p12_parse(lua_State *L) {
+	/* parse a p12 binary string and return the parts */
+
+	EVP_PKEY *pkey;
+	X509 *cert;
+	STACK_OF(X509) *ca = NULL;
+	PKCS12 *p12;
+
+	/* gather input parameters */
+	size_t len;
+	const char *blob = luaL_checklstring(L, 1, &len);
+	const char *passphrase = luaL_optstring(L, 2, NULL);;
+
+	/* prepare return values */
+	EVP_PKEY **ud_pkey = prepsimple(L, PKEY_CLASS);
+	X509 **ud_cert = prepsimple(L, X509_CERT_CLASS);
+	STACK_OF(X509) **ud_chain = prepsimple(L, X509_CHAIN_CLASS);
+	/* Note: *ud_chain must be initialised to NULL, which prepsimple does. */
+
+	/* read PKCS#12 data into OpenSSL memory buffer */
+	BIO *bio = BIO_new_mem_buf((void*)blob, len);
+	if (!bio) 
+		return auxL_error(L, auxL_EOPENSSL, "pkcs12.parse");
+	p12 = d2i_PKCS12_bio(bio, NULL);
+	BIO_free(bio);
+	if (!p12)
+		return auxL_error(L, auxL_EOPENSSL, "pkcs12.parse");
+	
+	/* the p12 pointer holds the data we're interested in */
+	int rc = PKCS12_parse(p12, passphrase, ud_pkey, ud_cert, ud_chain);
+	PKCS12_free(p12);
+	if (!rc)
+		auxL_error(L, auxL_EOPENSSL, "pkcs12.parse");
+
+	/* replace the return values by nil if the ud pointers are NULL */
+	if (*ud_pkey == NULL) {
+		lua_pushnil(L);
+		lua_replace(L, -4);
+	}
+
+	if (*ud_cert == NULL) {
+		lua_pushnil(L);
+		lua_replace(L, -3);
+	}
+
+	/* other certificates (a chain, STACK_OF(X509) *) */
+	if (*ud_chain == NULL) {
+		lua_pop(L, 1);
+		lua_pushnil(L);
+	}
+
+	return 3;
+} /* p12_parse() */
+
+
 static int p12__tostring(lua_State *L) {
 	PKCS12 *p12 = checksimple(L, 1, PKCS12_CLASS);
 	BIO *bio = getbio(L);
@@ -7459,6 +7583,7 @@ static const auxL_Reg p12_metatable[] = {
 static const auxL_Reg p12_globals[] = {
 	{ "new",       &p12_new },
 	{ "interpose", &p12_interpose },
+	{ "parse",     &p12_parse },
 	{ NULL,        NULL },
 };
 
