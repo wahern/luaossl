@@ -6676,7 +6676,7 @@ static int xx_getNextUpdate(lua_State *L) {
 		updateby = timeutc(time);
 
 	if (isfinite(updateby))
-		lua_pushnumber(L, 1);
+		lua_pushnumber(L, updateby);
 	else
 		lua_pushnil(L);
 
