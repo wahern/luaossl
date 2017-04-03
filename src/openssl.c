@@ -37,28 +37,29 @@
 #include <errno.h>        /* ENOMEM ENOTSUP EOVERFLOW errno */
 #include <assert.h>       /* assert */
 
-#include <sys/types.h>    /* ssize_t pid_t */
-#include <sys/time.h>     /* struct timeval gettimeofday(2) */
 #include <sys/stat.h>     /* struct stat stat(2) */
 #ifdef _WIN32
-#include <winsock2.h>     /* AF_INET AF_INET6 */
-#include <inaddr.h>       /* struct in_addr struct in6_addr */
-#include <ws2tcpip.h>     /* inet_pton(3) */
+#include <inaddr.h>       /* struct in_addr, struct in6_addr */
+#include <winsock2.h>     /* AF_INET, AF_INET6 */
+#include <ws2tcpip.h>     /* inet_pton */
 #pragma comment(lib, "ws2_32.lib")
-#else
-#include <sys/socket.h>   /* AF_INET AF_INET6 */
-#include <netinet/in.h>   /* struct in_addr struct in6_addr */
-#include <arpa/inet.h>    /* inet_pton(3) */
-#endif
-#include <fcntl.h>        /* O_RDONLY O_CLOEXEC open(2) */
-#include <unistd.h>       /* close(2) getpid(2) */
-#ifdef __WIN32
+#include <wincrypt.h>     /* CryptAcquireContext(), CryptGenRandom(), CryptReleaseContext() */
+#pragma comment(lib, "advapi32.lib")
+#include <windows.h>      /* CreateMutex(), GetLastError(), GetModuleHandleEx(), GetProcessTimes(), InterlockedCompareExchangePointer() */
+#pragma comment(lib, "kernel32.lib")
 #define EXPORT  __declspec (dllexport)
 #else
+#include <arpa/inet.h>    /* inet_pton(3) */
+#include <dlfcn.h>        /* dladdr(3) dlopen(3) */
+#include <fcntl.h>        /* O_RDONLY O_CLOEXEC open(2) */
+#include <netinet/in.h>   /* struct in_addr struct in6_addr */
 #include <pthread.h>      /* pthread_mutex_init(3) pthread_mutex_lock(3) pthread_mutex_unlock(3) */
 #include <sys/resource.h> /* RUSAGE_SELF struct rusage getrusage(2) */
+#include <sys/socket.h>   /* AF_INET AF_INET6 */
+#include <sys/time.h>     /* struct timeval gettimeofday(2) */
+#include <sys/types.h>    /* ssize_t pid_t */
 #include <sys/utsname.h>  /* struct utsname uname(3) */
-#include <dlfcn.h>        /* dladdr(3) dlopen(3) */
+#include <unistd.h>       /* close(2) getpid(2) */
 #define EXPORT
 #endif
 
@@ -10009,7 +10010,11 @@ EXPORT int luaopen__openssl_ocsp_basic(lua_State *L) {
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 struct randL_state {
+#ifdef _WIN32
+	DWORD pid;
+#else
 	pid_t pid;
+#endif
 }; /* struct randL_state */
 
 static struct randL_state *randL_getstate(lua_State *L) {
@@ -10029,6 +10034,31 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 	int error;
 	unsigned char data[256];
 
+#ifdef _WIN32
+	HCRYPTPROV hCryptProv;
+	BOOL ok;
+
+	if (!CryptAcquireContext(&hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
+		error = GetLastError();
+		goto error;
+	}
+	while (count < rqstd) {
+		ok = CryptGenRandom(hCryptProv, sizeof data, (BYTE*)data);
+		if (!ok) {
+			CryptReleaseContext(hCryptProv, 0);
+			error = GetLastError();
+			goto error;
+		}
+
+		RAND_seed(data, sizeof data);
+
+		count += sizeof data;
+	}
+
+	CryptReleaseContext(hCryptProv, 0);
+
+	st->pid = GetCurrentProcessId();
+#else
 #if HAVE_ARC4RANDOM_BUF
 	while (count < rqstd) {
 		size_t n = MIN(rqstd - count, sizeof data);
@@ -10080,8 +10110,10 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 		int fd = open("/dev/urandom", O_RDONLY);
 #endif
 
-		if (fd == -1)
-			goto syserr;
+		if (fd == -1) {
+			error = errno;
+			goto error;
+		}
 
 		while (count < rqstd) {
 			ssize_t n = read(fd, data, MIN(rqstd - count, sizeof data));
@@ -10111,15 +10143,18 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 	}
 
 	st->pid = getpid();
+#endif /* _WIN32 */
 
 	return 0;
-syserr:
-	error = errno;
 error:;
 	struct {
-		struct timeval tv;
+#ifdef _WIN32
+		DWORD pid;
+		SYSTEMTIME tv;
+		FILETIME ftCreation, ftExit, ftKernel, ftUser;
+#else
 		pid_t pid;
-#ifndef _WIN32
+		struct timeval tv;
 		struct rusage ru;
 		struct utsname un;
 #endif
@@ -10131,9 +10166,13 @@ error:;
 #endif
 	} junk;
 
-	gettimeofday(&junk.tv, NULL);
+#ifdef _WIN32
+	junk.pid = GetCurrentProcessId();
+	GetSystemTime(&junk.tv);
+	GetProcessTimes(GetCurrentProcess(), &junk.ftCreation, &junk.ftExit, &junk.ftKernel, &junk.ftUser);
+#else
 	junk.pid = getpid();
-#ifndef _WIN32
+	gettimeofday(&junk.tv, NULL);
 	getrusage(RUSAGE_SELF, &junk.ru);
 	uname(&junk.un);
 #endif
@@ -10158,14 +10197,22 @@ error:;
 
 	RAND_add(&junk, sizeof junk, 0.1);
 
+#ifdef _WIN32
+	st->pid = GetCurrentProcessId();
+#else
 	st->pid = getpid();
+#endif
 
 	return error;
 } /* randL_stir() */
 
 
 static void randL_checkpid(struct randL_state *st) {
+#ifdef _WIN32
+	if (st->pid != GetCurrentProcessId())
+#else
 	if (st->pid != getpid())
+#endif
 		(void)randL_stir(st, 16);
 } /* randL_checkpid() */
 
