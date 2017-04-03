@@ -981,6 +981,10 @@ A table mapping OpenSSL named constants. Includes all constants provided by \mod
 \subsubsection[\fn{ssl.interpose}]{\fn{ssl.interpose($name$, $function$)}}
 Add or interpose an ssl class method. Returns the previous method, if any.
 
+\subsubsection[\fn{ssl:setContext}]{\fn{ssl:setContext($context$)}}
+
+Replaces the \module{openssl.ssl.context} used by $ssl$ with $context$.
+
 \subsubsection[\fn{ssl:setOptions}]{\fn{ssl:setOptions($flags$)}}
 
 Adds the option flags of the SSL connection instance. See \fn{openssl.ssl.context:setOptions}.

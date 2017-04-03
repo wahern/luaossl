@@ -8316,6 +8316,18 @@ static int ssl_interpose(lua_State *L) {
 } /* ssl_interpose() */
 
 
+static int ssl_setContext(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	SSL_CTX *ctx = checksimple(L, 2, SSL_CTX_CLASS);
+
+	if (!SSL_set_SSL_CTX(ssl, ctx))
+		return auxL_error(L, auxL_EOPENSSL, "ssl.setContext");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setContext() */
+
 static int ssl_setOptions(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	auxL_Integer options = auxL_checkinteger(L, 2);
@@ -8676,6 +8688,7 @@ static int ssl__gc(lua_State *L) {
 
 
 static const auxL_Reg ssl_methods[] = {
+	{ "setContext",       &ssl_setContext },
 	{ "setOptions",       &ssl_setOptions },
 	{ "getOptions",       &ssl_getOptions },
 	{ "clearOptions",     &ssl_clearOptions },
