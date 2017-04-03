@@ -4983,35 +4983,34 @@ static int xe_new(lua_State *L) {
 	CONF *conf = NULL;
 	X509V3_CTX cbuf = { 0 }, *ctx = NULL;
 	X509_EXTENSION **ud;
+	_Bool crit;
 
 	lua_settop(L, 3);
 	ud = prepsimple(L, X509_EXT_CLASS);
+
+	if (xe_new_isder(value, &crit)) {
+		size_t len;
+		const char *cdata = lua_tolstring(L, 3, &len);
+		if (!(obj = OBJ_txt2obj(name, 0)))
+			goto error;
+		if (!(oct = ASN1_STRING_new()))
+			goto error;
+		if (!ASN1_STRING_set(oct, cdata, len))
+			goto error;
+		if (!(*ud = X509_EXTENSION_create_by_OBJ(NULL, obj, crit, oct)))
+			goto error;
+
+		ASN1_OBJECT_free(obj);
+		ASN1_STRING_free(oct);
+
+		return 1;
+	}
 
 	switch (lua_type(L, 3)) {
 	case LUA_TNONE:
 	case LUA_TNIL:
 		break;
 	case LUA_TSTRING: {
-		size_t len;
-		const char *cdata = lua_tolstring(L, 3, &len);
-		_Bool crit;
-
-		if (xe_new_isder(value, &crit)) {
-			if (!(obj = OBJ_txt2obj(name, 0)))
-				goto error;
-			if (!(oct = ASN1_STRING_new()))
-				goto error;
-			if (!ASN1_STRING_set(oct, cdata, len))
-				goto error;
-			if (!(*ud = X509_EXTENSION_create_by_OBJ(NULL, obj, crit, oct)))
-				goto error;
-
-			ASN1_OBJECT_free(obj);
-			ASN1_STRING_free(oct);
-
-			return 1;
-		}
-
 		if (!(conf = loadconf(L, 3)))
 			goto error;
 
