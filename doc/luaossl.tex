@@ -555,6 +555,10 @@ Returns a copy of the \module{x509.extension} object identified by $key$ where $
 
 Returns the integer count of the number of extensions.
 
+\subsubsection[\fn{x509:getOCSP}]{\fn{x509:getOCSP()}}
+
+Returns the OCSP urls for the certificate.
+
 \subsubsection[\fn{x509:isIssuedBy}]{\fn{x509:isIssuedBy($issuer$)}}
 
 Returns a boolean according to whether the specified issuer---an \module{openssl.x509.name} object---signed the instance certificate.
@@ -926,6 +930,20 @@ Sets the advertised ALPN protocols. $table$ is an array of protocol string ident
 
 \emph{Only supported since OpenSSL 1.0.2.}
 
+\subsubsection[\fn{context:setTLSextStatusType}]{\fn{context:setTLSextStatusType($type$)}}
+
+Sets the default TLS extension status for SSL objects derived from this context.
+See \fn{ssl:setTLSextStatusType}
+
+\emph{Only supported since OpenSSL 1.1.0.}
+
+\subsubsection[\fn{context:getTLSextStatusType}]{\fn{context:getTLSextStatusType()}}
+
+Gets the default TLS extension status for SSL objects derived from this context as a string.
+See \fn{ssl:getTLSextStatusType}
+
+\emph{Only supported since OpenSSL 1.1.0.}
+
 \end{Module}
 
 
@@ -1013,6 +1031,30 @@ Sets the advertised ALPN protocols. $table$ is an array of protocol string ident
 
 \emph{Only supported since OpenSSL 1.0.2.}
 
+\subsubsection[\fn{ssl:setTLSextStatusType}]{\fn{ssl:setTLSextStatusType($type$)}}
+
+Sets the TLS extension status.
+
+Only the $type$ ``ocsp'' is currently supported, this is used by a client to request that a server sends a stapled OCSP response as part of the TLS handshake.
+
+See also: \fn{context:setTLSextStatusType()}
+
+\subsubsection[\fn{ssl:getTLSextStatusType}]{\fn{ssl:getTLSextStatusType()}}
+
+Gets the TLS extension status. As set by \fn{ssl:setTLSextStatusType} or \fn{context:setTLSextStatusType}.
+
+Only the type ``ocsp'' is currently known.
+
+\emph{Only supported since OpenSSL 1.1.0.}
+
+\subsubsection[\fn{ssl:setTLSextStatusOCSPResp}]{\fn{ssl:setTLSextStatusOCSPResp($or$)}}
+
+Sets an \module{openssl.ocsp.response}. Used by a server to staple an OCSP response into a TLS handshake.
+
+\subsubsection[\fn{ssl:getTLSextStatusOCSPResp}]{\fn{ssl:getTLSextStatusOCSPResp()}}
+
+Returns the \module{openssl.ocsp.response} associated with the ssl object (or $nil$ if one has not been set).
+
 \end{Module}
 
 
@@ -1091,6 +1133,36 @@ Update the cipher instance with the specified string(s). Returns a string on suc
 \subsubsection[\fn{cipher:final}]{\fn{cipher:final([$string$ [, ...]])}}
 
 Update the cipher with the specified string(s). Returns the final output string on success, or nil and an error message on failure. The returned string may be empty if all blocks have already been flushed in prior \fn{:update} calls.
+
+\end{Module}
+
+
+\begin{Module}{openssl.ocsp.response}
+
+Binds OpenSSL's \texttt{OCSP\_RESPONSE} object.
+
+\subsubsection[\fn{response:getBasic}]{\fn{response:getBasic()}}
+
+Returns a \module{openssl.ocsp.basic} representation of the object contained within the OCSP response.
+
+\subsubsection[\fn{response:tostring}]{\fn{response:tostring()}}
+
+Returns a human readable description of the OCSP response as a string.
+
+\subsubsection[\fn{response:toPEM}]{\fn{response:toPEM()}}
+
+Returns the OCSP response as a PEM encoded string.
+
+\end{Module}
+
+
+\begin{Module}{openssl.ocsp.basic}
+
+Binds OpenSSL's \texttt{OCSP\_BASICRESP} object.
+
+\subsubsection[\fn{basic:verify}]{\fn{basic:verify([$certs$ [, $store$[, $flags$]]])}}
+
+Verifies that the OCSP response is signed by a certificate in the \module{openssl.x509.chain} $certs$ or a trusted certificate in \module{openssl.x509.store} $store$.
 
 \end{Module}
 

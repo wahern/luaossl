@@ -69,6 +69,7 @@
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
 #include <openssl/des.h>
+#include <openssl/ocsp.h>
 
 #include <lua.h>
 #include <lualib.h>
@@ -272,6 +273,14 @@
 #define HAVE_SSL_CTX_CERT_STORE (!OPENSSL_PREREQ(1,1,0))
 #endif
 
+#ifndef HAVE_SSL_CTX_SET_TLSEXT_STATUS_TYPE
+#define HAVE_SSL_CTX_SET_TLSEXT_STATUS_TYPE OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_SSL_CTX_GET_TLSEXT_STATUS_TYPE
+#define HAVE_SSL_CTX_GET_TLSEXT_STATUS_TYPE OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HAVE_SSL_GET0_ALPN_SELECTED
 #define HAVE_SSL_GET0_ALPN_SELECTED HAVE_SSL_CTX_SET_ALPN_PROTOS
 #endif
@@ -286,6 +295,10 @@
 
 #ifndef HAVE_SSL_SET1_PARAM
 #define HAVE_SSL_SET1_PARAM OPENSSL_PREREQ(1,0,2)
+#endif
+
+#ifndef HAVE_SSL_GET_TLSEXT_STATUS_TYPE
+#define HAVE_SSL_GET_TLSEXT_STATUS_TYPE OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_SSL_UP_REF
@@ -382,6 +395,8 @@
 #define DIGEST_CLASS     "EVP_MD_CTX*"
 #define HMAC_CLASS       "HMAC_CTX*"
 #define CIPHER_CLASS     "EVP_CIPHER_CTX*"
+#define OCSP_RESPONSE_CLASS "OCSP_RESPONSE*"
+#define OCSP_BASICRESP_CLASS "OCSP_BASICRESP*"
 
 
 #if __GNUC__
@@ -6023,6 +6038,40 @@ static int xc_getExtensionCount(lua_State *L) {
 } /* xc_getExtensionCount() */
 
 
+static int sk_openssl_string__gc(lua_State *L) {
+	STACK_OF(OPENSSL_STRING) **res = lua_touserdata(L, 1);
+
+	if (*res) {
+		sk_OPENSSL_STRING_free(*res);
+		*res = NULL;
+	}
+
+	return 0;
+} /* sk_openssl_string__gc() */
+
+
+static int xc_getOCSP(lua_State *L) {
+	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
+	STACK_OF(OPENSSL_STRING) **res = prepsimple(L, NULL, &sk_openssl_string__gc);
+	int num, i;
+
+	*res = X509_get1_ocsp(crt);
+	if (!*res)
+		return 0;
+
+	num = sk_OPENSSL_STRING_num(*res);
+	luaL_checkstack(L, num, "too many authorityInfoAccess");
+	for (i = 0; i < num; i++) {
+		lua_pushstring(L, sk_OPENSSL_STRING_value(*res, i));
+	}
+
+	sk_OPENSSL_STRING_free(*res);
+	*res = NULL;
+
+	return num;
+} /* xc_getOCSP */
+
+
 static int xc_isIssuedBy(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	X509 *issuer = checksimple(L, 2, X509_CERT_CLASS);
@@ -6258,6 +6307,7 @@ static const auxL_Reg xc_methods[] = {
 	{ "addExtension",  &xc_addExtension },
 	{ "getExtension",  &xc_getExtension },
 	{ "getExtensionCount", &xc_getExtensionCount },
+	{ "getOCSP",       &xc_getOCSP },
 	{ "isIssuedBy",    &xc_isIssuedBy },
 	{ "getPublicKey",  &xc_getPublicKey },
 	{ "setPublicKey",  &xc_setPublicKey },
@@ -8062,6 +8112,48 @@ static int sx_setAlpnSelect(lua_State *L) {
 #endif
 
 
+int TLSEXT_STATUSTYPEs[] = { TLSEXT_STATUSTYPE_ocsp };
+const char *TLSEXT_STATUSTYPEs_names[] = { "ocsp", NULL };
+#define checkTLSEXT_STATUSTYPE(L, idx) \
+	(TLSEXT_STATUSTYPEs[luaL_checkoption((L), (idx), NULL, TLSEXT_STATUSTYPEs_names)])
+
+
+#if HAVE_SSL_CTX_SET_TLSEXT_STATUS_TYPE
+static int sx_setTLSextStatusType(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	int type = checkTLSEXT_STATUSTYPE(L, 2);
+
+	if(!SSL_CTX_set_tlsext_status_type(ctx, type))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setTLSextStatusType");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_setTLSextStatusType() */
+#endif
+
+
+#if HAVE_SSL_CTX_GET_TLSEXT_STATUS_TYPE
+static int sx_getTLSextStatusType(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CLASS);
+
+	int type = SSL_CTX_get_tlsext_status_type(ctx);
+	switch(type) {
+	case -1:
+		lua_pushnil(L);
+		break;
+	case TLSEXT_STATUSTYPE_ocsp:
+		lua_pushliteral(L, "ocsp");
+		break;
+	default:
+		luaL_error(L, "unknown TLS extension %d", type);
+	}
+
+	return 1;
+} /* sx_getTLSextStatusType() */
+#endif
+
+
 static int sx__gc(lua_State *L) {
 	SSL_CTX **ud = luaL_checkudata(L, 1, SSL_CTX_CLASS);
 
@@ -8093,6 +8185,12 @@ static const auxL_Reg sx_methods[] = {
 #endif
 #if HAVE_SSL_CTX_SET_ALPN_SELECT_CB
 	{ "setAlpnSelect",    &sx_setAlpnSelect },
+#endif
+#if HAVE_SSL_CTX_SET_TLSEXT_STATUS_TYPE
+	{ "setTLSextStatusType", &sx_setTLSextStatusType },
+#endif
+#if HAVE_SSL_CTX_GET_TLSEXT_STATUS_TYPE
+	{ "getTLSextStatusType", &sx_getTLSextStatusType },
 #endif
 	{ NULL, NULL },
 };
@@ -8446,6 +8544,87 @@ static int ssl_setAlpnProtos(lua_State *L) {
 #endif
 
 
+static int ssl_setTLSextStatusType(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	int type = checkTLSEXT_STATUSTYPE(L, 2);
+
+	if(!SSL_set_tlsext_status_type(ssl, type))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setTLSextStatusType");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setTLSextStatusType() */
+
+
+#if HAVE_SSL_GET_TLSEXT_STATUS_TYPE
+static int ssl_getTLSextStatusType(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+
+	int type = SSL_get_tlsext_status_type(ssl);
+	switch(type) {
+	case -1:
+		lua_pushnil(L);
+		break;
+	case TLSEXT_STATUSTYPE_ocsp:
+		lua_pushliteral(L, "ocsp");
+		break;
+	default:
+		luaL_error(L, "unknown TLS extension %d", type);
+	}
+
+	return 1;
+} /* ssl_getTLSextStatusType() */
+#endif
+
+
+static int ssl_setTLSextStatusOCSPResp(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	OCSP_RESPONSE *or = testsimple(L, 2, OCSP_RESPONSE_CLASS);
+
+	unsigned char *resp = NULL;
+	long resp_len;
+
+	if (or) {
+		resp_len = i2d_OCSP_RESPONSE(or, &resp);
+		if (resp_len <= 0)
+			return auxL_error(L, auxL_EOPENSSL, "ssl:setTLSextStatusOCSPResp");
+	} else {
+		resp_len = 0;
+	}
+
+	if (!SSL_set_tlsext_status_ocsp_resp(ssl, resp, resp_len))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setTLSextStatusOCSPResp");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setTLSextStatusOCSPResp() */
+
+
+static int ssl_getTLSextStatusOCSPResp(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+
+	OCSP_RESPONSE **ud = prepsimple(L, OCSP_RESPONSE_CLASS);
+	const unsigned char *resp;
+	long resp_len;
+
+	resp_len = SSL_get_tlsext_status_ocsp_resp(ssl, &resp);
+	if (resp == NULL) {
+		lua_pushnil(L);
+		return 1;
+	}
+	if (resp_len == -1)
+		return auxL_error(L, auxL_EOPENSSL, "ssl:getTLSextStatusOCSPResp");
+
+	*ud = d2i_OCSP_RESPONSE(NULL, &resp, resp_len);
+	if(*ud == NULL)
+		return auxL_error(L, auxL_EOPENSSL, "ssl:getTLSextStatusOCSPResp");
+
+	return 1;
+} /* ssl_getTLSextStatusOCSPResp() */
+
+
 static int ssl__gc(lua_State *L) {
 	SSL **ud = luaL_checkudata(L, 1, SSL_CLASS);
 
@@ -8478,6 +8657,12 @@ static const auxL_Reg ssl_methods[] = {
 #if HAVE_SSL_SET_ALPN_PROTOS
 	{ "setAlpnProtos",    &ssl_setAlpnProtos },
 #endif
+	{ "setTLSextStatusType", &ssl_setTLSextStatusType },
+#if HAVE_SSL_GET_TLSEXT_STATUS_TYPE
+	{ "getTLSextStatusType", &ssl_getTLSextStatusType },
+#endif
+	{ "setTLSextStatusOCSPResp", &ssl_setTLSextStatusOCSPResp },
+	{ "getTLSextStatusOCSPResp", &ssl_getTLSextStatusOCSPResp },
 	{ NULL,            NULL },
 };
 
@@ -9215,6 +9400,166 @@ int luaopen__openssl_cipher(lua_State *L) {
 
 
 /*
+ * OCSP_RESPONSE - openssl.ocsp.response
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static int or_tostring(lua_State *L) {
+	OCSP_RESPONSE *resp = checksimple(L, 1, OCSP_RESPONSE_CLASS);
+	BIO *bio = getbio(L);
+	size_t len;
+	char *bytes;
+
+	if (!OCSP_RESPONSE_print(bio, resp, 0))
+		return auxL_error(L, auxL_EOPENSSL, "OCSP_RESPONSE:tostring");
+
+	len = BIO_get_mem_data(bio, &bytes);
+	lua_pushlstring(L, bytes, len);
+
+	return 1;
+} /* or__tostring() */
+
+
+static int or_toPEM(lua_State *L) {
+	OCSP_RESPONSE *resp = checksimple(L, 1, OCSP_RESPONSE_CLASS);
+	BIO *bio = getbio(L);
+	size_t len;
+	char *bytes;
+
+	if (!PEM_write_bio_OCSP_RESPONSE(bio, resp))
+		return auxL_error(L, auxL_EOPENSSL, "OCSP_RESPONSE:toPEM");
+
+	len = BIO_get_mem_data(bio, &bytes);
+	lua_pushlstring(L, bytes, len);
+
+	return 1;
+} /* or_toPEM() */
+
+
+static int or_getBasic(lua_State *L) {
+	OCSP_RESPONSE *resp = checksimple(L, 1, OCSP_RESPONSE_CLASS);
+
+	OCSP_BASICRESP **basic = prepsimple(L, OCSP_BASICRESP_CLASS);
+
+	*basic = OCSP_response_get1_basic(resp);
+	if (!*basic)
+		return auxL_error(L, auxL_EOPENSSL, "OCSP_RESPONSE:getBasic");
+
+	return 1;
+} /* or_getBasic() */
+
+
+static int or__gc(lua_State *L) {
+	OCSP_RESPONSE **ud = luaL_checkudata(L, 1, OCSP_RESPONSE_CLASS);
+
+	if (*ud) {
+		OCSP_RESPONSE_free(*ud);
+		*ud = NULL;
+	}
+
+	return 0;
+} /* or__gc() */
+
+static const auxL_Reg or_methods[] = {
+	{ "tostring", &or_tostring },
+	{ "toPEM",    &or_toPEM },
+	{ "getBasic", &or_getBasic },
+	{ NULL,       NULL },
+};
+
+static const auxL_Reg or_metatable[] = {
+	{ "__tostring", &or_tostring },
+	{ "__gc",       &or__gc },
+	{ NULL,         NULL },
+};
+
+static const auxL_Reg or_globals[] = {
+	{ NULL, NULL },
+};
+
+int luaopen__openssl_ocsp_response(lua_State *L) {
+	initall(L);
+
+	auxL_newlib(L, or_globals, 0);
+
+	return 1;
+} /* luaopen__openssl_ocsp_response() */
+
+
+/*
+ * OCSP_BASICRESP - openssl.ocsp.basic
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static int ob_verify(lua_State *L) {
+	OCSP_BASICRESP *basic = checksimple(L, 1, OCSP_BASICRESP_CLASS);
+	STACK_OF(X509) *certs = testsimple(L, 2, X509_CHAIN_CLASS);
+	X509_STORE *store = testsimple(L, 3, X509_STORE_CLASS);
+	unsigned long flags = luaL_optinteger(L, 4, 0);
+
+	int res = OCSP_basic_verify(basic, certs, store, flags);
+	if (res == -1)
+		return auxL_error(L, auxL_EOPENSSL, "OCSP_BASICRESP:verify");
+
+	lua_pushboolean(L, res);
+	if (res) {
+		return 1;
+	} else {
+		auxL_pusherror(L, auxL_EOPENSSL, NULL);
+		return 2;
+	}
+} /* ob_verify() */
+
+
+static int ob__gc(lua_State *L) {
+	OCSP_BASICRESP **ud = luaL_checkudata(L, 1, OCSP_BASICRESP_CLASS);
+
+	if (*ud) {
+		OCSP_BASICRESP_free(*ud);
+		*ud = NULL;
+	}
+
+	return 0;
+} /* or__gc() */
+
+
+static const auxL_Reg ob_methods[] = {
+	{ "verify", &ob_verify },
+	{ NULL, NULL },
+};
+
+static const auxL_Reg ob_metatable[] = {
+	{ "__gc", &ob__gc },
+	{ NULL,   NULL },
+};
+
+static const auxL_Reg ob_globals[] = {
+	{ NULL,   NULL },
+};
+
+static const auxL_IntegerReg ob_verify_flags[] = {
+	{ "NOSIGS", OCSP_NOSIGS},
+	{ "NOVERIFY", OCSP_NOVERIFY},
+	{ "NOCHAIN", OCSP_NOCHAIN},
+	{ "NOCHECKS", OCSP_NOCHECKS},
+	{ "NOEXPLICIT", OCSP_NOEXPLICIT},
+	{ "TRUSTOTHER", OCSP_TRUSTOTHER},
+	{ "NOINTERN", OCSP_NOINTERN},
+	{ "TRUSTOTHER", OCSP_TRUSTOTHER},
+	{ NULL, 0 },
+};
+
+int luaopen__openssl_ocsp_basic(lua_State *L) {
+	initall(L);
+
+	auxL_newlib(L, ob_globals, 0);
+	auxL_setintegers(L, ob_verify_flags);
+
+	return 1;
+} /* luaopen__openssl_ocsp_basic() */
+
+
+/*
  * Rand - openssl.rand
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -9779,5 +10124,7 @@ static void initall(lua_State *L) {
 	auxL_addclass(L, DIGEST_CLASS, md_methods, md_metatable, 0);
 	auxL_addclass(L, HMAC_CLASS, hmac_methods, hmac_metatable, 0);
 	auxL_addclass(L, CIPHER_CLASS, cipher_methods, cipher_metatable, 0);
+	auxL_addclass(L, OCSP_RESPONSE_CLASS, or_methods, or_metatable, 0);
+	auxL_addclass(L, OCSP_BASICRESP_CLASS, ob_methods, ob_metatable, 0);
 } /* initall() */
 
