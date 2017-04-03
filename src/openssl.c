@@ -254,6 +254,10 @@
 #define HAVE_SSL_CTX_GET0_PARAM OPENSSL_PREREQ(1,0,2)
 #endif
 
+#ifndef HAVE_SSL_CTX_SET_CURVES_LIST
+#define HAVE_SSL_CTX_SET_CURVES_LIST (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,5,1))
+#endif
+
 #ifndef HAVE_SSL_CTX_SET_ALPN_PROTOS
 #define HAVE_SSL_CTX_SET_ALPN_PROTOS (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,1,3))
 #endif
@@ -7746,6 +7750,21 @@ static int sx_setCipherList(lua_State *L) {
 } /* sx_setCipherList() */
 
 
+#if HAVE_SSL_CTX_SET_CURVES_LIST
+static int sx_setCurvesList(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	const char *curves = luaL_checkstring(L, 2);
+
+	if (!SSL_CTX_set1_curves_list(ctx, curves))
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setCurvesList");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_setCurvesList() */
+#endif
+
+
 static int sx_setEphemeralKey(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
@@ -7941,6 +7960,9 @@ static const auxL_Reg sx_methods[] = {
 	{ "setCertificate",   &sx_setCertificate },
 	{ "setPrivateKey",    &sx_setPrivateKey },
 	{ "setCipherList",    &sx_setCipherList },
+#if HAVE_SSL_CTX_SET_CURVES_LIST
+	{ "setCurvesList",    &sx_setCurvesList },
+#endif
 	{ "setEphemeralKey",  &sx_setEphemeralKey },
 #if HAVE_SSL_CTX_SET_ALPN_PROTOS
 	{ "setAlpnProtos",    &sx_setAlpnProtos },
