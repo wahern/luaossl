@@ -6838,6 +6838,19 @@ static int xx_sign(lua_State *L) {
 } /* xx_sign() */
 
 
+static int xx_verify(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
+
+	if (!X509_CRL_verify(crl, key))
+		return auxL_error(L, auxL_EOPENSSL, "x509.crl:verify");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* xx_verify() */
+
+
 static int xx_text(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 
@@ -6907,6 +6920,7 @@ static const auxL_Reg xx_methods[] = {
 	{ "getExtension",   &xx_getExtension },
 	{ "getExtensionCount", &xx_getExtensionCount },
 	{ "sign",           &xx_sign },
+	{ "verify",         &xx_verify },
 	{ "text",           &xx_text },
 	{ "tostring",       &xx__tostring },
 	{ NULL,             NULL },
