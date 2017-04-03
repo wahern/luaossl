@@ -297,6 +297,10 @@
 #define HAVE_SSL_SET1_PARAM OPENSSL_PREREQ(1,0,2)
 #endif
 
+#ifndef HAVE_SSL_GET_CLIENT_RANDOM
+#define HAVE_SSL_GET_CLIENT_RANDOM OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HAVE_SSL_GET_TLSEXT_STATUS_TYPE
 #define HAVE_SSL_GET_TLSEXT_STATUS_TYPE OPENSSL_PREREQ(1,1,0)
 #endif
@@ -1574,6 +1578,18 @@ static void compat_RSA_set0_key(RSA *r, BIGNUM *n, BIGNUM *e, BIGNUM *d) {
 	if (d)
 		auxS_bn_free_and_set0(&r->d, d);
 } /* compat_RSA_set0_key() */
+#endif
+
+#if !HAVE_SSL_GET_CLIENT_RANDOM
+#define SSL_get_client_random(...) compat_SSL_get_client_random(__VA_ARGS__)
+static size_t compat_SSL_get_client_random(const SSL *ssl, unsigned char *out, size_t outlen) {
+    if (outlen == 0)
+        return sizeof(ssl->s3->client_random);
+    if (outlen > sizeof(ssl->s3->client_random))
+        outlen = sizeof(ssl->s3->client_random);
+    memcpy(out, ssl->s3->client_random, outlen);
+    return outlen;
+}
 #endif
 
 #if !HAVE_SSL_CLIENT_VERSION
@@ -8474,6 +8490,31 @@ static int ssl_getVersion(lua_State *L) {
 } /* ssl_getVersion() */
 
 
+static int ssl_getClientRandom(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	luaL_Buffer B;
+	size_t len;
+	unsigned char *out;
+
+	len = SSL_get_client_random(ssl, NULL, 0);
+#if LUA_VERSION_NUM < 502
+	if (LUAL_BUFFERSIZE < len)
+		luaL_error(L, "ssl:getClientRandom: LUAL_BUFFERSIZE(%d) < SSL_get_client_random(ssl, NULL, 0)", (int)LUAL_BUFFERSIZE, (int)len);
+	luaL_buffinit(L, &B);
+	out = luaL_prepbuffer(&B);
+	len = SSL_get_client_random(ssl, out, len);
+	luaL_addsize(&B, len);
+	luaL_pushresult(&B);
+#else
+	out = luaL_buffinitsize(L, &B, len);
+	len = SSL_get_client_random(ssl, out, len);
+	luaL_pushresultsize(&B, len);
+#endif
+
+	return 1;
+} /* ssl_getClientRandom() */
+
+
 static int ssl_getClientVersion(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	int format = luaL_checkoption(L, 2, "d", (const char *[]){ "d", ".", "f", NULL });
@@ -8650,6 +8691,7 @@ static const auxL_Reg ssl_methods[] = {
 	{ "getHostName",      &ssl_getHostName },
 	{ "setHostName",      &ssl_setHostName },
 	{ "getVersion",       &ssl_getVersion },
+	{ "getClientRandom",  &ssl_getClientRandom },
 	{ "getClientVersion", &ssl_getClientVersion },
 #if HAVE_SSL_GET0_ALPN_SELECTED
 	{ "getAlpnSelected",  &ssl_getAlpnSelected },
