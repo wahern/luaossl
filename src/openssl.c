@@ -258,6 +258,10 @@
 #define HAVE_SSL_CTX_SET_CURVES_LIST (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,5,1))
 #endif
 
+#ifndef HAVE_SSL_CTX_SET_ECDH_AUTO
+#define HAVE_SSL_CTX_SET_ECDH_AUTO ((OPENSSL_PREREQ(1,0,2) && !OPENSSL_PREREQ(1,1,0)) || LIBRESSL_PREREQ(2,1,2))
+#endif
+
 #ifndef HAVE_SSL_CTX_SET_ALPN_PROTOS
 #define HAVE_SSL_CTX_SET_ALPN_PROTOS (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,1,3))
 #endif
@@ -7574,6 +7578,15 @@ static int sx_new(lua_State *L) {
 		return auxL_error(L, auxL_EOPENSSL, "ssl.context.new");
 
 	SSL_CTX_set_options(*ud, options);
+
+#if HAVE_SSL_CTX_SET_ECDH_AUTO
+	/* OpenSSL 1.0.2 introduced SSL_CTX_set_ecdh_auto to automatically select
+	 * from the curves set via SSL_CTX_set1_curves_list. However as of OpenSSL
+	 * 1.1.0, the functionality was turned on permanently and the option
+	 * removed. */
+	if (!SSL_CTX_set_ecdh_auto(*ud, 1))
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context.new");
+#endif
 
 	return 1;
 } /* sx_new() */
