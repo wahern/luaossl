@@ -30,7 +30,6 @@
 #include <limits.h>       /* INT_MAX INT_MIN LLONG_MAX LLONG_MIN UCHAR_MAX ULLONG_MAX */
 #include <stdint.h>       /* uintptr_t */
 #include <string.h>       /* memset(3) strerror_r(3) */
-#include <strings.h>      /* strcasecmp(3) */
 #include <math.h>         /* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
 #include <time.h>         /* struct tm time_t strptime(3) time(2) */
 #include <ctype.h>        /* isdigit(3), isxdigit(3), tolower(3) */
@@ -493,7 +492,12 @@
 #undef MIN
 #define MIN(a, b) (((a) < (b))? (a) : (b))
 
+#ifdef _WIN32
+#define stricmp(a, b) _stricmp((a), (b))
+#else
+#include <strings.h>      /* strcasecmp(3) */
 #define stricmp(a, b) strcasecmp((a), (b))
+#endif
 #define strieq(a, b) (!stricmp((a), (b)))
 
 #define xtolower(c) tolower((unsigned char)(c))
@@ -988,7 +992,13 @@ NOTUSED static auxtype_t auxL_getref(lua_State *L, auxref_t ref) {
 
 static int auxL_testoption(lua_State *L, int index, const char *def, const char *const *optlist, _Bool nocase) {
 	const char *optname = (def)? luaL_optstring(L, index, def) : luaL_checkstring(L, index);
-	int (*optcmp)() = (nocase)? &strcasecmp : &strcmp;
+	int (*optcmp)() = (nocase)?
+#ifdef _WIN32
+		&_stricmp
+#else
+		&strcasecmp
+#endif
+		: &strcmp;
 	int i;
 
 	for (i = 0; optlist[i]; i++) {
