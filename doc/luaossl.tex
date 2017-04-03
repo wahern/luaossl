@@ -389,7 +389,19 @@ Binds the X.509 extension OpenSSL object.
 
 \subsubsection[\fn{extension.new}]{\fn{extension.new($name$, $value$ [, $data$])}}
 
-Returns a new X.509 extension. If $value$ is the string ``DER'' or ``critical,DER'', then $data$ is an ASN.1-encoded octet string. Otherwise, $name$ and $value$ are plain text strings in \href{https://www.openssl.org/docs/apps/x509v3_config.html#ARBITRARY_EXTENSIONS}{OpenSSL's arbitrary extension format}; and if specified, $data$ is an OpenSSL configuration string defining any referenced identifiers in $value$.
+Returns a new X.509 extension.
+If $value$ is the string ``DER'' or ``critical,DER'', then $data$ is an ASN.1-encoded octet string.
+Otherwise, $name$ and $value$ are plain text strings in \href{https://www.openssl.org/docs/apps/x509v3_config.html#ARBITRARY_EXTENSIONS}{OpenSSL's arbitrary extension format}; and if specified, $data$ is either an OpenSSL configuration string defining any referenced identifiers in $value$, or a table with members:
+
+\begin{ctabular}{ l | l | p{8cm} }
+field & type:default & description\\\hline
+.db & string:$nil$ & OpenSSL configuration string\\
+.issuer & \module{openssl.x509}:$nil$ & issuer certificate\\
+.subject & \module{openssl.x509}:$nil$ & subject certificate\\
+.request & \module{openssl.x509.csr}:$nil$ & certificate signing request\\
+.crl & \module{openssl.x509.crl}:$nil$ & certificate revocation list\\
+.flags & integer:$0$ & a bitwise combination of flags
+\end{ctabular}
 
 \subsubsection[\fn{extension.interpose}]{\fn{extension.interpose($name$, $function$)}}
 
