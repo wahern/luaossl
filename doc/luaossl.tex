@@ -286,8 +286,13 @@ field & type:default & description\\\hline
 
 .exp & number:65537 & RSA or Diffie-Hellman exponent \\
 
+.dhparam & string & PEM encoded string with precomputed DH parameters \\
+
 .curve & string:prime192v1 & for elliptic curve keys, the OpenSSL string identifier of the curve
 \end{ctabular}
+
+The DH parameters ``dhparam'' will be generated on the fly, ``bits'' wide. This is a slow process, and especially for larger sizes, you would precompute those; for example: ``openssl dhparam -2 -out dh-2048.pem -outform PEM 2048''. Using the field ``dhparam'' overrides the ``bits'' field.
+
 \subsubsection[\fn{pkey.interpose}]{\fn{pkey.interpose($name$, $function$)}}
 
 Add or interpose a pkey class method. Returns the previous method, if any.

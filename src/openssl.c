@@ -3062,6 +3062,7 @@ static int pk_new(lua_State *L) {
 		unsigned exp = 65537;
 		int curve = NID_X9_62_prime192v1;
 		const char *id;
+		const char *dhparam = NULL;
 		lua_Number n;
 
 		if (!lua_istable(L, 1))
@@ -3103,6 +3104,9 @@ static int pk_new(lua_State *L) {
 				luaL_argerror(L, 1, lua_pushfstring(L, "%s: invalid curve", id));
 		}
 
+		/* dhparam field can contain a PEM encoded string. */
+		loadfield(L, 1, "dhparam", LUA_TSTRING, &dhparam);
+
 creat:
 		if (!(*ud = EVP_PKEY_new()))
 			return auxL_error(L, auxL_EOPENSSL, "pkey.new");
@@ -3140,8 +3144,22 @@ creat:
 		case EVP_PKEY_DH: {
 			DH *dh;
 
-			if (!(dh = DH_generate_parameters(bits, exp, 0, 0)))
+			/* DH Parameter Generation can take a long time, therefore we look
+			 * at the "dhparam" field, provided by the user.
+			 * The "dhparam" field takes precedence over "bits"
+			 */
+			if (dhparam) {
+				BIO *bio = BIO_new_mem_buf((void*)dhparam, strlen(dhparam));
+				if (!bio)
+					return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+
+				dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
+				BIO_free(bio);
+				if (!dh)
+					return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+			} else if (!(dh = DH_generate_parameters(bits, exp, 0, 0)))
 				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+
 
 			if (!DH_generate_key(dh)) {
 				DH_free(dh);
