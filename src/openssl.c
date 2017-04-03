@@ -300,6 +300,10 @@
 #define HAVE_SSLV2_SERVER_METHOD (!OPENSSL_PREREQ(1,1,0) && !defined OPENSSL_NO_SSL2)
 #endif
 
+#ifndef HAVE_X509_GET_SIGNATURE_NID
+#define HAVE_X509_GET_SIGNATURE_NID (OPENSSL_PREREQ(1,0,2))
+#endif
+
 #ifndef HAVE_X509_STORE_REFERENCES
 #define HAVE_X509_STORE_REFERENCES (!OPENSSL_PREREQ(1,1,0))
 #endif
@@ -1611,6 +1615,10 @@ static int compat_SSL_CTX_set1_param(SSL_CTX *ctx, X509_VERIFY_PARAM *vpm) {
 
 #if !HAVE_X509_GET0_EXT
 #define X509_get0_ext(crt, i) X509_get_ext((crt), (i))
+#endif
+
+#if !HAVE_X509_GET_SIGNATURE_NID
+#define X509_get_signature_nid(crt) OBJ_obj2nid((crt)->sig_alg->algorithm)
 #endif
 
 #if !HAVE_X509_CRL_GET0_EXT
@@ -6097,23 +6105,17 @@ static int xc_getPublicKeyDigest(lua_State *L) {
 } /* xc_getPublicKeyDigest() */
 
 
-#if 0
-/*
- * TODO: X509_get_signature_type always seems to return NID_undef. Are we
- * using it wrong or is it broken?
- */
 static int xc_getSignatureName(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	int nid;
 
-	if (NID_undef == (nid = X509_get_signature_type(crt)))
+	if (NID_undef == (nid = X509_get_signature_nid(crt)))
 		return 0;
 
 	auxL_pushnid(L, nid);
 
 	return 1;
 } /* xc_getSignatureName() */
-#endif
 
 
 static int xc_sign(lua_State *L) {
@@ -6260,9 +6262,7 @@ static const auxL_Reg xc_methods[] = {
 	{ "getPublicKey",  &xc_getPublicKey },
 	{ "setPublicKey",  &xc_setPublicKey },
 	{ "getPublicKeyDigest", &xc_getPublicKeyDigest },
-#if 0
 	{ "getSignatureName", &xc_getSignatureName },
-#endif
 	{ "sign",          &xc_sign },
 	{ "text",          &xc_text },
 	{ "tostring",      &xc__tostring },
