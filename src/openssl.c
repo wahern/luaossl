@@ -7434,6 +7434,61 @@ static int p12_interpose(lua_State *L) {
 } /* p12_interpose() */
 
 
+static int p12_parse(lua_State *L) {
+	/* parse a p12 binary string and return the parts */
+
+	EVP_PKEY *pkey;
+	X509 *cert;
+	STACK_OF(X509) *ca = NULL;
+	PKCS12 *p12;
+
+	/* gather input parameters */
+	size_t len;
+	const char *blob = luaL_checklstring(L, 1, &len);
+	const char *passphrase = luaL_optstring(L, 2, NULL);
+
+	/* prepare return values */
+	EVP_PKEY **ud_pkey = prepsimple(L, PKEY_CLASS);
+	X509 **ud_cert = prepsimple(L, X509_CERT_CLASS);
+	STACK_OF(X509) **ud_chain = prepsimple(L, X509_CHAIN_CLASS);
+	/* Note: *ud_chain must be initialised to NULL, which prepsimple does. */
+
+	/* read PKCS#12 data into OpenSSL memory buffer */
+	BIO *bio = BIO_new_mem_buf((void*)blob, len);
+	if (!bio)
+		return auxL_error(L, auxL_EOPENSSL, "pkcs12.parse");
+	p12 = d2i_PKCS12_bio(bio, NULL);
+	BIO_free(bio);
+	if (!p12)
+		return auxL_error(L, auxL_EOPENSSL, "pkcs12.parse");
+
+	/* the p12 pointer holds the data we're interested in */
+	int rc = PKCS12_parse(p12, passphrase, ud_pkey, ud_cert, ud_chain);
+	PKCS12_free(p12);
+	if (!rc)
+		auxL_error(L, auxL_EOPENSSL, "pkcs12.parse");
+
+	/* replace the return values by nil if the ud pointers are NULL */
+	if (*ud_pkey == NULL) {
+		lua_pushnil(L);
+		lua_replace(L, -4);
+	}
+
+	if (*ud_cert == NULL) {
+		lua_pushnil(L);
+		lua_replace(L, -3);
+	}
+
+	/* other certificates (a chain, STACK_OF(X509) *) */
+	if (*ud_chain == NULL) {
+		lua_pop(L, 1);
+		lua_pushnil(L);
+	}
+
+	return 3;
+} /* p12_parse() */
+
+
 static int p12__tostring(lua_State *L) {
 	PKCS12 *p12 = checksimple(L, 1, PKCS12_CLASS);
 	BIO *bio = getbio(L);
@@ -7477,6 +7532,7 @@ static const auxL_Reg p12_metatable[] = {
 static const auxL_Reg p12_globals[] = {
 	{ "new",       &p12_new },
 	{ "interpose", &p12_interpose },
+	{ "parse",     &p12_parse },
 	{ NULL,        NULL },
 };
 

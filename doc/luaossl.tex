@@ -768,6 +768,10 @@ Add or interpose a store class method. Returns the previous method, if any.
 
 Returns a PKCS \#12 binary encoded string.
 
+\subsubsection[\fn{pkcs12.parse}]{\fn{pkcs12.parse($bag$[, $passphrase$])}}
+
+Parses a PKCS\#12 bag, presented as a binary string $bag$. The second parameter $passphrase$ is the passphrase required to decrypt the PKCS\#12 bag. The function returns three items; namely the key, certificate and the CA chain, as their respective objects. If an item is absent, it will be substituted with nil.
+
 \end{Module}
 
 
