@@ -886,6 +886,23 @@ Returns the option flags of the context instance as an integer.
 
 Clears the option flags of the context instance.
 
+\subsubsection[\fn{context:setStore}]{\fn{context:setStore($store$)}}
+
+Associate the \module{openssl.x509.store} object $store$ with $context$. Replaces any existing store.
+
+\subsubsection[\fn{context:getStore}]{\fn{context:getStore()}}
+
+Returns the \module{openssl.x509.store} object associated with $context$.
+
+\subsubsection[\fn{context:setParam}]{\fn{context:setParam($params$)}}
+
+Causes $context$ to inherit the parameters from the \module{openssl.x509.verify\_param} object $params$.
+Only parameters set in $params$ will take effect (others will stay unchanged).
+
+\subsubsection[\fn{context:getParam}]{\fn{context:getParam()}}
+
+Returns an \module{openssl.x509.verify\_param} object containing a copy of $context$'s parameters.
+
 \subsubsection[\fn{context:setVerify}]{\fn{context:setVerify([$mode$][, $depth$])}}
 
 Sets the verification mode flags and maximum validation chain depth.
@@ -927,6 +944,12 @@ Sets \module{openssl.pkey} object $key$ as the ephemeral key during key exchange
 \subsubsection[\fn{context:setAlpnProtos}]{\fn{context:setAlpnProtos($table$)}}
 
 Sets the advertised ALPN protocols. $table$ is an array of protocol string identifiers.
+
+\emph{Only supported since OpenSSL 1.0.2.}
+
+\subsubsection[\fn{context:setAlpnSelect}]{\fn{context:setAlpnSelect($cb$)}}
+
+Sets the callback used to select an ALPN protocol. $cb$ should be a function that takes two arguments: an \module{openssl.ssl} object and a table containing a sequence of ALPN protocol strings; it should return the ALPN protocol string it selected or $nil$ to select none of them.
 
 \emph{Only supported since OpenSSL 1.0.2.}
 
