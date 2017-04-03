@@ -74,9 +74,7 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
-#if LUA_VERSION_NUM < 502
 #include "compat52.h"
-#endif
 
 #define GNUC_2VER(M, m, p) (((M) * 10000) + ((m) * 100) + (p))
 #define GNUC_PREREQ(M, m, p) (__GNUC__ > 0 && GNUC_2VER(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__) >= GNUC_2VER((M), (m), (p)))
@@ -4976,6 +4974,25 @@ static _Bool xe_new_isder(const char *value, _Bool *crit) {
 	return 0;
 } /* xs_new_isder() */
 
+static CONF* loadconf(lua_State *L, int idx) {
+	CONF *conf;
+	size_t len;
+	const char *cdata = luaL_checklstring(L, idx, &len);
+	BIO *bio = getbio(L);
+	if (BIO_write(bio, cdata, len) < 0)
+		return NULL;
+
+	if (!(conf = NCONF_new(NULL)))
+		return NULL;
+
+	if (!NCONF_load_bio(conf, bio, NULL)) {
+		NCONF_free(conf);
+		return NULL;
+	}
+
+	return conf;
+}
+
 static int xe_new(lua_State *L) {
 	const char *name = luaL_checkstring(L, 1);
 	const char *value = luaL_checkstring(L, 2);
@@ -4984,42 +5001,87 @@ static int xe_new(lua_State *L) {
 	CONF *conf = NULL;
 	X509V3_CTX cbuf = { 0 }, *ctx = NULL;
 	X509_EXTENSION **ud;
+	_Bool crit;
 
 	lua_settop(L, 3);
 	ud = prepsimple(L, X509_EXT_CLASS);
 
-	if (!lua_isnil(L, 3)) {
+	if (xe_new_isder(value, &crit)) {
 		size_t len;
-		const char *cdata = luaL_checklstring(L, 3, &len);
-		_Bool crit;
-
-		if (xe_new_isder(value, &crit)) {
-			if (!(obj = OBJ_txt2obj(name, 0)))
-				goto error;
-			if (!(oct = ASN1_STRING_new()))
-				goto error;
-			if (!ASN1_STRING_set(oct, cdata, len))
-				goto error;
-			if (!(*ud = X509_EXTENSION_create_by_OBJ(NULL, obj, crit, oct)))
-				goto error;
-
-			ASN1_OBJECT_free(obj);
-			ASN1_STRING_free(oct);
-
-			return 1;
-		}
-
-		BIO *bio = getbio(L);
-		if (BIO_puts(bio, cdata) < 0)
+		const char *cdata = lua_tolstring(L, 3, &len);
+		if (!(obj = OBJ_txt2obj(name, 0)))
+			goto error;
+		if (!(oct = ASN1_STRING_new()))
+			goto error;
+		if (!ASN1_STRING_set(oct, cdata, len))
+			goto error;
+		if (!(*ud = X509_EXTENSION_create_by_OBJ(NULL, obj, crit, oct)))
 			goto error;
 
-		if (!(conf = NCONF_new(NULL)))
-			goto error;
-		if (!NCONF_load_bio(conf, bio, NULL))
+		ASN1_OBJECT_free(obj);
+		ASN1_STRING_free(oct);
+
+		return 1;
+	}
+
+	switch (lua_type(L, 3)) {
+	case LUA_TNONE:
+	case LUA_TNIL:
+		break;
+	case LUA_TSTRING: {
+		if (!(conf = loadconf(L, 3)))
 			goto error;
 
 		ctx = &cbuf;
 		X509V3_set_nconf(ctx, conf);
+		break;
+	}
+	case LUA_TTABLE: {
+		X509 *issuer = NULL;
+		X509 *subject = NULL;
+		X509_REQ *request = NULL;
+		X509_CRL *crl = NULL;
+		int flags = 0;
+
+		ctx = &cbuf;
+
+		if (lua_getfield(L, 3, "db") != LUA_TNIL) {
+			if (!(conf = loadconf(L, -1)))
+				goto error;
+			X509V3_set_nconf(ctx, conf);
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 3, "issuer") != LUA_TNIL) {
+			issuer = checksimple(L, -1, X509_CERT_CLASS);
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 3, "subject") != LUA_TNIL) {
+			subject = checksimple(L, -1, X509_CERT_CLASS);
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 3, "request") != LUA_TNIL) {
+			request = checksimple(L, -1, X509_CSR_CLASS);
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 3, "crl") != LUA_TNIL) {
+			crl = checksimple(L, -1, X509_CRL_CLASS);
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 3, "flags") != LUA_TNIL) {
+			flags = luaL_checkinteger(L, -1);
+		}
+		lua_pop(L, 1);
+
+		X509V3_set_ctx(ctx, issuer, subject, request, crl, flags);
+		break;
+	}
+	default:
+		return luaL_argerror(L, 3, "invalid extra parameter (expected string, table or nil)");
 	}
 
 	/*

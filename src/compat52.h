@@ -23,6 +23,14 @@
  * USE OR OTHER DEALINGS IN THE SOFTWARE.
  * ==========================================================================
  */
+
+
+#if LUA_VERSION_NUM < 503
+
+#define lua_getfield(L, i, f) (lua_getfield(L, (i), (f)), lua_type(L, -1))
+
+#endif
+
 #if LUA_VERSION_NUM < 502
 
 #define LUA_OK 0
