@@ -7328,7 +7328,7 @@ static int xs_verify(lua_State *L) {
 	X509 *crt = checksimple(L, 2, X509_CERT_CLASS);
 	STACK_OF(X509) *chain = NULL, **proof;
 	X509_STORE_CTX *ctx = NULL;
-	int nr = 0, ok, why;
+	int ok, why;
 
 	/* pre-allocate space for a successful return */
 	lua_settop(L, 3);
@@ -7363,27 +7363,24 @@ static int xs_verify(lua_State *L) {
 	case 1: /* verified */
 		if (!(*proof = X509_STORE_CTX_get1_chain(ctx)))
 			goto eossl;
+		X509_STORE_CTX_free(ctx);
 
 		lua_pushboolean(L, 1);
 		lua_pushvalue(L, -2);
-		nr = 2;
 
-		break;
+		return 2;
 	case 0: /* not verified */
 		why = X509_STORE_CTX_get_error(ctx);
+		X509_STORE_CTX_free(ctx);
 
 		lua_pushboolean(L, 0);
 		lua_pushstring(L, X509_verify_cert_error_string(why));
-		nr = 2;
 
-		break;
+		return 2;
 	default:
 		goto eossl;
 	}
 
-	X509_STORE_CTX_free(ctx);
-
-	return nr;
 eossl:
 	if (ctx)
 		X509_STORE_CTX_free(ctx);
