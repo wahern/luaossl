@@ -7512,10 +7512,6 @@ static int p12_interpose(lua_State *L) {
 
 static int p12_parse(lua_State *L) {
 	/* parse a p12 binary string and return the parts */
-
-	EVP_PKEY *pkey;
-	X509 *cert;
-	STACK_OF(X509) *ca = NULL;
 	PKCS12 *p12;
 
 	/* gather input parameters */
