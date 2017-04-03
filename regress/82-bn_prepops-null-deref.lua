@@ -14,7 +14,7 @@
 -- 		bn_prepops(L, &r, &a, NULL, 1);
 -- 		...
 -- 	}
--- 
+--
 -- Caught by clang static analyzer. This was introduced with a patch adding
 -- the :sqr method. This should have been caught sooner as the :sqr method
 -- couldn't have possibly ever worked--a missing or non-numeric second

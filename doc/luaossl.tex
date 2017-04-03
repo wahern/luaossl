@@ -545,7 +545,7 @@ Sets the basic constraints critical flag.
 
 \subsubsection[\fn{x509:addExtension}]{\fn{x509:addExtension($ext$)}}
 
-Adds a copy of the \module{x509.extension} object to the certificate. 
+Adds a copy of the \module{x509.extension} object to the certificate.
 
 \subsubsection[\fn{x509:getExtension}]{\fn{x509:getExtension($key$)}}
 
@@ -695,7 +695,7 @@ Add the certificate identified by $serial$ to the revocation list. $serial$ shou
 
 \subsubsection[\fn{crl:addExtension}]{\fn{crl:addExtension($ext$)}}
 
-Adds a copy of the \module{x509.extension} object to the revocation list. 
+Adds a copy of the \module{x509.extension} object to the revocation list.
 
 \subsubsection[\fn{crl:getExtension}]{\fn{crl:getExtension($key$)}}
 
@@ -810,7 +810,7 @@ Returns a new context object. $protocol$ is an optional string identifier select
 \begin{ctabular}{ c | p{14cm} }
 \multicolumn{2}{c}{$protocol$ identifiers}\\\hline\hline
 name & \href{https://www.openssl.org/docs/ssl/SSL_CTX_new.html}{description} \\\hline
-TLS & Supports TLS 1.0 \emph{and above}. Internally uses \fn{SSLv23\_method} and disables SSLv2 and 
+TLS & Supports TLS 1.0 \emph{and above}. Internally uses \fn{SSLv23\_method} and disables SSLv2 and
 SSLv3 using \texttt{SSL\_OP\_NO\_SSLv2} and \texttt{SSL\_OP\_NO\_SSLv3}.\\
 
 SSL & Supports SSL 3.0 \emph{and above}. Internally uses \fn{SSLv23\_method} and disables SSLv2 using \texttt{SSL\_OP\_NO\_SSLv2}.\\
@@ -962,7 +962,7 @@ Similar to :getPeerCertifiate, but returns the entire chain sent by the peer as 
 
 \subsubsection[\fn{ssl:getCipherInfo}]{\fn{ssl:getCipherInfo()}}
 
-Returns a table of information on the current cipher. 
+Returns a table of information on the current cipher.
 
 \begin{tabular}{ c | l }
 field & description\\\hline

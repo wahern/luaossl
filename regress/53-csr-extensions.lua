@@ -131,9 +131,9 @@ do
 	checknames(csr:getSubjectAlt(), expected)
 	-- check after a round-trip through PEM
 	checknames(x509_csr.new(tostring(csr)):getSubjectAlt(), expected)
-end	
+end
 
--- adding altnames where none existed 
+-- adding altnames where none existed
 do
 	local expected = {
 		name = {
@@ -155,7 +155,7 @@ do
 	csr:setSubjectAlt(gn)
 	csr:setPublicKey(key)
 	csr:sign(key)
-  
+
 	checknames(csr:getSubject(), expected.name)
 	checknames(csr:getSubjectAlt(), expected.altname)
 
