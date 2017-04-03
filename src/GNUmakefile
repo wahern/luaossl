@@ -92,6 +92,7 @@ MODS$(1)_$(d) = \
 	$$(DESTDIR)$(3)/openssl.lua \
 	$$(DESTDIR)$(3)/openssl/auxlib.lua \
 	$$(DESTDIR)$(3)/openssl/bignum.lua \
+	$$(DESTDIR)$(3)/openssl/ocsp/basic.lua \
 	$$(DESTDIR)$(3)/openssl/pkey.lua \
 	$$(DESTDIR)$(3)/openssl/pubkey.lua \
 	$$(DESTDIR)$(3)/openssl/x509.lua \

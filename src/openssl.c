@@ -9371,6 +9371,31 @@ static const auxL_Reg ob_metatable[] = {
 	{ NULL,   NULL },
 };
 
+static const auxL_Reg ob_globals[] = {
+	{ NULL,   NULL },
+};
+
+static const auxL_IntegerReg ob_verify_flags[] = {
+	{ "NOSIGS", OCSP_NOSIGS},
+	{ "NOVERIFY", OCSP_NOVERIFY},
+	{ "NOCHAIN", OCSP_NOCHAIN},
+	{ "NOCHECKS", OCSP_NOCHECKS},
+	{ "NOEXPLICIT", OCSP_NOEXPLICIT},
+	{ "TRUSTOTHER", OCSP_TRUSTOTHER},
+	{ "NOINTERN", OCSP_NOINTERN},
+	{ "TRUSTOTHER", OCSP_TRUSTOTHER},
+	{ NULL, 0 },
+};
+
+int luaopen__openssl_ocsp_basic(lua_State *L) {
+	initall(L);
+
+	auxL_newlib(L, ob_globals, 0);
+	auxL_setintegers(L, ob_verify_flags);
+
+	return 1;
+} /* luaopen__openssl_ocsp_basic() */
+
 /*
  * Rand - openssl.rand
  *
