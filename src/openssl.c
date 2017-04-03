@@ -3062,6 +3062,7 @@ static int pk_new(lua_State *L) {
 		unsigned exp = 65537;
 		int curve = NID_X9_62_prime192v1;
 		const char *id;
+		const char *dhparam = NULL;
 		lua_Number n;
 
 		if (!lua_istable(L, 1))
@@ -3103,6 +3104,9 @@ static int pk_new(lua_State *L) {
 				luaL_argerror(L, 1, lua_pushfstring(L, "%s: invalid curve", id));
 		}
 
+		/* dhparam field can contain a PEM encoded string. */
+		loadfield(L, 1, "dhparam", LUA_TSTRING, &dhparam);
+
 creat:
 		if (!(*ud = EVP_PKEY_new()))
 			return auxL_error(L, auxL_EOPENSSL, "pkey.new");
@@ -3140,8 +3144,22 @@ creat:
 		case EVP_PKEY_DH: {
 			DH *dh;
 
-			if (!(dh = DH_generate_parameters(bits, exp, 0, 0)))
+			/* DH Parameter Generation can take a long time, therefore we look
+			 * at the "dhparam" field, provided by the user.
+			 * The "dhparam" field takes precedence over "bits"
+			 */
+			if (dhparam) {
+				BIO *bio = BIO_new_mem_buf((void*)dhparam, strlen(dhparam));
+				if (!bio)
+					return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+
+				dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
+				BIO_free(bio);
+				if (!dh)
+					return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+			} else if (!(dh = DH_generate_parameters(bits, exp, 0, 0)))
 				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+
 
 			if (!DH_generate_key(dh)) {
 				DH_free(dh);
@@ -6630,7 +6648,7 @@ static int xx_getNextUpdate(lua_State *L) {
 		updateby = timeutc(time);
 
 	if (isfinite(updateby))
-		lua_pushnumber(L, 1);
+		lua_pushnumber(L, updateby);
 	else
 		lua_pushnil(L);
 
@@ -6820,6 +6838,19 @@ static int xx_sign(lua_State *L) {
 } /* xx_sign() */
 
 
+static int xx_verify(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
+
+	if (!X509_CRL_verify(crl, key))
+		return auxL_error(L, auxL_EOPENSSL, "x509.crl:verify");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* xx_verify() */
+
+
 static int xx_text(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 
@@ -6889,6 +6920,7 @@ static const auxL_Reg xx_methods[] = {
 	{ "getExtension",   &xx_getExtension },
 	{ "getExtensionCount", &xx_getExtensionCount },
 	{ "sign",           &xx_sign },
+	{ "verify",         &xx_verify },
 	{ "text",           &xx_text },
 	{ "tostring",       &xx__tostring },
 	{ NULL,             NULL },
@@ -7416,6 +7448,61 @@ static int p12_interpose(lua_State *L) {
 } /* p12_interpose() */
 
 
+static int p12_parse(lua_State *L) {
+	/* parse a p12 binary string and return the parts */
+
+	EVP_PKEY *pkey;
+	X509 *cert;
+	STACK_OF(X509) *ca = NULL;
+	PKCS12 *p12;
+
+	/* gather input parameters */
+	size_t len;
+	const char *blob = luaL_checklstring(L, 1, &len);
+	const char *passphrase = luaL_optstring(L, 2, NULL);
+
+	/* prepare return values */
+	EVP_PKEY **ud_pkey = prepsimple(L, PKEY_CLASS);
+	X509 **ud_cert = prepsimple(L, X509_CERT_CLASS);
+	STACK_OF(X509) **ud_chain = prepsimple(L, X509_CHAIN_CLASS);
+	/* Note: *ud_chain must be initialised to NULL, which prepsimple does. */
+
+	/* read PKCS#12 data into OpenSSL memory buffer */
+	BIO *bio = BIO_new_mem_buf((void*)blob, len);
+	if (!bio)
+		return auxL_error(L, auxL_EOPENSSL, "pkcs12.parse");
+	p12 = d2i_PKCS12_bio(bio, NULL);
+	BIO_free(bio);
+	if (!p12)
+		return auxL_error(L, auxL_EOPENSSL, "pkcs12.parse");
+
+	/* the p12 pointer holds the data we're interested in */
+	int rc = PKCS12_parse(p12, passphrase, ud_pkey, ud_cert, ud_chain);
+	PKCS12_free(p12);
+	if (!rc)
+		auxL_error(L, auxL_EOPENSSL, "pkcs12.parse");
+
+	/* replace the return values by nil if the ud pointers are NULL */
+	if (*ud_pkey == NULL) {
+		lua_pushnil(L);
+		lua_replace(L, -4);
+	}
+
+	if (*ud_cert == NULL) {
+		lua_pushnil(L);
+		lua_replace(L, -3);
+	}
+
+	/* other certificates (a chain, STACK_OF(X509) *) */
+	if (*ud_chain == NULL) {
+		lua_pop(L, 1);
+		lua_pushnil(L);
+	}
+
+	return 3;
+} /* p12_parse() */
+
+
 static int p12__tostring(lua_State *L) {
 	PKCS12 *p12 = checksimple(L, 1, PKCS12_CLASS);
 	BIO *bio = getbio(L);
@@ -7459,6 +7546,7 @@ static const auxL_Reg p12_metatable[] = {
 static const auxL_Reg p12_globals[] = {
 	{ "new",       &p12_new },
 	{ "interpose", &p12_interpose },
+	{ "parse",     &p12_parse },
 	{ NULL,        NULL },
 };
 

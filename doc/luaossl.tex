@@ -286,8 +286,13 @@ field & type:default & description\\\hline
 
 .exp & number:65537 & RSA or Diffie-Hellman exponent \\
 
+.dhparam & string & PEM encoded string with precomputed DH parameters \\
+
 .curve & string:prime192v1 & for elliptic curve keys, the OpenSSL string identifier of the curve
 \end{ctabular}
+
+The DH parameters ``dhparam'' will be generated on the fly, ``bits'' wide. This is a slow process, and especially for larger sizes, you would precompute those; for example: ``openssl dhparam -2 -out dh-2048.pem -outform PEM 2048''. Using the field ``dhparam'' overrides the ``bits'' field.
+
 \subsubsection[\fn{pkey.interpose}]{\fn{pkey.interpose($name$, $function$)}}
 
 Add or interpose a pkey class method. Returns the previous method, if any.
@@ -688,6 +693,10 @@ Returns the integer count of the number of extensions.
 
 Signs the instance CRL using the \module{openssl.pkey} $key$.
 
+\subsubsection[\fn{crl:verify}]{\fn{crl:verify($publickey$)}}
+
+Verifies the instance CRL using a public key.
+
 \subsubsection[\fn{crl:text}]{\fn{crl:text()}}
 
 Returns a human-readable textual representation of the instance CRL.
@@ -762,6 +771,10 @@ Add or interpose a store class method. Returns the previous method, if any.
 \subsubsection[\fn{pkcs12:\_\_tostring}]{\fn{pkcs12:\_\_tostring()}}
 
 Returns a PKCS \#12 binary encoded string.
+
+\subsubsection[\fn{pkcs12.parse}]{\fn{pkcs12.parse($bag$[, $passphrase$])}}
+
+Parses a PKCS\#12 bag, presented as a binary string $bag$. The second parameter $passphrase$ is the passphrase required to decrypt the PKCS\#12 bag. The function returns three items; namely the key, certificate and the CA chain, as their respective objects. If an item is absent, it will be substituted with nil.
 
 \end{Module}
 
