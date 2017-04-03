@@ -569,8 +569,9 @@ static void *prepsimple(lua_State *L, const char *tname, int (*gc)(lua_State *))
 	return p;
 } /* prepsimple() */
 
+#define EXPAND( x ) x
 #define prepsimple_(a, b, c, ...) prepsimple((a), (b), (c))
-#define prepsimple(...) prepsimple_(__VA_ARGS__, 0, 0)
+#define prepsimple(...) EXPAND( prepsimple_(__VA_ARGS__, 0, 0) )
 
 
 static void *checksimple(lua_State *L, int index, const char *tname) {
@@ -1061,7 +1062,7 @@ static void auxL_pushunsigned(lua_State *L, auxL_Unsigned i) {
 } /* auxL_pushunsigned() */
 
 #define auxL_checkinteger_(a, b, c, d, ...) auxL_checkinteger((a), (b), (c), (d))
-#define auxL_checkinteger(...) auxL_checkinteger_(__VA_ARGS__, auxL_IntegerMin, auxL_IntegerMax, 0)
+#define auxL_checkinteger(...) EXPAND( auxL_checkinteger_(__VA_ARGS__, auxL_IntegerMin, auxL_IntegerMax, 0) )
 
 static auxL_Integer (auxL_checkinteger)(lua_State *L, int index, auxL_Integer min, auxL_Integer max) {
 	auxL_Integer i;
@@ -1080,14 +1081,14 @@ static auxL_Integer (auxL_checkinteger)(lua_State *L, int index, auxL_Integer mi
 } /* auxL_checkinteger() */
 
 #define auxL_optinteger_(a, b, c, d, e, ...) auxL_optinteger((a), (b), (c), (d), (e))
-#define auxL_optinteger(...) auxL_optinteger_(__VA_ARGS__, auxL_IntegerMin, auxL_IntegerMax, 0)
+#define auxL_optinteger(...) EXPAND( auxL_optinteger_(__VA_ARGS__, auxL_IntegerMin, auxL_IntegerMax, 0))
 
 static auxL_Integer (auxL_optinteger)(lua_State *L, int index, auxL_Integer def, auxL_Integer min, auxL_Integer max) {
 	return (lua_isnoneornil(L, index))? def : auxL_checkinteger(L, index, min, max);
 } /* auxL_optinteger() */
 
 #define auxL_checkunsigned_(a, b, c, d, ...) auxL_checkunsigned((a), (b), (c), (d))
-#define auxL_checkunsigned(...) auxL_checkunsigned_(__VA_ARGS__, auxL_UnsignedMin, auxL_UnsignedMax, 0)
+#define auxL_checkunsigned(...) EXPAND( auxL_checkunsigned_(__VA_ARGS__, auxL_UnsignedMin, auxL_UnsignedMax, 0))
 
 static auxL_Unsigned (auxL_checkunsigned)(lua_State *L, int index, auxL_Unsigned min, auxL_Unsigned max) {
 	auxL_Unsigned i;
@@ -1107,7 +1108,7 @@ static auxL_Unsigned (auxL_checkunsigned)(lua_State *L, int index, auxL_Unsigned
 } /* auxL_checkunsigned() */
 
 #define auxL_optunsigned_(a, b, c, d, e, ...) auxL_optunsigned((a), (b), (c), (d), (e))
-#define auxL_optunsigned(...) auxL_optunsigned_(__VA_ARGS__, auxL_UnsignedMin, auxL_UnsignedMax, 0)
+#define auxL_optunsigned(...) EXPAND( auxL_optunsigned_(__VA_ARGS__, auxL_UnsignedMin, auxL_UnsignedMax, 0) )
 
 static auxL_Unsigned (auxL_optunsigned)(lua_State *L, int index, auxL_Unsigned def, auxL_Unsigned min, auxL_Unsigned max) {
 	return (lua_isnoneornil(L, index))? def : auxL_checkunsigned(L, index, min, max);
@@ -1231,7 +1232,7 @@ static _Bool auxL_newclass(lua_State *L, const char *name, const auxL_Reg *metho
 } /* auxL_newclass() */
 
 #define auxL_addclass(L, ...) \
-	(auxL_newclass((L), __VA_ARGS__), lua_pop((L), 1))
+	EXPAND( (auxL_newclass((L), __VA_ARGS__), lua_pop((L), 1)) )
 
 static int auxL_swaptable(lua_State *L, int index) {
 	index = lua_absindex(L, index);
@@ -1411,7 +1412,7 @@ static struct {
 #endif
 
 #if !HAVE_DH_GET0_KEY
-#define DH_get0_key(...) compat_DH_get0_key(__VA_ARGS__)
+#define DH_get0_key(...) EXPAND( compat_DH_get0_key(__VA_ARGS__) )
 
 static void compat_DH_get0_key(const DH *d, const BIGNUM **pub_key, const BIGNUM **priv_key) {
 	if (pub_key)
@@ -1422,7 +1423,7 @@ static void compat_DH_get0_key(const DH *d, const BIGNUM **pub_key, const BIGNUM
 #endif
 
 #if !HAVE_DH_GET0_PQG
-#define DH_get0_pqg(...) compat_DH_get0_pqg(__VA_ARGS__)
+#define DH_get0_pqg(...) EXPAND( compat_DH_get0_pqg(__VA_ARGS__) )
 
 static void compat_DH_get0_pqg(const DH *d, const BIGNUM **p, const BIGNUM **q, const BIGNUM **g) {
 	if (p)
@@ -1435,7 +1436,7 @@ static void compat_DH_get0_pqg(const DH *d, const BIGNUM **p, const BIGNUM **q, 
 #endif
 
 #if !HAVE_DH_SET0_KEY
-#define DH_set0_key(...) compat_DH_set0_key(__VA_ARGS__)
+#define DH_set0_key(...) EXPAND( compat_DH_set0_key(__VA_ARGS__) )
 
 static void compat_DH_set0_key(DH *d, BIGNUM *pub_key, BIGNUM *priv_key) {
 	if (pub_key)
@@ -1446,7 +1447,7 @@ static void compat_DH_set0_key(DH *d, BIGNUM *pub_key, BIGNUM *priv_key) {
 #endif
 
 #if !HAVE_DH_SET0_PQG
-#define DH_set0_pqg(...) compat_DH_set0_pqg(__VA_ARGS__)
+#define DH_set0_pqg(...) EXPAND( compat_DH_set0_pqg(__VA_ARGS__) )
 
 static void compat_DH_set0_pqg(DH *d, BIGNUM *p, BIGNUM *q, BIGNUM *g) {
 	if (p)
@@ -1459,7 +1460,7 @@ static void compat_DH_set0_pqg(DH *d, BIGNUM *p, BIGNUM *q, BIGNUM *g) {
 #endif
 
 #if !HAVE_DSA_GET0_KEY
-#define DSA_get0_key(...) compat_DSA_get0_key(__VA_ARGS__)
+#define DSA_get0_key(...) EXPAND( compat_DSA_get0_key(__VA_ARGS__) )
 
 static void compat_DSA_get0_key(const DSA *d, const BIGNUM **pub_key, const BIGNUM **priv_key) {
 	if (pub_key)
@@ -1470,7 +1471,7 @@ static void compat_DSA_get0_key(const DSA *d, const BIGNUM **pub_key, const BIGN
 #endif
 
 #if !HAVE_DSA_GET0_PQG
-#define DSA_get0_pqg(...) compat_DSA_get0_pqg(__VA_ARGS__)
+#define DSA_get0_pqg(...) EXPAND( compat_DSA_get0_pqg(__VA_ARGS__) )
 
 static void compat_DSA_get0_pqg(const DSA *d, const BIGNUM **p, const BIGNUM **q, const BIGNUM **g) {
 	if (p)
@@ -1483,7 +1484,7 @@ static void compat_DSA_get0_pqg(const DSA *d, const BIGNUM **p, const BIGNUM **q
 #endif
 
 #if !HAVE_DSA_SET0_KEY
-#define DSA_set0_key(...) compat_DSA_set0_key(__VA_ARGS__)
+#define DSA_set0_key(...) EXPAND( compat_DSA_set0_key(__VA_ARGS__) )
 
 static void compat_DSA_set0_key(DSA *d, BIGNUM *pub_key, BIGNUM *priv_key) {
 	if (pub_key)
@@ -1494,7 +1495,7 @@ static void compat_DSA_set0_key(DSA *d, BIGNUM *pub_key, BIGNUM *priv_key) {
 #endif
 
 #if !HAVE_DSA_SET0_PQG
-#define DSA_set0_pqg(...) compat_DSA_set0_pqg(__VA_ARGS__)
+#define DSA_set0_pqg(...) EXPAND( compat_DSA_set0_pqg(__VA_ARGS__) )
 
 static void compat_DSA_set0_pqg(DSA *d, BIGNUM *p, BIGNUM *q, BIGNUM *g) {
 	if (p)
@@ -1552,7 +1553,7 @@ static int compat_EVP_PKEY_base_id(EVP_PKEY *key) {
 
 #if !HAVE_EVP_PKEY_GET_DEFAULT_DIGEST_NID
 #define EVP_PKEY_get_default_digest_nid(...) \
-	compat_EVP_PKEY_get_default_digest_nid(__VA_ARGS__)
+	EXPAND( compat_EVP_PKEY_get_default_digest_nid(__VA_ARGS__) )
 
 static int compat_EVP_PKEY_get_default_digest_nid(EVP_PKEY *key, int *nid) {
 	switch (EVP_PKEY_base_id(key)) {
@@ -1633,7 +1634,7 @@ static HMAC_CTX *compat_HMAC_CTX_new(void) {
 #endif
 
 #if !HAVE_RSA_GET0_CRT_PARAMS
-#define RSA_get0_crt_params(...) compat_RSA_get0_crt_params(__VA_ARGS__)
+#define RSA_get0_crt_params(...) EXPAND( compat_RSA_get0_crt_params(__VA_ARGS__) )
 
 static void compat_RSA_get0_crt_params(const RSA *r, const BIGNUM **dmp1, const BIGNUM **dmq1, const BIGNUM **iqmp) {
 	if (dmp1)
@@ -1646,7 +1647,7 @@ static void compat_RSA_get0_crt_params(const RSA *r, const BIGNUM **dmp1, const 
 #endif
 
 #if !HAVE_RSA_GET0_FACTORS
-#define RSA_get0_factors(...) compat_RSA_get0_factors(__VA_ARGS__)
+#define RSA_get0_factors(...) EXPAND( compat_RSA_get0_factors(__VA_ARGS__) )
 
 static void compat_RSA_get0_factors(const RSA *r, const BIGNUM **p, const BIGNUM **q) {
 	if (p)
@@ -1657,7 +1658,7 @@ static void compat_RSA_get0_factors(const RSA *r, const BIGNUM **p, const BIGNUM
 #endif
 
 #if !HAVE_RSA_GET0_KEY
-#define RSA_get0_key(...) compat_RSA_get0_key(__VA_ARGS__)
+#define RSA_get0_key(...) EXPAND( compat_RSA_get0_key(__VA_ARGS__) )
 
 static void compat_RSA_get0_key(const RSA *r, const BIGNUM **n, const BIGNUM **e, const BIGNUM **d) {
 	if (n)
@@ -1670,7 +1671,7 @@ static void compat_RSA_get0_key(const RSA *r, const BIGNUM **n, const BIGNUM **e
 #endif
 
 #if !HAVE_RSA_SET0_CRT_PARAMS
-#define RSA_set0_crt_params(...) compat_RSA_set0_crt_params(__VA_ARGS__)
+#define RSA_set0_crt_params(...) EXPAND( compat_RSA_set0_crt_params(__VA_ARGS__) )
 
 static void compat_RSA_set0_crt_params(RSA *r, BIGNUM *dmp1, BIGNUM *dmq1, BIGNUM *iqmp) {
 	if (dmp1)
@@ -1683,7 +1684,7 @@ static void compat_RSA_set0_crt_params(RSA *r, BIGNUM *dmp1, BIGNUM *dmq1, BIGNU
 #endif
 
 #if !HAVE_RSA_SET0_FACTORS
-#define RSA_set0_factors(...) compat_RSA_set0_factors(__VA_ARGS__)
+#define RSA_set0_factors(...) EXPAND( compat_RSA_set0_factors(__VA_ARGS__) )
 
 static void compat_RSA_set0_factors(RSA *r, BIGNUM *p, BIGNUM *q) {
 	if (p)
@@ -1694,7 +1695,7 @@ static void compat_RSA_set0_factors(RSA *r, BIGNUM *p, BIGNUM *q) {
 #endif
 
 #if !HAVE_RSA_SET0_KEY
-#define RSA_set0_key(...) compat_RSA_set0_key(__VA_ARGS__)
+#define RSA_set0_key(...) EXPAND( compat_RSA_set0_key(__VA_ARGS__) )
 
 static void compat_RSA_set0_key(RSA *r, BIGNUM *n, BIGNUM *e, BIGNUM *d) {
 	if (n)
@@ -1707,7 +1708,7 @@ static void compat_RSA_set0_key(RSA *r, BIGNUM *n, BIGNUM *e, BIGNUM *d) {
 #endif
 
 #if !HAVE_SSL_GET_CLIENT_RANDOM
-#define SSL_get_client_random(...) compat_SSL_get_client_random(__VA_ARGS__)
+#define SSL_get_client_random(...) EXPAND( compat_SSL_get_client_random(__VA_ARGS__) )
 static size_t compat_SSL_get_client_random(const SSL *ssl, unsigned char *out, size_t outlen) {
     if (outlen == 0)
         return sizeof(ssl->s3->client_random);
@@ -1719,7 +1720,7 @@ static size_t compat_SSL_get_client_random(const SSL *ssl, unsigned char *out, s
 #endif
 
 #if !HAVE_SSL_CLIENT_VERSION
-#define SSL_client_version(...) compat_SSL_client_version(__VA_ARGS__)
+#define SSL_client_version(...) EXPAND( compat_SSL_client_version(__VA_ARGS__) )
 
 static int compat_SSL_client_version(const SSL *ssl) {
 	return ssl->client_version;
@@ -1743,7 +1744,7 @@ static int compat_SSL_set1_param(SSL *ssl, X509_VERIFY_PARAM *vpm) {
 #endif
 
 #if !HAVE_SSL_UP_REF
-#define SSL_up_ref(...) compat_SSL_up_ref(__VA_ARGS__)
+#define SSL_up_ref(...) EXPAND( compat_SSL_up_ref(__VA_ARGS__) )
 
 static int compat_SSL_up_ref(SSL *ssl) {
 	/* our caller should already have had a proper reference */
@@ -1909,7 +1910,7 @@ static void compat_init_X509_STORE_onfree(void *store, void *data NOTUSED, CRYPT
 } /* compat_init_X509_STORE_onfree() */
 
 #if !HAVE_X509_STORE_UP_REF
-#define X509_STORE_up_ref(...) compat_X509_STORE_up_ref(__VA_ARGS__)
+#define X509_STORE_up_ref(...) EXPAND( compat_X509_STORE_up_ref(__VA_ARGS__) )
 
 static int compat_X509_STORE_up_ref(X509_STORE *crt) {
 	/* our caller should already have had a proper reference */
@@ -1921,7 +1922,7 @@ static int compat_X509_STORE_up_ref(X509_STORE *crt) {
 #endif
 
 #if !HAVE_X509_UP_REF
-#define X509_up_ref(...) compat_X509_up_ref(__VA_ARGS__)
+#define X509_up_ref(...) EXPAND( compat_X509_up_ref(__VA_ARGS__) )
 
 static int compat_X509_up_ref(X509 *crt) {
 	/* our caller should already have had a proper reference */
@@ -2587,7 +2588,7 @@ static BIGNUM *bn_dup_nil(lua_State *L, const BIGNUM *src) {
 
 
 #define checkbig_(a, b, c, ...) checkbig((a), (b), (c))
-#define checkbig(...) checkbig_(__VA_ARGS__, &(_Bool){ 0 }, 0)
+#define checkbig(...) EXPAND( checkbig_(__VA_ARGS__, &(_Bool){ 0 }, 0) )
 
 static BIGNUM *(checkbig)(lua_State *, int, _Bool *);
 
