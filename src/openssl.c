@@ -1342,7 +1342,15 @@ static const EVP_MD *auxL_optdigest(lua_State *L, int index, EVP_PKEY *key, cons
  */
 /* dl_anchor must not be called from multiple threads at once */
 static int dl_anchor(void) {
-#if HAVE_DLADDR
+#if _WIN32
+	EXPORT extern int luaopen__openssl(lua_State *);
+
+	HMODULE dummy;
+	if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_PIN|GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (void *)&luaopen__openssl, &dummy))
+		return GetLastError();
+
+	return 0;
+#elif HAVE_DLADDR
 	extern int luaopen__openssl(lua_State *);
 	static void *anchor;
 	Dl_info info;
