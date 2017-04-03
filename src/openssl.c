@@ -302,6 +302,10 @@
 #define HAVE_SSLV2_SERVER_METHOD (!OPENSSL_PREREQ(1,1,0) && !defined OPENSSL_NO_SSL2)
 #endif
 
+#ifndef HAVE_X509_GET_SIGNATURE_NID
+#define HAVE_X509_GET_SIGNATURE_NID (OPENSSL_PREREQ(1,0,2))
+#endif
+
 #ifndef HAVE_X509_STORE_REFERENCES
 #define HAVE_X509_STORE_REFERENCES (!OPENSSL_PREREQ(1,1,0))
 #endif
@@ -1613,6 +1617,10 @@ static int compat_SSL_CTX_set1_param(SSL_CTX *ctx, X509_VERIFY_PARAM *vpm) {
 
 #if !HAVE_X509_GET0_EXT
 #define X509_get0_ext(crt, i) X509_get_ext((crt), (i))
+#endif
+
+#if !HAVE_X509_GET_SIGNATURE_NID
+#define X509_get_signature_nid(crt) OBJ_obj2nid((crt)->sig_alg->algorithm)
 #endif
 
 #if !HAVE_X509_CRL_GET0_EXT
