@@ -8510,7 +8510,7 @@ static int ssl_getClientRandom(lua_State *L) {
 	if (LUAL_BUFFERSIZE < len)
 		luaL_error(L, "ssl:getClientRandom: LUAL_BUFFERSIZE(%d) < SSL_get_client_random(ssl, NULL, 0)", (int)LUAL_BUFFERSIZE, (int)len);
 	luaL_buffinit(L, &B);
-	out = luaL_prepbuffer(&B);
+	out = (unsigned char*)luaL_prepbuffer(&B);
 	len = SSL_get_client_random(ssl, out, len);
 	luaL_addsize(&B, len);
 	luaL_pushresult(&B);
