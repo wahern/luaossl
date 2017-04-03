@@ -8515,7 +8515,7 @@ static int ssl_getClientRandom(lua_State *L) {
 	luaL_addsize(&B, len);
 	luaL_pushresult(&B);
 #else
-	out = luaL_buffinitsize(L, &B, len);
+	out = (unsigned char*)luaL_buffinitsize(L, &B, len);
 	len = SSL_get_client_random(ssl, out, len);
 	luaL_pushresultsize(&B, len);
 #endif
