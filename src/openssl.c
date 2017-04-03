@@ -8434,14 +8434,18 @@ static int ssl_getTLSextStatusType(lua_State *L) {
 
 static int ssl_setTLSextStatusOCSPResp(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
-	OCSP_RESPONSE *or = checksimple(L, 2, OCSP_RESPONSE_CLASS);
+	OCSP_RESPONSE *or = testsimple(L, 2, OCSP_RESPONSE_CLASS);
 
 	unsigned char *resp = NULL;
 	long resp_len;
 
-	resp_len = i2d_OCSP_RESPONSE(or, &resp);
-	if (resp_len <= 0)
-		return auxL_error(L, auxL_EOPENSSL, "ssl:setTLSextStatusOCSPResp");
+	if (or) {
+		resp_len = i2d_OCSP_RESPONSE(or, &resp);
+		if (resp_len <= 0)
+			return auxL_error(L, auxL_EOPENSSL, "ssl:setTLSextStatusOCSPResp");
+	} else {
+		resp_len = 0;
+	}
 
 	if (!SSL_set_tlsext_status_ocsp_resp(ssl, resp, resp_len))
 		return auxL_error(L, auxL_EOPENSSL, "ssl:setTLSextStatusOCSPResp");
