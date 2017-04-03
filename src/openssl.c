@@ -9254,10 +9254,9 @@ int luaopen__openssl_cipher(lua_State *L) {
 
 
 /*
- * OCSP
+ * OCSP_RESPONSE - openssl.ocsp.response
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-
 
 static int or_tostring(lua_State *L) {
 	OCSP_RESPONSE *resp = checksimple(L, 1, OCSP_RESPONSE_CLASS);
@@ -9328,6 +9327,23 @@ static const auxL_Reg or_metatable[] = {
 	{ NULL,         NULL },
 };
 
+static const auxL_Reg or_globals[] = {
+	{ NULL, NULL },
+};
+
+int luaopen__openssl_ocsp_response(lua_State *L) {
+	initall(L);
+
+	auxL_newlib(L, or_globals, 0);
+
+	return 1;
+} /* luaopen__openssl_ocsp_response() */
+
+
+/*
+ * OCSP_BASICRESP - openssl.ocsp.basic
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 static int ob_verify(lua_State *L) {
 	OCSP_BASICRESP *basic = checksimple(L, 1, OCSP_BASICRESP_CLASS);
@@ -9395,6 +9411,7 @@ int luaopen__openssl_ocsp_basic(lua_State *L) {
 
 	return 1;
 } /* luaopen__openssl_ocsp_basic() */
+
 
 /*
  * Rand - openssl.rand
