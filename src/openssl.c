@@ -929,7 +929,7 @@ static void auxL_pushinteger(lua_State *L, auxL_Integer i) {
 	}
 } /* auxL_pushinteger() */
 
-NOTUSED static void auxL_pushunsigned(lua_State *L, auxL_Unsigned i) {
+static void auxL_pushunsigned(lua_State *L, auxL_Unsigned i) {
 	if (i <= lua_IntegerMax) {
 		lua_pushinteger(L, i);
 	} else if (i == (auxL_Unsigned)(lua_Number)i) {
@@ -3463,7 +3463,7 @@ static int pk_decrypt(lua_State *L) {
 	if (lua_istable(L, 3)) {
 		if (base_type == EVP_PKEY_RSA) {
 			lua_getfield(L, 3, "rsaPadding");
-			rsaPadding = luaL_optint(L, -1, rsaPadding);
+			rsaPadding = luaL_optinteger(L, -1, rsaPadding);
 			lua_pop(L, 1);
 		}
 	}
@@ -3522,7 +3522,7 @@ static int pk_encrypt(lua_State *L) {
 	if (lua_istable(L, 3)) {
 		if (base_type == EVP_PKEY_RSA) {
 			lua_getfield(L, 3, "rsaPadding");
-			rsaPadding = luaL_optint(L, -1, rsaPadding);
+			rsaPadding = luaL_optinteger(L, -1, rsaPadding);
 			lua_pop(L, 1);
 		}
 	}
@@ -4444,7 +4444,7 @@ static int ecg_new(lua_State *L) {
 		return 1;
 	}
 	case LUA_TNUMBER: {
-		int nid = luaL_checkint(L, 2);
+		int nid = luaL_checkinteger(L, 2);
 
 		if (!ecg_push_by_nid(L, nid))
 			goto sslerr;
@@ -5364,7 +5364,7 @@ static int xc_getVersion(lua_State *L) {
 
 static int xc_setVersion(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
-	int version = luaL_checkint(L, 2);
+	int version = luaL_checkinteger(L, 2);
 
 	if (!X509_set_version(crt, version - 1))
 		return luaL_error(L, "x509.cert:setVersion: %d: invalid version", version);
@@ -5911,11 +5911,11 @@ static int xc_setBasicConstraint(lua_State *L) {
 		lua_pop(L, 1);
 
 		lua_getfield(L, 2, "pathLen");
-		pathLen = luaL_optint(L, -1, pathLen);
+		pathLen = luaL_optinteger(L, -1, pathLen);
 		lua_pop(L, 1);
 
 		lua_getfield(L, 2, "pathLenConstraint");
-		pathLen = luaL_optint(L, -1, pathLen);
+		pathLen = luaL_optinteger(L, -1, pathLen);
 		lua_pop(L, 1);
 
 		if (!(bs = BASIC_CONSTRAINTS_new()))
@@ -5932,7 +5932,7 @@ static int xc_setBasicConstraint(lua_State *L) {
 		case 1:
 			/* FALL THROUGH */
 		case 2:
-			pathLen = luaL_checkint(L, 3);
+			pathLen = luaL_checkinteger(L, 3);
 
 			break;
 		}
@@ -6420,7 +6420,7 @@ static int xr_getVersion(lua_State *L) {
 
 static int xr_setVersion(lua_State *L) {
 	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
-	int version = luaL_checkint(L, 2);
+	int version = luaL_checkinteger(L, 2);
 
 	if (!X509_REQ_set_version(csr, version - 1))
 		return luaL_error(L, "x509.csr:setVersion: %d: invalid version", version);
@@ -6725,7 +6725,7 @@ static int xx_getVersion(lua_State *L) {
 
 static int xx_setVersion(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
-	int version = luaL_checkint(L, 2);
+	int version = luaL_checkinteger(L, 2);
 
 	if (!X509_CRL_set_version(crl, version - 1))
 		return luaL_error(L, "x509.crl:setVersion: %d: invalid version", version);
@@ -7878,8 +7878,8 @@ static int sx_getParam(lua_State *L) {
 
 static int sx_setVerify(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
-	int mode = luaL_optint(L, 2, -1);
-	int depth = luaL_optint(L, 3, -1);
+	int mode = luaL_optinteger(L, 2, -1);
+	int depth = luaL_optinteger(L, 3, -1);
 
 	if (mode != -1)
 		SSL_CTX_set_verify(ctx, mode, 0);
@@ -9808,7 +9808,7 @@ static int rand_add(lua_State *L) {
 
 
 static int rand_bytes(lua_State *L) {
-	int size = luaL_checkint(L, 1);
+	int size = luaL_checkinteger(L, 1);
 	luaL_Buffer B;
 	int count = 0, n;
 
@@ -9924,11 +9924,7 @@ static int rand_uniform(lua_State *L) {
 	} else {
 		unsigned long long N, m;
 
-		if (sizeof (lua_Unsigned) >= sizeof r) {
-			N = luaL_checkunsigned(L, 1);
-		} else {
-			N = luaL_checknumber(L, 1);
-		}
+		N = auxL_checkunsigned(L, 1);
 
 		luaL_argcheck(L, N > 1, 1, lua_pushfstring(L, "[0, %d): interval is empty", (int)N));
 
@@ -9941,11 +9937,7 @@ static int rand_uniform(lua_State *L) {
 		r = r % N;
 	}
 
-	if (sizeof (lua_Unsigned) >= sizeof r) {
-		lua_pushunsigned(L, r);
-	} else {
-		lua_pushnumber(L, r);
-	}
+	auxL_pushunsigned(L, r);
 
 	return 1;
 } /* rand_uniform() */
