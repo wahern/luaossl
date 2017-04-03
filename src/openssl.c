@@ -811,11 +811,10 @@ static const char *aux_strerror_r(int error, char *dst, size_t lim) {
 	size_t n;
 
 #if _WIN32
-	char *rv = strerror(error);
-	n = MIN(strlen(rv) - 1, lim);
-	memcpy(dst, rv, n);
-	return dst;
+	errno_t rv = strerror_s(dst, lim, error);
 
+	if (rv)
+		return dst;
 #elif STRERROR_R_CHAR_P
 	char *rv = strerror_r(error, dst, lim);
 
