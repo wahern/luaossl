@@ -261,6 +261,10 @@
 #define HAVE_SSL_CTX_SET_ALPN_SELECT_CB HAVE_SSL_CTX_SET_ALPN_PROTOS
 #endif
 
+#ifndef HAVE_SSL_CTX_SET_TLSEXT_SERVERNAME_CALLBACK
+#define HAVE_SSL_CTX_SET_TLSEXT_SERVERNAME_CALLBACK OPENSSL_PREREQ(1,0,0)
+#endif
+
 #ifndef HAVE_SSL_CTX_SET1_CERT_STORE
 #define HAVE_SSL_CTX_SET1_CERT_STORE (HAVE_SSL_CTX_set1_cert_store || 0) /* backwards compatible with old macro name */
 #endif
@@ -676,6 +680,10 @@ static void *loadfield_udata(lua_State *L, int index, const char *k, const char 
 
 	return *p;
 } /* loadfield_udata() */
+
+
+/* Forward declarations */
+static SSL *ssl_push(lua_State *, SSL *);
 
 
 /*
@@ -1939,6 +1947,7 @@ struct ex_data {
 
 enum {
 	EX_SSL_CTX_ALPN_SELECT_CB,
+	EX_SSL_CTX_TLSEXT_SERVERNAME_CB,
 };
 
 static struct ex_type {
@@ -1948,6 +1957,7 @@ static struct ex_type {
 	int (*set_ex_data)();
 } ex_type[] = {
 	[EX_SSL_CTX_ALPN_SELECT_CB] = { CRYPTO_EX_INDEX_SSL_CTX, -1, &SSL_CTX_get_ex_data, &SSL_CTX_set_ex_data },
+	[EX_SSL_CTX_TLSEXT_SERVERNAME_CB] = { CRYPTO_EX_INDEX_SSL_CTX, -1, &SSL_CTX_get_ex_data, &SSL_CTX_set_ex_data },
 };
 
 #if OPENSSL_PREREQ(1,1,0)
@@ -8028,9 +8038,8 @@ static int sx_setAlpnProtos(lua_State *L) {
 } /* sx_setAlpnProtos() */
 #endif
 
-#if HAVE_SSL_CTX_SET_ALPN_SELECT_CB
-static SSL *ssl_push(lua_State *, SSL *);
 
+#if HAVE_SSL_CTX_SET_ALPN_SELECT_CB
 static int sx_setAlpnSelect_cb(SSL *ssl, const unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *_ctx) {
 	SSL_CTX *ctx = _ctx;
 	lua_State *L = NULL;
@@ -8125,6 +8134,74 @@ static int sx_setAlpnSelect(lua_State *L) {
 #endif
 
 
+#if HAVE_SSL_CTX_SET_TLSEXT_SERVERNAME_CALLBACK
+static int sx_setHostnameCallback_cb(SSL *ssl, int *ad, void *_ctx) {
+	SSL_CTX *ctx = _ctx;
+	lua_State *L = NULL;
+	size_t n;
+	int otop, status, ret = SSL_TLSEXT_ERR_ALERT_FATAL;
+
+	*ad = SSL_AD_INTERNAL_ERROR;
+
+	/* expect at least one value: closure */
+	if ((n = ex_getdata(&L, EX_SSL_CTX_TLSEXT_SERVERNAME_CB, ctx)) < 1)
+		return SSL_TLSEXT_ERR_ALERT_FATAL;
+
+	otop = lua_gettop(L) - n;
+
+	/* TODO: Install temporary panic handler to catch OOM errors */
+
+	/* pass SSL object as 1st argument */
+	ssl_push(L, ssl);
+	lua_insert(L, otop + 2);
+
+	if (LUA_OK != (status = lua_pcall(L, 1 + (n - 1), 2, 0)))
+		goto done;
+
+	/* callback should return a boolean for OK/NOACK
+	 * or nil + an integer for a controlled error
+	 * everything else will be a fatal internal error
+	 */
+	if (lua_isboolean(L, -2)) {
+		ret = lua_toboolean(L, -2) ? SSL_TLSEXT_ERR_OK : SSL_TLSEXT_ERR_NOACK;
+	} else {
+		ret = SSL_TLSEXT_ERR_ALERT_FATAL;
+		if (lua_isnil(L, -2) && lua_isinteger(L, -1))
+			*ad = lua_tointeger(L, -1);
+	}
+
+done:
+	lua_settop(L, otop);
+
+	return ret;
+} /* sx_setHostnameCallback_cb() */
+
+
+static int sx_setHostnameCallback(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	int error;
+
+	luaL_checktype(L, 2, LUA_TFUNCTION);
+
+	if ((error = ex_setdata(L, EX_SSL_CTX_TLSEXT_SERVERNAME_CB, ctx, lua_gettop(L) - 1))) {
+		if (error > 0) {
+			return luaL_error(L, "unable to set hostname selection callback: %s", aux_strerror(error));
+		} else if (error == auxL_EOPENSSL && !ERR_peek_error()) {
+			return luaL_error(L, "unable to set hostname selection callback: Unknown internal error");
+		} else {
+			return auxL_error(L, error, "ssl.context:setAlpnSelect");
+		}
+	}
+	SSL_CTX_set_tlsext_servername_callback(ctx, sx_setHostnameCallback_cb);
+	SSL_CTX_set_tlsext_servername_arg(ctx, ctx);
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_setHostnameCallback() */
+#endif
+
+
 int TLSEXT_STATUSTYPEs[] = { TLSEXT_STATUSTYPE_ocsp };
 const char *TLSEXT_STATUSTYPEs_names[] = { "ocsp", NULL };
 #define checkTLSEXT_STATUSTYPE(L, idx) \
@@ -8199,8 +8276,8 @@ static const auxL_Reg sx_methods[] = {
 #if HAVE_SSL_CTX_SET_ALPN_SELECT_CB
 	{ "setAlpnSelect",    &sx_setAlpnSelect },
 #endif
-#if HAVE_SSL_CTX_SET_TLSEXT_STATUS_TYPE
-	{ "setTLSextStatusType", &sx_setTLSextStatusType },
+#if HAVE_SSL_CTX_SET_TLSEXT_SERVERNAME_CALLBACK
+	{ "setHostnameCallback", &sx_setHostnameCallback },
 #endif
 #if HAVE_SSL_CTX_GET_TLSEXT_STATUS_TYPE
 	{ "getTLSextStatusType", &sx_getTLSextStatusType },
