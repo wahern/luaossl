@@ -8389,6 +8389,33 @@ static int ssl_getParam(lua_State *L) {
 } /* ssl_getParam() */
 
 
+static int ssl_setVerify(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	int mode = luaL_optinteger(L, 2, -1);
+	int depth = luaL_optinteger(L, 3, -1);
+
+	if (mode != -1)
+		SSL_set_verify(ssl, mode, 0);
+
+	if (depth != -1)
+		SSL_set_verify_depth(ssl, depth);
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setVerify() */
+
+
+static int ssl_getVerify(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+
+	lua_pushinteger(L, SSL_get_verify_mode(ssl));
+	lua_pushinteger(L, SSL_get_verify_depth(ssl));
+
+	return 2;
+} /* ssl_getVerify() */
+
+
 static int ssl_getVerifyResult(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	long res = SSL_get_verify_result(ssl);
@@ -8396,6 +8423,44 @@ static int ssl_getVerifyResult(lua_State *L) {
 	lua_pushstring(L, X509_verify_cert_error_string(res));
 	return 2;
 } /* ssl_getVerifyResult() */
+
+
+static int ssl_setCertificate(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	X509 *crt = X509_dup(checksimple(L, 2, X509_CERT_CLASS));
+	int ok;
+
+	ok = SSL_use_certificate(ssl, crt);
+	X509_free(crt);
+
+	if (!ok)
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setCertificate");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setCertificate() */
+
+
+static int ssl_setPrivateKey(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
+	/*
+	 * NOTE: No easy way to dup the key, but a shared reference should
+	 * be okay as keys are less mutable than certificates.
+	 *
+	 * FIXME: SSL_use_PrivateKey will return true even if the
+	 * EVP_PKEY object has no private key. Instead, we'll just get a
+	 * segfault during the SSL handshake. We need to check that a
+	 * private key is actually defined in the object.
+	 */
+	if (!SSL_use_PrivateKey(ssl, key))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setPrivateKey");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setPrivateKey() */
 
 
 static int ssl_getPeerCertificate(lua_State *L) {
@@ -8694,7 +8759,11 @@ static const auxL_Reg ssl_methods[] = {
 	{ "clearOptions",     &ssl_clearOptions },
 	{ "setParam",         &ssl_setParam },
 	{ "getParam",         &ssl_getParam },
+	{ "setVerify",        &ssl_setVerify },
+	{ "getVerify",        &ssl_getVerify },
 	{ "getVerifyResult",  &ssl_getVerifyResult },
+	{ "setCertificate",   &ssl_setCertificate },
+	{ "setPrivateKey",    &ssl_setPrivateKey },
 	{ "getPeerCertificate", &ssl_getPeerCertificate },
 	{ "getPeerChain",     &ssl_getPeerChain },
 	{ "getCipherInfo",    &ssl_getCipherInfo },

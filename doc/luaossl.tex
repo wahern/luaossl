@@ -997,6 +997,26 @@ Returns the option flags of the SSL connection instance. See \fn{openssl.ssl.con
 
 Clears the option flags of the SSL connection instance. See \fn{openssl.ssl.context:clearOptions}.
 
+\subsubsection[\fn{ssl:setVerify}]{\fn{ssl:setVerify([$mode$][, $depth$])}}
+
+Sets the verification mode flags and maximum validation chain depth.
+See \fn{openssl.ssl.context:setVerify}.
+
+\subsubsection[\fn{ssl:getVerify}]{\fn{ssl:getVerify()}}
+
+Returns two values: the bitwise verification mode flags, and the maximum validation depth.
+See \fn{openssl.ssl.context:getVerify}.
+
+\subsubsection[\fn{ssl:setCertificate}]{\fn{ssl:setCertificate($crt$)}}
+
+Sets the X.509 certificate \module{openssl.x509} object $crt$ to send during SSL connection instance handshakes.
+See \fn{openssl.ssl.context:setCertificate}.
+
+\subsubsection[\fn{ssl:setPrivateKey}]{\fn{ssl:setPrivateKey($key$)}}
+
+Sets the private key \module{openssl.pkey} object $key$ for use during SSL connection instance handshakes.
+See \fn{openssl.ssl.context:setPrivateKey}.
+
 \subsubsection[\fn{ssl:getPeerCertificate}]{\fn{ssl:getPeerCertificate()}}
 
 Returns the X.509 peer certificate as an \module{openssl.x509} object. If no peer certificate is available, returns $nil$.
