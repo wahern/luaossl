@@ -682,8 +682,42 @@ static void *loadfield_udata(lua_State *L, int index, const char *k, const char 
 } /* loadfield_udata() */
 
 
-/* Forward declarations */
+/* Forward declaration */
 static SSL *ssl_push(lua_State *, SSL *);
+
+/* push an ssl object into lua in a way that is safe from OOM
+ * Lua 5.1 does not support normally returning values from lua_cpcall
+ * to return a value, we instead return it via an error object
+ */
+static int ssl_pushsafe_helper(lua_State *L) {
+	ssl_push(L, lua_touserdata(L, 1));
+#if LUA_VERSION_NUM <= 501
+	return lua_error(L);
+#else
+	return 1;
+#endif
+}
+
+static int ssl_pushsafe(lua_State *L, SSL *ssl) {
+	int status;
+#if LUA_VERSION_NUM <= 501
+	status = lua_cpcall(L, ssl_pushsafe_helper, ssl);
+	if (status == LUA_ERRRUN)
+		status = LUA_OK;
+	else if (status == LUA_OK)
+		/* this should be impossible */
+		status = LUA_ERRRUN;
+	else
+		lua_pop(L, 1);
+#else
+	lua_pushcfunction(L, ssl_pushsafe_helper);
+	lua_pushlightuserdata(L, ssl);
+	status = lua_pcall(L, 1, 1, 0);
+	if (status != LUA_OK)
+		lua_pop(L, 1);
+#endif
+	return status;
+}
 
 
 /*
@@ -8057,12 +8091,12 @@ static int sx_setAlpnSelect_cb(SSL *ssl, const unsigned char **out, unsigned cha
 
 	otop = lua_gettop(L) - n;
 
-	/* TODO: Install temporary panic handler to catch OOM errors */
-
 	/* pass SSL object as 1st argument */
-	ssl_push(L, ssl);
+	if (ssl_pushsafe(L, ssl))
+		goto fatal;
 	lua_insert(L, otop + 3);
 
+	/* TODO: Install temporary panic handler to catch OOM errors */
 	/* pass table of protocol names as 2nd argument */
 	pushprotos(L, in, inlen);
 	lua_insert(L, otop + 4);
@@ -8149,10 +8183,10 @@ static int sx_setHostnameCallback_cb(SSL *ssl, int *ad, void *_ctx) {
 
 	otop = lua_gettop(L) - n;
 
-	/* TODO: Install temporary panic handler to catch OOM errors */
-
 	/* pass SSL object as 1st argument */
-	ssl_push(L, ssl);
+	if (ssl_pushsafe(L, ssl))
+		goto done;
+
 	lua_insert(L, otop + 2);
 
 	if (LUA_OK != (status = lua_pcall(L, 1 + (n - 1), 2, 0)))
