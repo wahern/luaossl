@@ -1007,6 +1007,10 @@ See \fn{openssl.ssl.context:setVerify}.
 Returns two values: the bitwise verification mode flags, and the maximum validation depth.
 See \fn{openssl.ssl.context:getVerify}.
 
+\subsubsection[\fn{ssl:getVerifyResult}]{\fn{ssl:getVerifyResult()}}
+
+Returns two values: the integer verification result code and the string representation of that code.
+
 \subsubsection[\fn{ssl:setCertificate}]{\fn{ssl:setCertificate($crt$)}}
 
 Sets the X.509 certificate \module{openssl.x509} object $crt$ to send during SSL connection instance handshakes.
