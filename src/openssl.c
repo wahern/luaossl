@@ -8313,6 +8313,9 @@ static const auxL_Reg sx_methods[] = {
 #if HAVE_SSL_CTX_SET_TLSEXT_SERVERNAME_CALLBACK
 	{ "setHostnameCallback", &sx_setHostnameCallback },
 #endif
+#if HAVE_SSL_CTX_SET_TLSEXT_STATUS_TYPE
+	{ "setTLSextStatusType", &sx_setTLSextStatusType },
+#endif
 #if HAVE_SSL_CTX_GET_TLSEXT_STATUS_TYPE
 	{ "getTLSextStatusType", &sx_getTLSextStatusType },
 #endif
