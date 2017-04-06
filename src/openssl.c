@@ -294,6 +294,10 @@
 #define HAVE_SSL_SET_ALPN_PROTOS HAVE_SSL_CTX_SET_ALPN_PROTOS
 #endif
 
+#ifndef HAVE_SSL_SET_CURVES_LIST
+#define HAVE_SSL_SET_CURVES_LIST (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,5,1))
+#endif
+
 #ifndef HAVE_SSL_SET1_PARAM
 #define HAVE_SSL_SET1_PARAM OPENSSL_PREREQ(1,0,2)
 #endif
@@ -8214,6 +8218,21 @@ static int ssl_getCipherInfo(lua_State *L) {
 } /* ssl_getCipherInfo() */
 
 
+#if HAVE_SSL_SET_CURVES_LIST
+static int ssl_setCurvesList(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	const char *curves = luaL_checkstring(L, 2);
+
+	if (!SSL_set1_curves_list(ssl, curves))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setCurvesList");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setCurvesList() */
+#endif
+
+
 static int ssl_getHostName(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	const char *host;
@@ -8357,6 +8376,9 @@ static const auxL_Reg ssl_methods[] = {
 	{ "getPeerCertificate", &ssl_getPeerCertificate },
 	{ "getPeerChain",     &ssl_getPeerChain },
 	{ "getCipherInfo",    &ssl_getCipherInfo },
+#if HAVE_SSL_SET_CURVES_LIST
+	{ "setCurvesList",    &ssl_setCurvesList },
+#endif
 	{ "getHostName",      &ssl_getHostName },
 	{ "setHostName",      &ssl_setHostName },
 	{ "getVersion",       &ssl_getVersion },

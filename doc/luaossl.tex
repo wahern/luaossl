@@ -978,6 +978,12 @@ TLS1\_2\_VERSION & 16-bit TLSv1.2 identifier (0x0303).  \\
 
 Returns the SSL/TLS version supported by the client, which should be greater than or equal to the negotiated version. See \fn{ssl:getVersion}.
 
+\subsubsection[\fn{ssl:setCurvesList}]{\fn{ssl:setCurvesList($string$ [, ...])}}
+
+Sets the supported curves for this SSL connection instance. See \fn{openssl.ssl.context:setCurvesList}.
+
+\emph{Only supported since OpenSSL 1.0.2.}
+
 \subsubsection[\fn{ssl:getAlpnSelected}]{\fn{ssl:getAlpnSelected()}}
 
 Returns the negotiated ALPN protocol as a string.
