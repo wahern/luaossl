@@ -8169,7 +8169,7 @@ static int sx_setAlpnSelect(lua_State *L) {
 
 
 #if HAVE_SSL_CTX_SET_TLSEXT_SERVERNAME_CALLBACK
-static int sx_setHostnameCallback_cb(SSL *ssl, int *ad, void *_ctx) {
+static int sx_setHostNameCallback_cb(SSL *ssl, int *ad, void *_ctx) {
 	SSL_CTX *ctx = _ctx;
 	lua_State *L = NULL;
 	size_t n;
@@ -8208,10 +8208,10 @@ done:
 	lua_settop(L, otop);
 
 	return ret;
-} /* sx_setHostnameCallback_cb() */
+} /* sx_setHostNameCallback_cb() */
 
 
-static int sx_setHostnameCallback(lua_State *L) {
+static int sx_setHostNameCallback(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	int error;
 
@@ -8223,16 +8223,16 @@ static int sx_setHostnameCallback(lua_State *L) {
 		} else if (error == auxL_EOPENSSL && !ERR_peek_error()) {
 			return luaL_error(L, "unable to set hostname selection callback: Unknown internal error");
 		} else {
-			return auxL_error(L, error, "ssl.context:setHostnameCallback");
+			return auxL_error(L, error, "ssl.context:setHostNameCallback");
 		}
 	}
-	SSL_CTX_set_tlsext_servername_callback(ctx, sx_setHostnameCallback_cb);
+	SSL_CTX_set_tlsext_servername_callback(ctx, sx_setHostNameCallback_cb);
 	SSL_CTX_set_tlsext_servername_arg(ctx, ctx);
 
 	lua_pushboolean(L, 1);
 
 	return 1;
-} /* sx_setHostnameCallback() */
+} /* sx_setHostNameCallback() */
 #endif
 
 
@@ -8311,7 +8311,7 @@ static const auxL_Reg sx_methods[] = {
 	{ "setAlpnSelect",    &sx_setAlpnSelect },
 #endif
 #if HAVE_SSL_CTX_SET_TLSEXT_SERVERNAME_CALLBACK
-	{ "setHostnameCallback", &sx_setHostnameCallback },
+	{ "setHostNameCallback", &sx_setHostNameCallback },
 #endif
 #if HAVE_SSL_CTX_SET_TLSEXT_STATUS_TYPE
 	{ "setTLSextStatusType", &sx_setTLSextStatusType },
