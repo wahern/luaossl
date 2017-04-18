@@ -8223,7 +8223,7 @@ static int sx_setHostnameCallback(lua_State *L) {
 		} else if (error == auxL_EOPENSSL && !ERR_peek_error()) {
 			return luaL_error(L, "unable to set hostname selection callback: Unknown internal error");
 		} else {
-			return auxL_error(L, error, "ssl.context:setAlpnSelect");
+			return auxL_error(L, error, "ssl.context:setHostnameCallback");
 		}
 	}
 	SSL_CTX_set_tlsext_servername_callback(ctx, sx_setHostnameCallback_cb);
@@ -8248,7 +8248,7 @@ static int sx_setTLSextStatusType(lua_State *L) {
 	int type = checkTLSEXT_STATUSTYPE(L, 2);
 
 	if(!SSL_CTX_set_tlsext_status_type(ctx, type))
-		return auxL_error(L, auxL_EOPENSSL, "ssl:setTLSextStatusType");
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setTLSextStatusType");
 
 	lua_pushboolean(L, 1);
 
