@@ -140,6 +140,11 @@ $$(DESTDIR)$(3)/openssl/pubkey.lua: $$(d)/openssl.pubkey.lua
 	$$(RM) -f $$@
 	$$(CP) -p $$< $$@
 
+$$(DESTDIR)$(3)/openssl/ocsp/%.lua: $$(d)/openssl.ocsp.%.lua
+	$$(LUAC$(1)_$(d)) -p $$<
+	$$(MKDIR) -p $$(@D)
+	$$(CP) -p $$< $$@
+
 $$(DESTDIR)$(3)/openssl/x509/%.lua: $$(d)/openssl.x509.%.lua
 	$$(LUAC$(1)_$(d)) -p $$<
 	$$(MKDIR) -p $$(@D)
