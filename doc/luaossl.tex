@@ -543,6 +543,10 @@ Returns the basic constraints critical flag as a boolean.
 
 Sets the basic constraints critical flag.
 
+\subsubsection[\fn{x509:setKeyIdentifier}]{\fn{x509:setKeyIdentifier($which$[, $x509$])}}
+
+Sets the key identifier flag. $which$ has to be one of ``subjectKeyIdentifier'' or ``authorityKeyIdentifier''. If $x509$ is specified it will be used to calculate the hash for authorityKeyIdentifier.
+
 \subsubsection[\fn{x509:addExtension}]{\fn{x509:addExtension($ext$)}}
 
 Adds a copy of the \module{x509.extension} object to the certificate.

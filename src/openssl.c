@@ -5455,6 +5455,47 @@ error:
 } /* xc_setSerial() */
 
 
+static int xc_setKeyIdentifier(lua_State *L) {
+  X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
+  const char *nid = luaL_checkstring(L, 2);
+  ASN1_OBJECT *obj;
+  X509_EXTENSION *ex;
+  X509V3_CTX ctx;
+
+  if (!(obj = OBJ_txt2obj(nid, 0)))
+    return luaL_error(L, "x509.cert:setKeyIdentifier: %s: invalid NID", nid);
+
+  ASN1_OBJECT_free(obj);
+
+  X509V3_set_ctx_nodb(&ctx);
+  if (lua_gettop(L) == 3 && strcmp(nid, "authorityKeyIdentifier") == 0) {
+    X509 *ca = checksimple(L, 3, X509_CERT_CLASS);
+    X509V3_set_ctx(&ctx, ca, crt, NULL, NULL, 0);
+  } else {
+    X509V3_set_ctx(&ctx, crt, crt, NULL, NULL, 0);
+  }
+
+  switch (auxL_checkoption(L, 2, 0, (const char *[]){ "subjectKeyIdentifier", "authorityKeyIdentifier", NULL }, 1)) {
+    case 0:
+      ex = X509V3_EXT_conf_nid(NULL, &ctx, NID_subject_key_identifier, "hash");
+      break;
+    case 1:
+      ex = X509V3_EXT_conf_nid(NULL, &ctx, NID_authority_key_identifier, "keyid:always");
+      break;
+    default:
+      ex = NULL;
+  }
+
+  if (!ex)
+    return auxL_error(L, auxL_EOPENSSL, "x509.cert:setKeyIdentifier");
+
+  X509_add_ext(crt, ex, -1);
+  X509_EXTENSION_free(ex);
+
+  return 1;
+}
+
+
 static int xc_digest(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	const char *type = luaL_optstring(L, 2, "sha1");
@@ -6364,6 +6405,7 @@ static const auxL_Reg xc_methods[] = {
 	{ "setBasicConstraint",  &xc_setBasicConstraint },
 	{ "getBasicConstraintsCritical", &xc_getBasicConstraintsCritical },
 	{ "setBasicConstraintsCritical", &xc_setBasicConstraintsCritical },
+	{ "setKeyIdentifier", &xc_setKeyIdentifier },
 	{ "addExtension",  &xc_addExtension },
 	{ "getExtension",  &xc_getExtension },
 	{ "getExtensionCount", &xc_getExtensionCount },
