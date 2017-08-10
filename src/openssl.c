@@ -1227,16 +1227,13 @@ static const EVP_MD *auxL_optdigest(lua_State *L, int index, EVP_PKEY *key, cons
  * Prevent loader from unlinking us if we've registered a callback with
  * OpenSSL by taking another reference to ourselves.
  */
+/* dl_anchor must not be called from multiple threads at once */
 static int dl_anchor(void) {
 #if HAVE_DLADDR
 	extern int luaopen__openssl(lua_State *);
-	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 	static void *anchor;
 	Dl_info info;
 	int error = 0;
-
-	if ((error = pthread_mutex_lock(&mutex)))
-		return error;
 
 	if (anchor)
 		goto epilog;
@@ -1247,8 +1244,6 @@ static int dl_anchor(void) {
 	if (!(anchor = dlopen(info.dli_fname, RTLD_NOW|RTLD_LOCAL)))
 		goto dlerr;
 epilog:
-	(void)pthread_mutex_unlock(&mutex);
-
 	return error;
 dlerr:
 	error = auxL_EDYLD;
