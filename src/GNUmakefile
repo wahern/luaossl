@@ -16,7 +16,7 @@ include $(d)/../GNUmakefile
 #
 # C O M P I L A T I O N  F L A G S
 #
-CPPFLAGS_$(d) = $(ALL_CPPFLAGS) -DHAVE_CONFIG_H
+CPPFLAGS_$(d) = $(ALL_CPPFLAGS) -DHAVE_CONFIG_H -DCOMPAT_PREFIX=luaossl
 CFLAGS_$(d) = $(ALL_CFLAGS)
 SOFLAGS_$(d) = $(ALL_SOFLAGS)
 LDFLAGS_$(d) = $(ALL_LDFLAGS)
@@ -25,7 +25,7 @@ LIBS_$(d) = $(ALL_LIBS)
 #
 # C O M P I L A T I O N  R U L E S
 #
-OBJS_$(d) = openssl.o
+OBJS_$(d) = openssl.o ../vendor/compat53/c-api/compat-5.3.o
 
 $(d)/config.h: $(abspath $(d)/..)/config.h
 	$(CP) $< $@
@@ -35,7 +35,7 @@ define BUILD_$(d)
 $$(d)/$(1)/openssl.so: $$(addprefix $$(d)/$(1)/, $$(OBJS_$(d)))
 	$$(CC) -o $$@ $$^ $$(SOFLAGS_$$(abspath $$(@D)/..)) $$(LDFLAGS_$$(abspath $$(@D)/..)) $$(LIBS_$$(abspath $$(@D)/..))
 
-$$(d)/$(1)/%.o: $$(d)/%.c $$(d)/compat52.h $$(d)/config.h
+$$(d)/$(1)/%.o: $$(d)/%.c $$(d)/../vendor/compat53/c-api/compat-5.3.h $$(d)/config.h
 	$$(MKDIR) -p $$(@D)
 	$$(CC) $$(CFLAGS_$$(<D)) $$(ALL_LUA$(subst .,,$(1))_CPPFLAGS) $$(CPPFLAGS_$$(<D)) -c -o $$@ $$<
 
