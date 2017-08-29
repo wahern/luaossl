@@ -155,11 +155,6 @@ $$(DESTDIR)$(3)/openssl/ssl/%.lua: $$(d)/openssl.ssl.%.lua
 	$$(MKDIR) -p $$(@D)
 	$$(CP) -p $$< $$@
 
-$$(DESTDIR)$(3)/openssl/ssl/%.lua: $$(d)/openssl.ssl.%.lua
-	$$(LUAC$(1)_$(d)) -p $$<
-	$$(MKDIR) -p $$(@D)
-	$$(CP) -p $$< $$@
-
 liblua$(1)-openssl-install openssl$(1)-install: $$(MODS$(1)_$$(d))
 
 .PHONY: liblua$(1)-openssl-uninstall openssl$(1)-uninstall
