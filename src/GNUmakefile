@@ -166,6 +166,7 @@ liblua$(1)-openssl-install openssl$(1)-install: $$(MODS$(1)_$$(d))
 
 liblua$(1)-openssl-uninstall openssl$(1)-uninstall:
 	$$(RM) -f $$(MODS$(1)_$(d))
+	-$$(RMDIR) $$(DESTDIR)$(3)/openssl/ocsp
 	-$$(RMDIR) $$(DESTDIR)$(3)/openssl/x509
 	-$$(RMDIR) $$(DESTDIR)$(3)/openssl/ssl
 	-$$(RMDIR) $$(DESTDIR)$(3)/openssl
