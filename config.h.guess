@@ -34,7 +34,7 @@
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #define AG_VENDOR  "william+autoguess@25thandClement.com"
-#define AG_VERSION 20161019L
+#define AG_VERSION 20170511L
 
 
 /*
@@ -347,6 +347,7 @@
 
 #define AG_OPENBSD_PREREQ_0_0 (__OpenBSD__)
 #define AG_OPENBSD_PREREQ_5_5 (OpenBSD >= 201405)
+#define AG_OPENBSD_PREREQ_5_6 (OpenBSD >= 201411)
 #define AG_OPENBSD_PREREQ_5_7 (OpenBSD >= 201505)
 #define AG_OPENBSD_PREREQ(M, m) (AG_OPENBSD_PREREQ_ ## M ## _ ## m)
 
@@ -486,6 +487,11 @@
 
 #ifndef HAVE_SYS_INOTIFY_H
 #define HAVE_SYS_INOTIFY_H ag_test_include(<sys/inotify.h>, __linux__)
+#endif
+
+#ifndef HAVE_SYS_RANDOM_H
+#define HAVE_SYS_RANDOM_H_ (__sun && defined SYS_getrandom) /* requires #include <sys/syscall.h> :( */
+#define HAVE_SYS_RANDOM_H ag_test_include(<sys/random.h>, HAVE_SYS_RANDOM_H_)
 #endif
 
 #ifndef HAVE_SYS_SIGNALFD_H
@@ -731,6 +737,10 @@
 #define HAVE_GETAUXVAL (HAVE_SYS_AUXV_H && !__sun)
 #endif
 
+#ifndef HAVE_GETENTROPY
+#define HAVE_GETENTROPY (AG_OPENBSD_PREREQ(5,6) || (HAVE_SYS_RANDOM_H && __sun))
+#endif
+
 #ifndef HAVE_GETENV_R
 #define HAVE_GETENV_R (AG_NETBSD_PREREQ(4,0,0) || __minix)
 #endif
@@ -745,6 +755,10 @@
 
 #ifndef HAVE_GETPROGNAME
 #define HAVE_GETPROGNAME (HAVE_ARC4RANDOM || AG_SUNOS_PREREQ(5,11))
+#endif
+
+#ifndef HAVE_GETRANDOM
+#define HAVE_GETRANDOM (HAVE_SYS_RANDOM_H && __sun)
 #endif
 
 #ifndef HAVE_INOTIFY_INIT
@@ -779,6 +793,14 @@
 #define HAVE_OPENAT \
 	((!__APPLE__ || AG_MACOS_PREREQ(10,10,0) || AG_IPHONE_PREREQ(8,0)) \
 	 && (!__NetBSD__ || AG_NETBSD_PREREQ(7,0,0)))
+#endif
+
+#ifndef HAVE_MKDIRAT
+#define HAVE_MKDIRAT HAVE_OPENAT
+#endif
+
+#ifndef HAVE_MKFIFOAT
+#define HAVE_MKFIFOAT (!__APPLE__ && (!__NetBSD__ || AG_NETBSD_PREREQ(7,0,0)))
 #endif
 
 #ifndef HAVE_PACCEPT
@@ -829,6 +851,10 @@
 #define HAVE_POSIX_FALLOCATE (_AIX || AG_FREEBSD_PREREQ(9,0,0) || AG_GLIBC_PREREQ(2,2) || AG_MUSL_MAYBE || AG_NETBSD_PREREQ(7,0,0) || __sun)
 #endif
 
+#ifndef HAVE_RENAMEAT
+#define HAVE_RENAMEAT HAVE_OPENAT
+#endif
+
 #ifndef HAVE_SIGNALFD
 #define HAVE_SIGNALFD HAVE_SYS_SIGNALFD_H
 #endif
@@ -871,6 +897,10 @@
 
 #ifndef HAVE_TIMERFD_SETTIME
 #define HAVE_TIMERFD_SETTIME HAVE_TIMERFD_CREATE
+#endif
+
+#ifndef HAVE_UNLINKAT
+#define HAVE_UNLINKAT HAVE_OPENAT
 #endif
 
 #ifndef STRERROR_R_CHAR_P
