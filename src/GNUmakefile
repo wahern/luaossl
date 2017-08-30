@@ -16,66 +16,46 @@ include $(d)/../GNUmakefile
 #
 # C O M P I L A T I O N  F L A G S
 #
-OS_$(d) = $(shell $(d)/../mk/vendor.os)
-CC_$(d) = $(shell env CC="$(CC) "$(d)/../mk/vendor.cc)
-LUAPATH_$(d) = $(shell env CC="$(CC)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" $(<D)/../mk/luapath -krxm3 -I$(DESTDIR)$(includedir) -I/usr/include -I/usr/local/include -P$(DESTDIR)$(bindir) -P$(bindir) -L$(DESTDIR)$(libdir) -L$(libdir) -v$(1) $(2))
-
-CPPFLAGS_$(d) = $(CPPFLAGS_$(abspath $(@D)/../..)) -DHAVE_CONFIG_H
-CFLAGS_$(d) = $(CFLAGS_$(abspath $(@D)/../..))
-LDFLAGS_$(d) = $(LDFLAGS_$(abspath $(@D)/../..))
-SOFLAGS_$(d) = $(SOFLAGS_$(abspath $(@D)/../..))
-
-ifeq ($(CC_$(d)), sunpro)
-CPPFLAGS_$(d) += -DOPENSSL_NO_EC
-endif
-
-LDFLAGS_$(d) += -lssl -lcrypto -lpthread -lm
-
-# NetBSD, FreeBSD, OpenBSD (and presumably descendants) lack any libdl;
-# dlopen, et al are part of libc.
-ifneq ($(patsubst %BSD,BSD,$(OS_$(d))), BSD)
-LDFLAGS_$(d) += -ldl
-endif
-
+CPPFLAGS_$(d) = $(ALL_CPPFLAGS) -DHAVE_CONFIG_H
+CFLAGS_$(d) = $(ALL_CFLAGS)
+SOFLAGS_$(d) = $(ALL_SOFLAGS)
+LDFLAGS_$(d) = $(ALL_LDFLAGS)
+LIBS_$(d) = $(ALL_LIBS)
 
 #
 # C O M P I L A T I O N  R U L E S
 #
+OBJS_$(d) = openssl.o
+
 $(d)/config.h: $(abspath $(d)/..)/config.h
 	$(CP) $< $@
 
 define BUILD_$(d)
 
-.SECONDARY: liblua$(1)-openssl openssl$(1)
+$$(d)/$(1)/openssl.so: $$(addprefix $$(d)/$(1)/, $$(OBJS_$(d)))
+	$$(CC) -o $$@ $$^ $$(SOFLAGS_$$(abspath $$(@D)/..)) $$(LDFLAGS_$$(abspath $$(@D)/..)) $$(LIBS_$$(abspath $$(@D)/..))
 
-$$(d)/$(1)/openssl.so: $$(d)/$(1)/openssl.o
-	$$(CC) -o $$@ $$^ $$(SOFLAGS_$$(abspath $$(@D)/..)) $$(SOFLAGS) $$(LDFLAGS_$$(abspath $$(@D)/..)) $$(LDFLAGS)
-
-$$(d)/$(1)/openssl.o: $$(d)/openssl.c $$(d)/compat52.h $$(d)/config.h
-	test "$$(notdir $$(@D))" = "$$(call LUAPATH_$$(<D), $$(notdir $$(@D)), version)"
+$$(d)/$(1)/%.o: $$(d)/%.c $$(d)/compat52.h $$(d)/config.h
 	$$(MKDIR) -p $$(@D)
-	$$(CC) $$(CFLAGS_$$(<D)) $$(CFLAGS) $$(call LUAPATH_$$(<D), $$(notdir $$(@D)), cppflags) $$(CPPFLAGS_$$(<D)) $$(CPPFLAGS) -c -o $$@ $$<
+	$$(CC) $$(CFLAGS_$$(<D)) $$(ALL_LUA$(subst .,,$(1))_CPPFLAGS) $$(CPPFLAGS_$$(<D)) -c -o $$@ $$<
 
-liblua$(1)-openssl openssl$(1): $$(d)/$(1)/openssl.so
+.SECONDARY: liblua$(1)-openssl openssl$(1) openssl
+
+liblua$(1)-openssl openssl$(1) openssl: $$(d)/$(1)/openssl.so
 
 endef # BUILD_$(d)
 
 $(eval $(call BUILD_$(d),5.1))
-
 $(eval $(call BUILD_$(d),5.2))
-
 $(eval $(call BUILD_$(d),5.3))
 
 ifneq "$(filter $(abspath $(d)/..)/%, $(abspath $(firstword $(MAKEFILE_LIST))))" ""
-.SECONDARY: all5.1 all5.2 all
+.SECONDARY: all all5.1 all5.2 all5.3
 
 all5.1: liblua5.1-openssl
-
 all5.2: liblua5.2-openssl
-
 all5.3: liblua5.3-openssl
-
-all: all5.1 all5.2
+all: $(foreach API,$(strip $(LUA_APIS)),all$(API))
 
 endif
 
@@ -84,8 +64,6 @@ endif
 # I N S T A L L  &  U N I N S T A L L  R U L E S
 #
 define INSTALL_$(d)
-
-LUAC$(1)_$(d) = $$(or $$(call LUAPATH_$(d), $(1), luac), true)
 
 MODS$(1)_$(d) = \
 	$$(DESTDIR)$(2)/_openssl.so \
@@ -116,42 +94,34 @@ MODS$(1)_$(d) = \
 
 .SECONDARY: liblua$(1)-openssl-install openssl$(1)-install
 
+liblua$(1)-openssl-install openssl$(1)-install: $$(MODS$(1)_$$(d))
+
 $$(DESTDIR)$(2)/_openssl.so: $$(d)/$(1)/openssl.so
 	$$(MKDIR) -p $$(@D)
-	$$(CP) -fp $$< $$@
+	$$(CP) -p $$< $$@
 
-$$(DESTDIR)$(3)/openssl.lua: $$(d)/openssl.lua
-	$$(LUAC$(1)_$(d)) -p $$<
+$$(DESTDIR)$(3)/%.lua: $$(d)/%.lua
+	$$(LUAC$(subst .,,$(1))) -p $$<
 	$$(MKDIR) -p $$(@D)
 	$$(CP) -p $$< $$@
 
 $$(DESTDIR)$(3)/openssl/%.lua: $$(d)/openssl.%.lua
-	$$(LUAC$(1)_$(d)) -p $$<
+	$$(LUAC$(subst .,,$(1))) -p $$<
 	$$(MKDIR) -p $$(@D)
 	$$(CP) -p $$< $$@
 
-# pubkey.lua used to be symbolic link to pkey.lua, but that caused packaging
-# headaches. Now it's a stub, but the cp -p in the inference rule will copy
-# to the target of the symbolic link, so we need a special install rule to
-# clean up the mess.
-$$(DESTDIR)$(3)/openssl/pubkey.lua: $$(d)/openssl.pubkey.lua
-	$$(LUAC$(1)_$(d)) -p $$<
-	$$(MKDIR) -p $$(@D)
-	$$(RM) -f $$@
-	$$(CP) -p $$< $$@
-
-$$(DESTDIR)$(3)/openssl/ocsp/%.lua: $$(d)/openssl.ocsp.%.lua
-	$$(LUAC$(1)_$(d)) -p $$<
+$$(DESTDIR)$(3)/openssl/ocsp/%.lua: $$(d)/ocsp.%.lua
+	$$(LUAC$(subst .,,$(1))) -p $$<
 	$$(MKDIR) -p $$(@D)
 	$$(CP) -p $$< $$@
 
-$$(DESTDIR)$(3)/openssl/x509/%.lua: $$(d)/openssl.x509.%.lua
-	$$(LUAC$(1)_$(d)) -p $$<
+$$(DESTDIR)$(3)/openssl/x509/%.lua: $$(d)/x509.%.lua
+	$$(LUAC$(subst .,,$(1))) -p $$<
 	$$(MKDIR) -p $$(@D)
 	$$(CP) -p $$< $$@
 
-$$(DESTDIR)$(3)/openssl/ssl/%.lua: $$(d)/openssl.ssl.%.lua
-	$$(LUAC$(1)_$(d)) -p $$<
+$$(DESTDIR)$(3)/openssl/ssl/%.lua: $$(d)/ssl.%.lua
+	$$(LUAC$(subst .,,$(1))) -p $$<
 	$$(MKDIR) -p $$(@D)
 	$$(CP) -p $$< $$@
 
@@ -169,31 +139,24 @@ liblua$(1)-openssl-uninstall openssl$(1)-uninstall:
 endef # INSTALL_$(d)
 
 $(eval $(call INSTALL_$(d),5.1,$$(lua51cpath),$$(lua51path)))
-
 $(eval $(call INSTALL_$(d),5.2,$$(lua52cpath),$$(lua52path)))
-
 $(eval $(call INSTALL_$(d),5.3,$$(lua53cpath),$$(lua53path)))
 
 ifneq "$(filter $(abspath $(d)/..)/%, $(abspath $(firstword $(MAKEFILE_LIST))))" ""
+
 .SECONDARY: install5.1 install5.2 install5.3 install
 
 install5.1: liblua5.1-openssl-install
-
 install5.2: liblua5.2-openssl-install
-
 install5.3: liblua5.3-openssl-install
-
-install: install5.1 install5.2
+install: $(foreach API,$(strip $(LUA_APIS)),install$(API))
 
 .PHONY: uninstall5.1 uninstall5.2 uninstall5.3 uninstall
 
 uninstall5.1: liblua5.1-openssl-uninstall
-
 uninstall5.2: liblua5.2-openssl-uninstall
-
 uninstall5.3: liblua5.3-openssl-uninstall
-
-uninstall: uninstall5.1 uninstall5.2
+uninstall: $(foreach API,$(strip $(LUA_APIS)),uninstall$(API))
 
 endif
 
@@ -204,7 +167,7 @@ endif
 .PHONY: $(d)/clean $(d)/clean~ clean clean~
 
 $(d)/clean:
-	$(RM) -fr $(@D)/*.so $(@D)/*.o $(@D)/*.dSYM $(@D)/5.1 $(@D)/5.2 $(@D)/5.3
+	$(RM) -fr $(@D)/config.h $(@D)/*.dSYM $(@D)/5.1 $(@D)/5.2 $(@D)/5.3
 
 $(d)/clean~: $(d)/clean
 	$(RM) -f $(@D)/*~
@@ -221,27 +184,27 @@ clean~: $(d)/clean~
 
 $(d)/help:
 	@echo
-	@echo "ext/ targets:"
+	@echo "src/ targets:"
 	@echo ""
-	@echo "    all      - build all binary targets"
-	@echo "openssl      - invokes openssl5.1 and openssl5.2"
-	@echo "openssl5.1   - build 5.1/openssl.so"
-	@echo "openssl5.2   - build 5.2/openssl.so"
-	@echo "openssl5.3   - build 5.3/openssl.so"
-	@echo "install      - invokes install5.1 and install5.2"
-	@echo "install5.1   - install openssl Lua 5.1 modules"
-	@echo "install5.2   - install openssl Lua 5.2 modules"
-	@echo "install5.3   - install openssl Lua 5.3 modules"
-	@echo "uninstall    - invokes uninstall5.1 and uninstall5.2"
+	@echo "         all - build all API targets"
+	@echo "      all5.1 - build 5.1/openssl.so"
+	@echo "      all5.2 - build 5.2/openssl.so"
+	@echo "      all5.3 - build 5.3/openssl.so"
+	@echo "     install - install all API targets"
+	@echo "  install5.1 - install openssl Lua 5.1 modules"
+	@echo "  install5.2 - install openssl Lua 5.2 modules"
+	@echo "  install5.3 - install openssl Lua 5.3 modules"
+	@echo "   uninstall - uninstall all API targets"
 	@echo "uninstall5.1 - uninstall openssl Lua 5.1 modules"
 	@echo "uninstall5.2 - uninstall openssl Lua 5.2 modules"
 	@echo "uninstall5.3 - uninstall openssl Lua 5.3 modules"
-	@echo "  clean      - rm binary targets, object files, debugging symbols, etc"
-	@echo " clean~      - clean + rm *~"
-	@echo "   help      - echo this help message"
+	@echo "       clean - rm binary targets, object files, debugging symbols, etc"
+	@echo "      clean~ - clean + rm *~"
+	@echo "        help - echo this help message"
 	@echo ""
 	@echo "Some important Make variables:"
 	@echo ""
+	@echo '  LUA_APIS - default Lua APIs to target ($(LUA_APIS))'
 	@echo "    prefix - path to install root ($(value prefix))"
 	@echo ' lua51path - install path for Lua 5.1 modules ($(value lua51path))'
 	@echo 'lua51cpath - install path for Lua 5.1 C modules ($(value lua51cpath))'
@@ -249,6 +212,10 @@ $(d)/help:
 	@echo 'lua52cpath - install path for Lua 5.2 C modules ($(value lua52cpath))'
 	@echo ' lua53path - install path for Lua 5.3 modules ($(value lua53path))'
 	@echo 'lua53cpath - install path for Lua 5.3 C modules ($(value lua53cpath))'
+	@echo ""
+	@echo 'LUA51_CPPFLAGS - cpp flags for Lua 5.1 headers ($(LUA51_CPPFLAGS))'
+	@echo 'LUA52_CPPFLAGS - cpp flags for Lua 5.2 headers ($(LUA52_CPPFLAGS))'
+	@echo 'LUA53_CPPFLAGS - cpp flags for Lua 5.3 headers ($(LUA53_CPPFLAGS))'
 	@echo ""
 	@echo "(NOTE: all the common GNU-style paths are supported, including"
 	@echo "prefix, bindir, libdir, datadir, includedir, and DESTDIR.)"
