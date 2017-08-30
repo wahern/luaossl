@@ -3212,6 +3212,7 @@ static int pk_new(lua_State *L) {
 		int type = EVP_PKEY_RSA;
 		unsigned bits = 1024;
 		unsigned exp = 65537;
+		int generator = 2;
 		int curve = NID_X9_62_prime192v1;
 		const char *id;
 		const char *dhparam = NULL;
@@ -3264,9 +3265,10 @@ static int pk_new(lua_State *L) {
 				bits = (unsigned)n;
 			}
 
-			if (loadfield(L, 1, "exp", LUA_TNUMBER, &n)) {
-				luaL_argcheck(L, n > 0 && n < UINT_MAX, 1, lua_pushfstring(L, "%f: `exp' invalid", n));
-				exp = (unsigned)n;
+			/* compat: DH used to use the 'exp' field for the generator */
+			if (loadfield(L, 1, "generator", LUA_TNUMBER, &n) || loadfield(L, 1, "exp", LUA_TNUMBER, &n)) {
+				luaL_argcheck(L, n > 0 && n <= INT_MAX, 1, lua_pushfstring(L, "%f: `exp' invalid", n));
+				generator = (int)n;
 			}
 			break;
 		case EVP_PKEY_EC:
@@ -3327,7 +3329,7 @@ creat:
 				BIO_free(bio);
 				if (!dh)
 					return auxL_error(L, auxL_EOPENSSL, "pkey.new");
-			} else if (!(dh = DH_generate_parameters(bits, exp, 0, 0)))
+			} else if (!(dh = DH_generate_parameters(bits, generator, 0, 0)))
 				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 
