@@ -1921,6 +1921,7 @@ static int compat_init(void) {
 	if (done)
 		goto epilog;
 
+#if defined compat_X509_STORE_free
 	/*
 	 * We need to unconditionally install at least one external
 	 * application data callback. Because these can never be
@@ -1929,7 +1930,6 @@ static int compat_init(void) {
 	if ((error = dl_anchor()))
 		goto epilog;
 
-#if defined compat_X509_STORE_free
 	/*
 	 * Test if X509_STORE_free obeys reference counts by installing an
 	 * onfree callback.
