@@ -3211,7 +3211,7 @@ static int pk_new(lua_State *L) {
 	if (lua_istable(L, 1) || lua_isnil(L, 1)) {
 		int type = EVP_PKEY_RSA;
 		unsigned bits = 1024;
-		unsigned exp = 65537;
+		BIGNUM *exp = NULL;
 		int generator = 2;
 		int curve = NID_X9_62_prime192v1;
 		const char *id;
@@ -3249,9 +3249,13 @@ static int pk_new(lua_State *L) {
 				bits = (unsigned)n;
 			}
 
-			if (loadfield(L, 1, "exp", LUA_TNUMBER, &n)) {
-				luaL_argcheck(L, n > 0 && n < UINT_MAX, 1, lua_pushfstring(L, "%f: `exp' invalid", n));
-				exp = (unsigned)n;
+			if (!getfield(L, 1, "exp")) {
+				exp = checkbig(L, -1);
+			} else {
+				/* default to 65537 */
+				exp = bn_push(L);
+				if (!BN_add_word(exp, 65537))
+					return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 			}
 			break;
 		case EVP_PKEY_DH:
@@ -3287,8 +3291,13 @@ creat:
 		case EVP_PKEY_RSA: {
 			RSA *rsa;
 
-			if (!(rsa = RSA_generate_key(bits, exp, 0, 0)))
+			if (!(rsa = RSA_new()))
 				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+
+			if (!RSA_generate_key_ex(rsa, bits, exp, 0)) {
+				RSA_free(rsa);
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+			}
 
 			EVP_PKEY_set1_RSA(*ud, rsa);
 
@@ -3299,8 +3308,13 @@ creat:
 		case EVP_PKEY_DSA: {
 			DSA *dsa;
 
-			if (!(dsa = DSA_generate_parameters(bits, 0, 0, 0, 0, 0, 0)))
+			if (!(dsa = DSA_new()))
 				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+
+			if (!DSA_generate_parameters_ex(dsa, bits, 0, 0, 0, 0, 0)) {
+				DSA_free(dsa);
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+			}
 
 			if (!DSA_generate_key(dsa)) {
 				DSA_free(dsa);
@@ -3329,8 +3343,15 @@ creat:
 				BIO_free(bio);
 				if (!dh)
 					return auxL_error(L, auxL_EOPENSSL, "pkey.new");
-			} else if (!(dh = DH_generate_parameters(bits, generator, 0, 0)))
-				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+			} else {
+				if (!(dh = DH_new()))
+					return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+
+				if (!DH_generate_parameters_ex(dh, bits, generator, 0)) {
+					DH_free(dh);
+					return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+				}
+			}
 
 
 			if (!DH_generate_key(dh)) {
