@@ -83,11 +83,16 @@
 #define MSC_2VER(M, m, p) ((((M) + 6) * 10000000) + ((m) * 1000000) + (p))
 #define MSC_PREREQ(M, m, p) (_MSC_FULL_VER > 0 && _MSC_FULL_VER >= MSC_2VER((M), (m), (p)))
 
-#define OPENSSL_PREREQ(M, m, p) \
-	(OPENSSL_VERSION_NUMBER >= (((M) << 28) | ((m) << 20) | ((p) << 12)) && !defined LIBRESSL_VERSION_NUMBER)
-
+#ifdef LIBRESSL_VERSION_NUMBER
+#define OPENSSL_PREREQ(M, m, p) (0)
 #define LIBRESSL_PREREQ(M, m, p) \
 	(LIBRESSL_VERSION_NUMBER >= (((M) << 28) | ((m) << 20) | ((p) << 12)))
+#else
+#define OPENSSL_PREREQ(M, m, p) \
+	(OPENSSL_VERSION_NUMBER >= (((M) << 28) | ((m) << 20) | ((p) << 12)))
+#define LIBRESSL_PREREQ(M, m, p) (0)
+#endif
+
 
 #ifndef __has_builtin
 #define __has_builtin(x) 0
@@ -146,7 +151,11 @@
 #endif
 
 #ifndef HAVE_DTLSV1_CLIENT_METHOD
-#define HAVE_DTLSV1_CLIENT_METHOD (!defined OPENSSL_NO_DTLS1)
+#ifdef OPENSSL_NO_DTLS1
+#define HAVE_DTLSV1_CLIENT_METHOD (0)
+#else
+#define HAVE_DTLSV1_CLIENT_METHOD (1)
+#endif
 #endif
 
 #ifndef HAVE_DTLSV1_SERVER_METHOD
@@ -154,7 +163,11 @@
 #endif
 
 #ifndef HAVE_DTLS_CLIENT_METHOD
-#define HAVE_DTLS_CLIENT_METHOD (OPENSSL_PREREQ(1,0,2) && !defined OPENSSL_NO_DTLS1)
+#ifdef OPENSSL_NO_DTLS1
+#define HAVE_DTLS_CLIENT_METHOD (0)
+#else
+#define HAVE_DTLS_CLIENT_METHOD OPENSSL_PREREQ(1,0,2)
+#endif
 #endif
 
 #ifndef HAVE_DTLS_SERVER_METHOD
@@ -162,7 +175,11 @@
 #endif
 
 #ifndef HAVE_DTLSV1_2_CLIENT_METHOD
-#define HAVE_DTLSV1_2_CLIENT_METHOD (OPENSSL_PREREQ(1,0,2) && !defined OPENSSL_NO_DTLS1)
+#ifdef OPENSSL_NO_DTLS1
+#define HAVE_DTLSV1_2_CLIENT_METHOD (0)
+#else
+#define HAVE_DTLSV1_2_CLIENT_METHOD OPENSSL_PREREQ(1,0,2)
+#endif
 #endif
 
 #ifndef HAVE_DTLSV1_2_SERVER_METHOD
@@ -227,10 +244,6 @@
 
 #ifndef HAVE_RSA_GET0_KEY
 #define HAVE_RSA_GET0_KEY OPENSSL_PREREQ(1,1,0)
-#endif
-
-#ifndef HAVE_RSA_PKCS1_PSS_PADDING
-#define HAVE_RSA_PKCS1_PSS_PADDING (defined RSA_PKCS1_PSS_PADDING || OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
 #endif
 
 #ifndef HAVE_RSA_SET0_CRT_PARAMS
@@ -378,7 +391,11 @@
 #endif
 
 #ifndef STRERROR_R_CHAR_P
-#define STRERROR_R_CHAR_P (defined __GLIBC__ && (_GNU_SOURCE || !(_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600)))
+#ifdef __GLIBC__
+#define STRERROR_R_CHAR_P (_GNU_SOURCE || !(_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600))
+#else
+#define STRERROR_R_CHAR_P (0)
+#endif
 #endif
 
 #ifndef LIST_HEAD
@@ -4416,7 +4433,7 @@ static const auxL_IntegerReg pk_rsa_pad_opts[] = {
 	{ "RSA_NO_PADDING", RSA_NO_PADDING }, // no padding
 	{ "RSA_PKCS1_OAEP_PADDING", RSA_PKCS1_OAEP_PADDING }, // OAEP padding (encrypt and decrypt only)
 	{ "RSA_X931_PADDING", RSA_X931_PADDING }, // (signature operations only)
-#if HAVE_RSA_PKCS1_PSS_PADDING
+#if RSA_PKCS1_PSS_PADDING
 	{ "RSA_PKCS1_PSS_PADDING", RSA_PKCS1_PSS_PADDING }, // (sign and verify only)
 #endif
 	{ NULL, 0 },
