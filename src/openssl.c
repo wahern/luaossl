@@ -358,6 +358,14 @@
 #define HAVE_X509_CRL_GET0_NEXTUPDATE OPENSSL_PREREQ(1,1,0)
 #endif
 
+#ifndef HAVE_X509_CRL_SET1_LASTUPDATE
+#define HAVE_X509_CRL_SET1_LASTUPDATE OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_X509_CRL_SET1_NEXTUPDATE
+#define HAVE_X509_CRL_SET1_NEXTUPDATE OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HAVE_X509_GET_SIGNATURE_NID
 #define HAVE_X509_GET_SIGNATURE_NID OPENSSL_PREREQ(1,0,2)
 #endif
@@ -1767,6 +1775,14 @@ static int compat_SSL_CTX_set1_param(SSL_CTX *ctx, X509_VERIFY_PARAM *vpm) {
 
 #if !HAVE_X509_CRL_GET0_NEXTUPDATE
 #define X509_CRL_get0_nextUpdate(crl) ((const ASN1_TIME*)X509_CRL_get_nextUpdate(crl))
+#endif
+
+#if !HAVE_X509_CRL_SET1_LASTUPDATE
+#define X509_CRL_set1_lastUpdate(crl, s) X509_CRL_set_lastUpdate((crl), (ASN1_TIME*)(s))
+#endif
+
+#if !HAVE_X509_CRL_SET1_NEXTUPDATE
+#define X509_CRL_set1_nextUpdate(crl, s) X509_CRL_set_nextUpdate((crl), (ASN1_TIME*)(s))
 #endif
 
 #if !HAVE_X509_EXTENSION_GET0_OBJECT
@@ -6855,10 +6871,21 @@ static int xx_new(lua_State *L) {
 		if (!ok)
 			return auxL_error(L, auxL_EOPENSSL, "x509.crl.new");
 	} else {
+		ASN1_TIME *tm;
+
 		if (!(*ud = X509_CRL_new()))
 			return auxL_error(L, auxL_EOPENSSL, "x509.crl.new");
 
-		X509_gmtime_adj(X509_CRL_get_lastUpdate(*ud), 0);
+		/* initialize last updated time to now */
+		if (!(tm = ASN1_TIME_set(NULL, time(NULL))))
+			return auxL_error(L, auxL_EOPENSSL, "x509.crl.new");
+
+		if (!X509_CRL_set1_lastUpdate(*ud, tm)) {
+			ASN1_TIME_free(tm);
+			return auxL_error(L, auxL_EOPENSSL, "x509.crl.new");
+		}
+
+		ASN1_TIME_free(tm);
 	}
 
 	return 1;
@@ -6912,14 +6939,21 @@ static int xx_getLastUpdate(lua_State *L) {
 static int xx_setLastUpdate(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 	double updated = luaL_checknumber(L, 2);
+	ASN1_TIME *time;
 
-	/* lastUpdate always present */
-	if (!ASN1_TIME_set(X509_CRL_get_lastUpdate(crl), updated))
-		return auxL_error(L, auxL_EOPENSSL, "x509.crl:setLastUpdate");
+	if (!(time = ASN1_TIME_set(NULL, updated)))
+		goto error;
+
+	if (!X509_CRL_set1_lastUpdate(crl, time))
+		goto error;
 
 	lua_pushboolean(L, 1);
 
 	return 1;
+error:
+	ASN1_TIME_free(time);
+
+	return auxL_error(L, auxL_EOPENSSL, "x509.crl:setLastUpdate");
 } /* xx_setLastUpdate() */
 
 
@@ -6943,30 +6977,19 @@ static int xx_getNextUpdate(lua_State *L) {
 static int xx_setNextUpdate(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 	double updateby = luaL_checknumber(L, 2);
-	ASN1_TIME *time = NULL;
+	ASN1_TIME *time;
 
-	if (X509_CRL_get0_nextUpdate(crl)) {
-		if (!ASN1_TIME_set(X509_CRL_get_nextUpdate(crl), updateby))
-			goto error;
-	} else {
-		if (!(time = ASN1_TIME_new()))
-			goto error;
+	if (!(time = ASN1_TIME_set(NULL, updateby)))
+		goto error;
 
-		if (!(ASN1_TIME_set(time, updateby)))
-			goto error;
-
-		if (!X509_CRL_set_nextUpdate(crl, time))
-			goto error;
-
-		time = NULL;
-	}
+	if (!X509_CRL_set1_nextUpdate(crl, time))
+		goto error;
 
 	lua_pushboolean(L, 1);
 
 	return 1;
 error:
-	if (time)
-		ASN1_TIME_free(time);
+	ASN1_TIME_free(time);
 
 	return auxL_error(L, auxL_EOPENSSL, "x509.crl:setNextUpdate");
 } /* xx_setNextUpdate() */
