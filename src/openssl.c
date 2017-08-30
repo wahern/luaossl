@@ -3241,23 +3241,41 @@ static int pk_new(lua_State *L) {
 			luaL_argcheck(L, type != NID_undef, 1, lua_pushfstring(L, "%s: invalid key type", id));
 		}
 
-		if (loadfield(L, 1, "bits", LUA_TNUMBER, &n)) {
-			luaL_argcheck(L, n > 0 && n < UINT_MAX, 1, lua_pushfstring(L, "%f: `bits' invalid", n));
-			bits = (unsigned)n;
-		}
+		switch(type) {
+		case EVP_PKEY_RSA:
+			if (loadfield(L, 1, "bits", LUA_TNUMBER, &n)) {
+				luaL_argcheck(L, n > 0 && n < UINT_MAX, 1, lua_pushfstring(L, "%f: `bits' invalid", n));
+				bits = (unsigned)n;
+			}
 
-		if (loadfield(L, 1, "exp", LUA_TNUMBER, &n)) {
-			luaL_argcheck(L, n > 0 && n < UINT_MAX, 1, lua_pushfstring(L, "%f: `exp' invalid", n));
-			exp = (unsigned)n;
-		}
+			if (loadfield(L, 1, "exp", LUA_TNUMBER, &n)) {
+				luaL_argcheck(L, n > 0 && n < UINT_MAX, 1, lua_pushfstring(L, "%f: `exp' invalid", n));
+				exp = (unsigned)n;
+			}
+			break;
+		case EVP_PKEY_DH:
+			/* dhparam field can contain a PEM encoded string.
+			   The "dhparam" field takes precedence over "bits" */
+			if (loadfield(L, 1, "dhparam", LUA_TSTRING, &dhparam))
+				break;
 
-		if (loadfield(L, 1, "curve", LUA_TSTRING, &id)) {
-			if (!auxS_txt2nid(&curve, id))
-				luaL_argerror(L, 1, lua_pushfstring(L, "%s: invalid curve", id));
-		}
+			if (loadfield(L, 1, "bits", LUA_TNUMBER, &n)) {
+				luaL_argcheck(L, n > 0 && n < UINT_MAX, 1, lua_pushfstring(L, "%f: `bits' invalid", n));
+				bits = (unsigned)n;
+			}
 
-		/* dhparam field can contain a PEM encoded string. */
-		loadfield(L, 1, "dhparam", LUA_TSTRING, &dhparam);
+			if (loadfield(L, 1, "exp", LUA_TNUMBER, &n)) {
+				luaL_argcheck(L, n > 0 && n < UINT_MAX, 1, lua_pushfstring(L, "%f: `exp' invalid", n));
+				exp = (unsigned)n;
+			}
+			break;
+		case EVP_PKEY_EC:
+			if (loadfield(L, 1, "curve", LUA_TSTRING, &id)) {
+				if (!auxS_txt2nid(&curve, id))
+					luaL_argerror(L, 1, lua_pushfstring(L, "%s: invalid curve", id));
+			}
+			break;
+		}
 
 creat:
 		if (!(*ud = EVP_PKEY_new()))
