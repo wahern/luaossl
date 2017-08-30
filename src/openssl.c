@@ -10371,8 +10371,11 @@ int luaopen__openssl_des(lua_State *L) {
 } /* luaopen__openssl_des() */
 
 
+#if !OPENSSL_PREREQ(1,1,0)
 /*
  * Multithread Reentrancy Protection
+ *
+ * Pre-1.0.2, OpenSSL needs to be given locking primitives
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
@@ -10470,15 +10473,19 @@ epilog:
 	return error;
 } /* mt_init() */
 
+#endif /* !OPENSSL_PREREQ(1,1,0) */
+
 
 static void initall(lua_State *L) {
 	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 	static int initssl;
-	int error;
+	int error = 0;
 
 	pthread_mutex_lock(&mutex);
 
-	error = mt_init();
+#if !OPENSSL_PREREQ(1,1,0)
+	if (!error)
+		error = mt_init();
 
 	if (!error && !initssl) {
 		initssl = 1;
@@ -10493,6 +10500,7 @@ static void initall(lua_State *L) {
 		 */
 		OPENSSL_config(NULL);
 	}
+#endif
 
 	if (!error)
 		error = compat_init();
