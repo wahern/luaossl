@@ -350,6 +350,14 @@
 #define HAVE_STACK_OPENSSL_STRING_FUNCS (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
 #endif
 
+#ifndef HAVE_X509_CRL_GET0_LASTUPDATE
+#define HAVE_X509_CRL_GET0_LASTUPDATE OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_X509_CRL_GET0_NEXTUPDATE
+#define HAVE_X509_CRL_GET0_NEXTUPDATE OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HAVE_X509_GET_SIGNATURE_NID
 #define HAVE_X509_GET_SIGNATURE_NID OPENSSL_PREREQ(1,0,2)
 #endif
@@ -1751,6 +1759,14 @@ static int compat_SSL_CTX_set1_param(SSL_CTX *ctx, X509_VERIFY_PARAM *vpm) {
 
 #if !HAVE_X509_CRL_GET0_EXT
 #define X509_CRL_get0_ext(crt, i) X509_CRL_get_ext((crt), (i))
+#endif
+
+#if !HAVE_X509_CRL_GET0_LASTUPDATE
+#define X509_CRL_get0_lastUpdate(crl) ((const ASN1_TIME*)X509_CRL_get_lastUpdate(crl))
+#endif
+
+#if !HAVE_X509_CRL_GET0_NEXTUPDATE
+#define X509_CRL_get0_nextUpdate(crl) ((const ASN1_TIME*)X509_CRL_get_nextUpdate(crl))
 #endif
 
 #if !HAVE_X509_EXTENSION_GET0_OBJECT
@@ -5637,17 +5653,17 @@ static _Bool scan(int *i, char **cp, int n, int signok) {
 } /* scan() */
 
 
-static double timeutc(ASN1_TIME *time) {
+static double timeutc(const ASN1_TIME *time) {
 	char buf[32] = "", *cp;
 	struct tm tm = { 0 };
 	int gmtoff = 0, year, i;
 
-	if (!ASN1_TIME_check(time))
+	if (!ASN1_TIME_check((ASN1_STRING *)time))
 		return 0;
 
 	cp = strncpy(buf, (const char *)ASN1_STRING_get0_data((ASN1_STRING *)time), sizeof buf - 1);
 
-	if (ASN1_STRING_type(time) == V_ASN1_GENERALIZEDTIME) {
+	if (ASN1_STRING_type((ASN1_STRING *)time) == V_ASN1_GENERALIZEDTIME) {
 		if (!scan(&year, &cp, 4, 1))
 			goto badfmt;
 	} else {
@@ -5709,7 +5725,7 @@ badfmt:
 static int xc_getLifetime(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	double begin = INFINITY, end = INFINITY;
-	ASN1_TIME *time;
+	const ASN1_TIME *time;
 
 	if ((time = X509_get_notBefore(crt)))
 		begin = timeutc(time);
@@ -6838,9 +6854,9 @@ static int xx_setVersion(lua_State *L) {
 static int xx_getLastUpdate(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 	double updated = INFINITY;
-	ASN1_TIME *time;
+	const ASN1_TIME *time;
 
-	if ((time = X509_CRL_get_lastUpdate(crl)))
+	if ((time = X509_CRL_get0_lastUpdate(crl)))
 		updated = timeutc(time);
 
 	if (isfinite(updated))
@@ -6869,9 +6885,9 @@ static int xx_setLastUpdate(lua_State *L) {
 static int xx_getNextUpdate(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 	double updateby = INFINITY;
-	ASN1_TIME *time;
+	const ASN1_TIME *time;
 
-	if ((time = X509_CRL_get_nextUpdate(crl)))
+	if ((time = X509_CRL_get0_nextUpdate(crl)))
 		updateby = timeutc(time);
 
 	if (isfinite(updateby))
@@ -6888,7 +6904,7 @@ static int xx_setNextUpdate(lua_State *L) {
 	double updateby = luaL_checknumber(L, 2);
 	ASN1_TIME *time = NULL;
 
-	if (X509_CRL_get_nextUpdate(crl)) {
+	if (X509_CRL_get0_nextUpdate(crl)) {
 		if (!ASN1_TIME_set(X509_CRL_get_nextUpdate(crl), updateby))
 			goto error;
 	} else {
