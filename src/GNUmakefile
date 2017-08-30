@@ -110,17 +110,17 @@ $$(DESTDIR)$(3)/openssl/%.lua: $$(d)/openssl.%.lua
 	$$(MKDIR) -p $$(@D)
 	$$(CP) -p $$< $$@
 
-$$(DESTDIR)$(3)/openssl/ocsp/%.lua: $$(d)/ocsp.%.lua
+$$(DESTDIR)$(3)/openssl/ocsp/%.lua: $$(d)/openssl.ocsp.%.lua
 	$$(LUAC$(subst .,,$(1))) -p $$<
 	$$(MKDIR) -p $$(@D)
 	$$(CP) -p $$< $$@
 
-$$(DESTDIR)$(3)/openssl/x509/%.lua: $$(d)/x509.%.lua
+$$(DESTDIR)$(3)/openssl/x509/%.lua: $$(d)/openssl.x509.%.lua
 	$$(LUAC$(subst .,,$(1))) -p $$<
 	$$(MKDIR) -p $$(@D)
 	$$(CP) -p $$< $$@
 
-$$(DESTDIR)$(3)/openssl/ssl/%.lua: $$(d)/ssl.%.lua
+$$(DESTDIR)$(3)/openssl/ssl/%.lua: $$(d)/openssl.ssl.%.lua
 	$$(LUAC$(subst .,,$(1))) -p $$<
 	$$(MKDIR) -p $$(@D)
 	$$(CP) -p $$< $$@
