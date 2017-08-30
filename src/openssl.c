@@ -333,6 +333,10 @@
 #define HAVE_SSLV2_SERVER_METHOD (!OPENSSL_PREREQ(1,1,0) && !defined OPENSSL_NO_SSL2)
 #endif
 
+#ifndef HAVE_STACK_OPENSSL_STRING_FUNCS
+#define HAVE_STACK_OPENSSL_STRING_FUNCS (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
+#endif
+
 #ifndef HAVE_X509_GET_SIGNATURE_NID
 #define HAVE_X509_GET_SIGNATURE_NID OPENSSL_PREREQ(1,0,2)
 #endif
@@ -1696,6 +1700,12 @@ static X509_VERIFY_PARAM *compat_SSL_CTX_get0_param(SSL_CTX *ctx) {
 static int compat_SSL_CTX_set1_param(SSL_CTX *ctx, X509_VERIFY_PARAM *vpm) {
 	return X509_VERIFY_PARAM_set1(ctx->param, vpm);
 } /* compat_SSL_CTX_set1_param() */
+#endif
+
+#if !HAVE_STACK_OPENSSL_STRING_FUNCS
+#define sk_OPENSSL_STRING_num(s) sk_num(s)
+#define sk_OPENSSL_STRING_value(s, i) sk_value((s), (i))
+#define sk_OPENSSL_STRING_free(s) X509_email_free(s)
 #endif
 
 #if !HAVE_X509_GET0_EXT
