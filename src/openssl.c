@@ -325,12 +325,12 @@
 #define HAVE_SSL_UP_REF OPENSSL_PREREQ(1,1,0)
 #endif
 
-#ifndef HAVE_SSLV2_CLIENT_METHOD
-#define HAVE_SSLV2_CLIENT_METHOD (!OPENSSL_PREREQ(1,1,0) && !defined OPENSSL_NO_SSL2)
+#ifndef HAVE_SSL_OP_NO_SSL_MASK
+#define HAVE_SSL_OP_NO_SSL_MASK OPENSSL_PREREQ(1,0,2)
 #endif
 
-#ifndef HAVE_SSLV2_SERVER_METHOD
-#define HAVE_SSLV2_SERVER_METHOD (!OPENSSL_PREREQ(1,1,0) && !defined OPENSSL_NO_SSL2)
+#ifndef HAVE_SSL_OP_NO_DTLS_MASK
+#define HAVE_SSL_OP_NO_DTLS_MASK OPENSSL_PREREQ(1,1,0)
 #endif
 
 #ifndef HAVE_STACK_OPENSSL_STRING_FUNCS
@@ -1684,6 +1684,22 @@ static int compat_SSL_up_ref(SSL *ssl) {
 
 	return 1;
 } /* compat_SSL_up_ref() */
+#endif
+
+#if !HAVE_SSL_OP_NO_SSL_MASK
+/* SSL_OP_NO_SSL_MASK was introduced in 1.0.2
+   1.0.1 had up to TLSv1_2
+   0.9.8-1.0.0 had up to TLSv1
+*/
+#ifdef SSL_OP_NO_TLSv1_2
+#define SSL_OP_NO_SSL_MASK (SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1_2)
+#else
+#define SSL_OP_NO_SSL_MASK (SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1)
+#endif
+#endif
+
+#if !HAVE_SSL_OP_NO_DTLS_MASK && HAVE_DTLS_CLIENT_METHOD
+#define SSL_OP_NO_DTLS_MASK (SSL_OP_NO_DTLSv1|SSL_OP_NO_DTLSv1_2)
 #endif
 
 #if !HAVE_SSL_CTX_GET0_PARAM
@@ -7751,11 +7767,6 @@ int luaopen__openssl_pkcs12(lua_State *L) {
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-/*
- * NOTE: TLS methods and flags were added in tandem. For example, if the
- * macro SSL_OP_NO_TLSv1_1 is defined we know TLSv1_1_server_method is also
- * declared and defined.
- */
 static int sx_new(lua_State *L) {
 	static const char *const opts[] = {
 		[0] = "SSL",
@@ -7771,69 +7782,61 @@ static int sx_new(lua_State *L) {
 		[14] = "DTLSv1_2", [15] = "DTLSv1.2",
 		NULL
 	};
-	/* later versions of SSL declare a const qualifier on the return type */
-	__typeof__(&TLSv1_client_method) method = &TLSv1_client_method;
+	int method_enum;
 	_Bool srv;
 	SSL_CTX **ud;
 	int options = 0;
 
 	lua_settop(L, 2);
+	method_enum = auxL_checkoption(L, 1, "TLS", opts, 1);
 	srv = lua_toboolean(L, 2);
 
-	switch (auxL_checkoption(L, 1, "TLS", opts, 1)) {
+	switch (method_enum) {
 	case 0: /* SSL */
-		method = (srv)? &SSLv23_server_method : &SSLv23_client_method;
 		options = SSL_OP_NO_SSLv2;
 		break;
 	case 1: /* TLS */
-		method = (srv)? &SSLv23_server_method : &SSLv23_client_method;
 		options = SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3;
 		break;
-#if HAVE_SSLV2_CLIENT_METHOD && HAVE_SSLV2_SERVER_METHOD
 	case 2: /* SSLv2 */
-		method = (srv)? &SSLv2_server_method : &SSLv2_client_method;
+		options = SSL_OP_NO_SSL_MASK & ~SSL_OP_NO_SSLv2;
 		break;
-#endif
-#ifndef OPENSSL_NO_SSL3
 	case 3: /* SSLv3 */
-		method = (srv)? &SSLv3_server_method : &SSLv3_client_method;
+		options = SSL_OP_NO_SSL_MASK & ~SSL_OP_NO_SSLv3;
 		break;
-#endif
 	case 4: /* SSLv23 */
-		method = (srv)? &SSLv23_server_method : &SSLv23_client_method;
 		break;
 	case 5: /* TLSv1 */
 	case 6: /* TLSv1.0 */
-		method = (srv)? &TLSv1_server_method : &TLSv1_client_method;
+		options = SSL_OP_NO_SSL_MASK & ~SSL_OP_NO_TLSv1;
 		break;
 #if defined SSL_OP_NO_TLSv1_1
 	case 7: /* TLSv1_1 */
 	case 8: /* TLSv1.1 */
-		method = (srv)? &TLSv1_1_server_method : &TLSv1_1_client_method;
+		options = SSL_OP_NO_SSL_MASK & ~SSL_OP_NO_TLSv1_1;
 		break;
 #endif
 #if defined SSL_OP_NO_TLSv1_2
 	case 9: /* TLSv1_2 */
 	case 10: /* TLSv1.2 */
-		method = (srv)? &TLSv1_2_server_method : &TLSv1_2_client_method;
+		options = SSL_OP_NO_SSL_MASK & ~SSL_OP_NO_TLSv1_2;
 		break;
 #endif
 #if HAVE_DTLS_CLIENT_METHOD
 	case 11: /* DTLS */
-		method = (srv)? &DTLS_server_method : &DTLS_client_method;
 		break;
-#endif
-#if HAVE_DTLSV1_CLIENT_METHOD
+#ifdef SSL_OP_NO_DTLSv1
 	case 12: /* DTLSv1 */
 	case 13: /* DTLSv1.0 */
-		method = (srv)? &DTLSv1_server_method : &DTLSv1_client_method;
+		options = SSL_OP_NO_DTLS_MASK & ~SSL_OP_NO_DTLSv1;
 		break;
 #endif
-#if HAVE_DTLSV1_2_CLIENT_METHOD
+#ifdef SSL_OP_NO_DTLSv1_2
 	case 14: /* DTLSv1_2 */
 	case 15: /* DTLSv1.2 */
-		method = (srv)? &DTLSv1_server_method : &DTLSv1_client_method;
+		options = SSL_OP_NO_DTLS_MASK & ~SSL_OP_NO_DTLSv1_2;
 		break;
+#endif
 #endif
 	default:
 		return luaL_argerror(L, 1, "invalid option");
@@ -7841,7 +7844,34 @@ static int sx_new(lua_State *L) {
 
 	ud = prepsimple(L, SSL_CTX_CLASS);
 
-	if (!(*ud = SSL_CTX_new(method())))
+	switch (method_enum) {
+	case 0: /* SSL */
+	case 1: /* TLS */
+	case 2: /* SSLv2 */
+	case 3: /* SSLv3 */
+	case 4: /* SSLv23 */
+	case 5: /* TLSv1 */
+	case 6: /* TLSv1.0 */
+	case 7: /* TLSv1_1 */
+	case 8: /* TLSv1.1 */
+	case 9: /* TLSv1_2 */
+	case 10: /* TLSv1.2 */
+		*ud = SSL_CTX_new(srv?SSLv23_server_method():SSLv23_client_method());
+		break;
+#if HAVE_DTLS_CLIENT_METHOD
+	case 11: /* DTLS */
+	case 12: /* DTLSv1 */
+	case 13: /* DTLSv1.0 */
+	case 14: /* DTLSv1_2 */
+	case 15: /* DTLSv1.2 */
+		*ud = SSL_CTX_new(srv?DTLS_server_method():DTLS_client_method());
+		break;
+#endif
+	default:
+		NOTREACHED;
+	}
+
+	if (!*ud)
 		return auxL_error(L, auxL_EOPENSSL, "ssl.context.new");
 
 	SSL_CTX_set_options(*ud, options);
