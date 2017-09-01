@@ -493,6 +493,10 @@
 #define MIN(a, b) (((a) < (b))? (a) : (b))
 
 #ifdef _WIN32
+#if !defined(S_ISDIR) && defined(_S_IFDIR) && defined(_S_IFDIR)
+#define S_ISDIR(m) (((m) & _S_IFDIR) == _S_IFDIR)
+#endif
+
 #define stricmp(a, b) _stricmp((a), (b))
 #else
 #include <strings.h>      /* strcasecmp(3) */
