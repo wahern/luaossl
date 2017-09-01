@@ -7424,6 +7424,54 @@ error:
 } /* xx_add() */
 
 
+static int xx_lookupSerial(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	ASN1_INTEGER *serial;
+	int status;
+
+	if (!(serial = BN_to_ASN1_INTEGER(checkbig(L, 2), NULL)))
+		return auxL_error(L, auxL_EOPENSSL, "x509.crl:lookupSerial");
+
+	status = X509_CRL_get0_by_serial(crl, NULL, serial);
+
+	ASN1_INTEGER_free(serial);
+
+	switch(status) {
+	case 0: /* failure (not on CRL) */
+		lua_pushnil(L);
+		return 1;
+	case 1: /* succeeds (on CRL) */
+		lua_pushboolean(L, 1);
+		return 1;
+	case 2: /* *was* on CRL, but not any more */
+		lua_pushboolean(L, 0);
+		return 1;
+	default:
+		return luaL_error(L, "x509.crl:lookupSerial: unexpected return value");
+	}
+} /* xx_lookupSerial() */
+
+
+static int xx_lookupCertificate(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	X509 *crt = checksimple(L, 2, X509_CERT_CLASS);
+
+	switch(X509_CRL_get0_by_cert(crl, NULL, crt)) {
+	case 0: /* failure (not on CRL) */
+		lua_pushnil(L);
+		return 1;
+	case 1: /* succeeds (on CRL) */
+		lua_pushboolean(L, 1);
+		return 1;
+	case 2: /* *was* on CRL, but not any more */
+		lua_pushboolean(L, 0);
+		return 1;
+	default:
+		return luaL_error(L, "x509.crl:lookupCertificate: unexpected return value");
+	}
+} /* xx_lookupCertificate() */
+
+
 static int xx_addExtension(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 	X509_EXTENSION *ext = checksimple(L, 2, X509_EXT_CLASS);
@@ -7611,6 +7659,8 @@ static const auxL_Reg xx_methods[] = {
 	{ "getIssuer",      &xx_getIssuer },
 	{ "setIssuer",      &xx_setIssuer },
 	{ "add",            &xx_add },
+	{ "lookupSerial",   &xx_lookupSerial },
+	{ "lookupCertificate", &xx_lookupCertificate },
 	{ "addExtension",   &xx_addExtension },
 	{ "setExtension",   &xx_setExtension },
 	{ "getExtension",   &xx_getExtension },
