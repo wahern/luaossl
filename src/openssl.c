@@ -75,7 +75,9 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
+#if LUA_VERSION_NUM < 503
 #include "../vendor/compat53/c-api/compat-5.3.h"
+#endif
 
 #define GNUC_2VER(M, m, p) (((M) * 10000) + ((m) * 100) + (p))
 #define GNUC_PREREQ(M, m, p) (__GNUC__ > 0 && GNUC_2VER(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__) >= GNUC_2VER((M), (m), (p)))
