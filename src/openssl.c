@@ -1497,7 +1497,7 @@ static EVP_CIPHER_CTX *compat_EVP_CIPHER_CTX_new(void) {
 #endif
 
 #if !HAVE_EVP_MD_CTX_NEW
-#define EVP_MD_CTX_new(md) EVP_MD_CTX_create()
+#define EVP_MD_CTX_new() EVP_MD_CTX_create()
 #endif
 
 #if !HAVE_EVP_PKEY_ID
