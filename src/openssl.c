@@ -3224,7 +3224,7 @@ static int pk_new(lua_State *L) {
 		if (!lua_istable(L, 1))
 			goto creat;
 
-		if (loadfield(L, 1, "type", LUA_TSTRING, &id)) {
+		if (loadfield(L, 1, "type", LUA_TSTRING, (void*)&id)) {
 			static const struct { int nid; const char *sn; } types[] = {
 				{ EVP_PKEY_RSA, "RSA" },
 				{ EVP_PKEY_DSA, "DSA" },
@@ -3264,7 +3264,7 @@ static int pk_new(lua_State *L) {
 		case EVP_PKEY_DH:
 			/* dhparam field can contain a PEM encoded string.
 			   The "dhparam" field takes precedence over "bits" */
-			if (loadfield(L, 1, "dhparam", LUA_TSTRING, &dhparam))
+			if (loadfield(L, 1, "dhparam", LUA_TSTRING, (void*)&dhparam))
 				break;
 
 			if (loadfield(L, 1, "bits", LUA_TNUMBER, &n)) {
@@ -3279,7 +3279,7 @@ static int pk_new(lua_State *L) {
 			}
 			break;
 		case EVP_PKEY_EC:
-			if (loadfield(L, 1, "curve", LUA_TSTRING, &id)) {
+			if (loadfield(L, 1, "curve", LUA_TSTRING, (void*)&id)) {
 				if (!auxS_txt2nid(&curve, id))
 					luaL_argerror(L, 1, lua_pushfstring(L, "%s: invalid curve", id));
 			}
