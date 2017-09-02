@@ -41,11 +41,8 @@
 #include <winsock2.h>     /* AF_INET, AF_INET6 */
 #include <inaddr.h>       /* struct in_addr, struct in6_addr */
 #include <ws2tcpip.h>     /* inet_pton */
-#pragma comment(lib, "ws2_32.lib")
 #include <wincrypt.h>     /* CryptAcquireContext(), CryptGenRandom(), CryptReleaseContext() */
-#pragma comment(lib, "advapi32.lib")
 #include <windows.h>      /* CreateMutex(), GetLastError(), GetModuleHandleEx(), GetProcessTimes(), InterlockedCompareExchangePointer() */
-#pragma comment(lib, "kernel32.lib")
 #define EXPORT  __declspec (dllexport)
 #else
 #include <arpa/inet.h>    /* inet_pton(3) */
