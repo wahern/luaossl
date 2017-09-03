@@ -5604,11 +5604,7 @@ static int xc_digest(lua_State *L) {
 		luaL_Buffer B;
 		unsigned i;
 
-#if LUA_VERSION_NUM < 502
-		luaL_buffinit(L, &B);
-#else
 		luaL_buffinitsize(L, &B, 2 * len);
-#endif
 
 		for (i = 0; i < len; i++) {
 			luaL_addchar(&B, x[0x0f & (md[i] >> 4)]);
@@ -8868,19 +8864,9 @@ static int ssl_getClientRandom(lua_State *L) {
 	unsigned char *out;
 
 	len = SSL_get_client_random(ssl, NULL, 0);
-#if LUA_VERSION_NUM < 502
-	if (LUAL_BUFFERSIZE < len)
-		luaL_error(L, "ssl:getClientRandom: LUAL_BUFFERSIZE(%d) < SSL_get_client_random(ssl, NULL, 0)", (int)LUAL_BUFFERSIZE, (int)len);
-	luaL_buffinit(L, &B);
-	out = (unsigned char*)luaL_prepbuffer(&B);
-	len = SSL_get_client_random(ssl, out, len);
-	luaL_addsize(&B, len);
-	luaL_pushresult(&B);
-#else
 	out = (unsigned char*)luaL_buffinitsize(L, &B, len);
 	len = SSL_get_client_random(ssl, out, len);
 	luaL_pushresultsize(&B, len);
-#endif
 
 	return 1;
 } /* ssl_getClientRandom() */
