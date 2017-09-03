@@ -42,7 +42,7 @@ $$(d)/$(1)/%.o: $$(d)/%.c $$(d)/config.h
 ifneq ($(1), 5.3)
 $$(d)/$(1)/compat53.o: $$(d)/../vendor/compat53/c-api/compat-5.3.c $$(d)/../vendor/compat53/c-api/compat-5.3.h $$(d)/config.h
 	$$(MKDIR) -p $$(@D)
-	$$(CC) $$(CFLAGS_$$(<D)) $$(ALL_LUA$(subst .,,$(1))_CPPFLAGS) $$(CPPFLAGS_$$(<D)) -c -o $$@ $$<
+	$$(CC) $$(CFLAGS_$(d)) $$(ALL_LUA$(subst .,,$(1))_CPPFLAGS) $$(CPPFLAGS_$(d)) -c -o $$@ $$<
 
 $$(d)/$(1)/%.o: $$(d)/../vendor/compat53/c-api/compat-5.3.h
 
