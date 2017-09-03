@@ -1,0 +1,10 @@
+*.o
+*.so
+*.rockspec
+*.rock
+config.h
+doc/*.aux
+doc/*.idx
+doc/*.log
+doc/*.toc
+doc/*.out
