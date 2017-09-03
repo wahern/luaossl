@@ -1191,6 +1191,9 @@ static _Bool auxL_newclass(lua_State *L, const char *name, const auxL_Reg *metho
 	_Bool fresh = auxL_newmetatable(L, name, reset);
 	int n;
 
+	if (!reset && !fresh)
+		return fresh;
+
 	auxL_setfuncs(L, metamethods, 0);
 
 	if ((n = auxL_liblen(methods))) {
