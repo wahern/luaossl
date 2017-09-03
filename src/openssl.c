@@ -3212,8 +3212,6 @@ static int pk_new(lua_State *L) {
 	/* #1 table or key; if key, #2 format and #3 type */
 	lua_settop(L, 3);
 
-	ud = prepsimple(L, PKEY_CLASS);
-
 	if (lua_istable(L, 1) || lua_isnil(L, 1)) {
 		int type = EVP_PKEY_RSA;
 		unsigned bits = 1024;
@@ -3255,7 +3253,7 @@ static int pk_new(lua_State *L) {
 				bits = (unsigned)n;
 			}
 
-			if (!getfield(L, 1, "exp")) {
+			if (getfield(L, 1, "exp")) {
 				exp = checkbig(L, -1);
 			} else {
 				/* default to 65537 */
@@ -3290,6 +3288,8 @@ static int pk_new(lua_State *L) {
 		}
 
 creat:
+		ud = prepsimple(L, PKEY_CLASS);
+
 		if (!(*ud = EVP_PKEY_new()))
 			return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
@@ -3429,6 +3429,8 @@ creat:
 		}
 
 		data = luaL_checklstring(L, 1, &len);
+
+		ud = prepsimple(L, PKEY_CLASS);
 
 		if (!(bio = BIO_new_mem_buf((void *)data, len)))
 			return auxL_error(L, auxL_EOPENSSL, "pkey.new");
