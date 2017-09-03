@@ -1,3 +1,73 @@
+liblua-openssl (20170903-0) unstable; urgency=low
+
+  * Fix pkey.new failing when generating RSA keys
+  * Fix loading C modules clearing interposed fields
+  * Fix building compat-5.3.o
+
+ -- Daurnimator <quae@daurnimator.com>  Sun, 03 Sep 2017 22:39:20 +1000
+
+liblua-openssl (20170901-0) unstable; urgency=low
+
+  * New openssl.ocsp.basic and openssl.ocsp.response modules
+  * Add x509:getOCSP()
+  * Add x509:getSignatureName() (#79)
+  * Add crl:verify(publickey)
+  * Add pkcs12.parse(bag[, passphrase])
+  * Add context:setStore(store) and context:getStore()
+  * Add context:setParam(params) and context:getParam()
+  * Add context:setCurvesList(string [, ...])
+  * Add context:setAlpnSelect(cb)
+  * Add context:setTLSextStatusType(type) and context:getTLSextStatusType()
+  * Add ssl:getVerifyResult() (#75)
+  * Add ssl:setContext(context) (#84)
+  * Add ssl:setVerify([mode][, depth]) and ssl:getVerify() (#84)
+  * Add ssl:setCertificate(crt), ssl:setPrivateKey(key), ssl:setCurvesList(string [, ...]) (#84)
+  * Add ssl:setTLSextStatusType(type) and ssl:getTLSextStatusType()
+  * Add ssl:setTLSextStatusOCSPResp(or) and ssl:getTLSextStatusOCSPResp()
+  * Use lua-compat-5.3 (fixes LuaJIT header file compatibility) (#94)
+  * Add generator field to replace exp when generating a DH key
+  * Move away from interfaces deprecated in OpenSSL 1.1.0
+
+-- Daurnimator <quae@daurnimator.com>  Fri, 01 Sep 2017 14:20:00 +1000
+
+liblua-openssl (20161214-0) unstable; urgency=low
+
+  * Refactor of bignum operations, fixes bn:sqr()
+
+ -- William Ahern <william@25thandClement.com>
+
+liblua-openssl (20161209-0) unstable; urgency=low
+
+  * Add ssl:getVerifyResult()
+
+ -- William Ahern <william@25thandClement.com>
+
+liblua-openssl (20161208-0) unstable; urgency=low
+
+  * openssl.x509.store:addDefaults() new function to add the operating system's default ca's to a certificate store.
+  * openssl.x509.store:add() can now take a CRL
+  * openssl.ssl.context:getStore() new function that returns a reference to a context's certificate store
+  * openssl.pkey:encrypt() and openssl.pkey:decrypt()
+  * openssl.ssl.new() to construct an SSL* given a SSL_CTX*
+  * Bindings for X509_VERIFY_PARAM*
+
+ -- William Ahern <william@25thandClement.com>
+
+liblua-openssl (20161101-0) unstable; urgency=low
+
+  * Rename bignum methods tobin, todec, tohex to CamelCase: toDecimal, toDecimal, toHex
+
+ -- William Ahern <william@25thandClement.com>
+
+liblua-openssl (20161029-0) unstable; urgency=low
+
+  * Add lots of bignum methods
+  * Allow hex strings creating bignums
+  * Expose openssl.x509.csr
+  * Use autoguess project to get platform features
+
+ -- William Ahern <william@25thandClement.com>
+
 liblua-openssl (20151221-0) unstable; urgency=low
 
   * Add :tohex and :todec methods to bignums, and make metamethods
