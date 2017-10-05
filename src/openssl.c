@@ -30,25 +30,34 @@
 #include <limits.h>       /* INT_MAX INT_MIN LLONG_MAX LLONG_MIN UCHAR_MAX ULLONG_MAX */
 #include <stdint.h>       /* uintptr_t */
 #include <string.h>       /* memset(3) strerror_r(3) */
-#include <strings.h>      /* strcasecmp(3) */
 #include <math.h>         /* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
 #include <time.h>         /* struct tm time_t strptime(3) time(2) */
 #include <ctype.h>        /* isdigit(3), isxdigit(3), tolower(3) */
 #include <errno.h>        /* ENOMEM ENOTSUP EOVERFLOW errno */
 #include <assert.h>       /* assert */
 
-#include <sys/types.h>    /* ssize_t pid_t */
-#include <sys/time.h>     /* struct timeval gettimeofday(2) */
 #include <sys/stat.h>     /* struct stat stat(2) */
-#include <sys/socket.h>   /* AF_INET AF_INET6 */
-#include <sys/resource.h> /* RUSAGE_SELF struct rusage getrusage(2) */
-#include <sys/utsname.h>  /* struct utsname uname(3) */
-#include <fcntl.h>        /* O_RDONLY O_CLOEXEC open(2) */
-#include <unistd.h>       /* close(2) getpid(2) */
-#include <netinet/in.h>   /* struct in_addr struct in6_addr */
+#ifdef _WIN32
+#include <winsock2.h>     /* AF_INET, AF_INET6 */
+#include <inaddr.h>       /* struct in_addr, struct in6_addr */
+#include <ws2tcpip.h>     /* inet_pton */
+#include <wincrypt.h>     /* CryptAcquireContext(), CryptGenRandom(), CryptReleaseContext() */
+#include <windows.h>      /* CreateMutex(), GetLastError(), GetModuleHandleEx(), GetProcessTimes(), InterlockedCompareExchangePointer() */
+#define EXPORT  __declspec (dllexport)
+#else
 #include <arpa/inet.h>    /* inet_pton(3) */
-#include <pthread.h>      /* pthread_mutex_init(3) pthread_mutex_lock(3) pthread_mutex_unlock(3) */
 #include <dlfcn.h>        /* dladdr(3) dlopen(3) */
+#include <fcntl.h>        /* O_RDONLY O_CLOEXEC open(2) */
+#include <netinet/in.h>   /* struct in_addr struct in6_addr */
+#include <pthread.h>      /* pthread_mutex_init(3) pthread_mutex_lock(3) pthread_mutex_unlock(3) */
+#include <sys/resource.h> /* RUSAGE_SELF struct rusage getrusage(2) */
+#include <sys/socket.h>   /* AF_INET AF_INET6 */
+#include <sys/time.h>     /* struct timeval gettimeofday(2) */
+#include <sys/types.h>    /* ssize_t pid_t */
+#include <sys/utsname.h>  /* struct utsname uname(3) */
+#include <unistd.h>       /* close(2) getpid(2) */
+#define EXPORT
+#endif
 
 #if __APPLE__
 #include <mach/mach_time.h> /* mach_absolute_time() */
@@ -480,7 +489,16 @@
 #undef MIN
 #define MIN(a, b) (((a) < (b))? (a) : (b))
 
+#ifdef _WIN32
+#if !defined(S_ISDIR) && defined(_S_IFDIR) && defined(_S_IFDIR)
+#define S_ISDIR(m) (((m) & _S_IFDIR) == _S_IFDIR)
+#endif
+
+#define stricmp(a, b) _stricmp((a), (b))
+#else
+#include <strings.h>      /* strcasecmp(3) */
 #define stricmp(a, b) strcasecmp((a), (b))
+#endif
 #define strieq(a, b) (!stricmp((a), (b)))
 
 #define xtolower(c) tolower((unsigned char)(c))
@@ -552,8 +570,9 @@ static void *prepsimple(lua_State *L, const char *tname, int (*gc)(lua_State *))
 	return p;
 } /* prepsimple() */
 
+#define EXPAND( x ) x
 #define prepsimple_(a, b, c, ...) prepsimple((a), (b), (c))
-#define prepsimple(...) prepsimple_(__VA_ARGS__, 0, 0)
+#define prepsimple(...) EXPAND( prepsimple_(__VA_ARGS__, 0, 0) )
 
 
 static void *checksimple(lua_State *L, int index, const char *tname) {
@@ -797,7 +816,12 @@ static const char *aux_strerror_r(int error, char *dst, size_t lim) {
 	static const char unknown[] = "Unknown error: ";
 	size_t n;
 
-#if STRERROR_R_CHAR_P
+#if _WIN32
+	errno_t rv = strerror_s(dst, lim, error);
+
+	if (rv)
+		return dst;
+#elif STRERROR_R_CHAR_P
 	char *rv = strerror_r(error, dst, lim);
 
 	if (rv != NULL)
@@ -970,7 +994,13 @@ NOTUSED static auxtype_t auxL_getref(lua_State *L, auxref_t ref) {
 
 static int auxL_testoption(lua_State *L, int index, const char *def, const char *const *optlist, _Bool nocase) {
 	const char *optname = (def)? luaL_optstring(L, index, def) : luaL_checkstring(L, index);
-	int (*optcmp)() = (nocase)? &strcasecmp : &strcmp;
+	int (*optcmp)() = (nocase)?
+#ifdef _WIN32
+		&_stricmp
+#else
+		&strcasecmp
+#endif
+		: &strcmp;
 	int i;
 
 	for (i = 0; optlist[i]; i++) {
@@ -1033,7 +1063,7 @@ static void auxL_pushunsigned(lua_State *L, auxL_Unsigned i) {
 } /* auxL_pushunsigned() */
 
 #define auxL_checkinteger_(a, b, c, d, ...) auxL_checkinteger((a), (b), (c), (d))
-#define auxL_checkinteger(...) auxL_checkinteger_(__VA_ARGS__, auxL_IntegerMin, auxL_IntegerMax, 0)
+#define auxL_checkinteger(...) EXPAND( auxL_checkinteger_(__VA_ARGS__, auxL_IntegerMin, auxL_IntegerMax, 0) )
 
 static auxL_Integer (auxL_checkinteger)(lua_State *L, int index, auxL_Integer min, auxL_Integer max) {
 	auxL_Integer i;
@@ -1052,14 +1082,14 @@ static auxL_Integer (auxL_checkinteger)(lua_State *L, int index, auxL_Integer mi
 } /* auxL_checkinteger() */
 
 #define auxL_optinteger_(a, b, c, d, e, ...) auxL_optinteger((a), (b), (c), (d), (e))
-#define auxL_optinteger(...) auxL_optinteger_(__VA_ARGS__, auxL_IntegerMin, auxL_IntegerMax, 0)
+#define auxL_optinteger(...) EXPAND( auxL_optinteger_(__VA_ARGS__, auxL_IntegerMin, auxL_IntegerMax, 0))
 
 static auxL_Integer (auxL_optinteger)(lua_State *L, int index, auxL_Integer def, auxL_Integer min, auxL_Integer max) {
 	return (lua_isnoneornil(L, index))? def : auxL_checkinteger(L, index, min, max);
 } /* auxL_optinteger() */
 
 #define auxL_checkunsigned_(a, b, c, d, ...) auxL_checkunsigned((a), (b), (c), (d))
-#define auxL_checkunsigned(...) auxL_checkunsigned_(__VA_ARGS__, auxL_UnsignedMin, auxL_UnsignedMax, 0)
+#define auxL_checkunsigned(...) EXPAND( auxL_checkunsigned_(__VA_ARGS__, auxL_UnsignedMin, auxL_UnsignedMax, 0))
 
 static auxL_Unsigned (auxL_checkunsigned)(lua_State *L, int index, auxL_Unsigned min, auxL_Unsigned max) {
 	auxL_Unsigned i;
@@ -1079,7 +1109,7 @@ static auxL_Unsigned (auxL_checkunsigned)(lua_State *L, int index, auxL_Unsigned
 } /* auxL_checkunsigned() */
 
 #define auxL_optunsigned_(a, b, c, d, e, ...) auxL_optunsigned((a), (b), (c), (d), (e))
-#define auxL_optunsigned(...) auxL_optunsigned_(__VA_ARGS__, auxL_UnsignedMin, auxL_UnsignedMax, 0)
+#define auxL_optunsigned(...) EXPAND( auxL_optunsigned_(__VA_ARGS__, auxL_UnsignedMin, auxL_UnsignedMax, 0) )
 
 static auxL_Unsigned (auxL_optunsigned)(lua_State *L, int index, auxL_Unsigned def, auxL_Unsigned min, auxL_Unsigned max) {
 	return (lua_isnoneornil(L, index))? def : auxL_checkunsigned(L, index, min, max);
@@ -1206,7 +1236,7 @@ static _Bool auxL_newclass(lua_State *L, const char *name, const auxL_Reg *metho
 } /* auxL_newclass() */
 
 #define auxL_addclass(L, ...) \
-	(auxL_newclass((L), __VA_ARGS__), lua_pop((L), 1))
+	EXPAND( (auxL_newclass((L), __VA_ARGS__), lua_pop((L), 1)) )
 
 static int auxL_swaptable(lua_State *L, int index) {
 	index = lua_absindex(L, index);
@@ -1281,10 +1311,12 @@ static const char *auxL_pusherror(lua_State *L, int error, const char *fun) {
 		} else {
 			return lua_pushfstring(L, "%s:%d:%s", file, line, txt);
 		}
+#if HAVE_DLADDR
 	} else if (error == auxL_EDYLD) {
 		const char *const fmt = (fun)? "%s: %s" : "%.0s%s";
 
 		return lua_pushfstring(L, fmt, (fun)? fun : "", dlerror());
+#endif
 	} else {
 		const char *const fmt = (fun)? "%s: %s" : "%.0s%s";
 
@@ -1325,7 +1357,15 @@ static const EVP_MD *auxL_optdigest(lua_State *L, int index, EVP_PKEY *key, cons
  */
 /* dl_anchor must not be called from multiple threads at once */
 static int dl_anchor(void) {
-#if HAVE_DLADDR
+#if _WIN32
+	EXPORT extern int luaopen__openssl(lua_State *);
+
+	HMODULE dummy;
+	if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_PIN|GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (void *)&luaopen__openssl, &dummy))
+		return GetLastError();
+
+	return 0;
+#elif HAVE_DLADDR
 	extern int luaopen__openssl(lua_State *);
 	static void *anchor;
 	Dl_info info;
@@ -1376,7 +1416,7 @@ static struct {
 #endif
 
 #if !HAVE_DH_GET0_KEY
-#define DH_get0_key(...) compat_DH_get0_key(__VA_ARGS__)
+#define DH_get0_key(...) EXPAND( compat_DH_get0_key(__VA_ARGS__) )
 
 static void compat_DH_get0_key(const DH *d, const BIGNUM **pub_key, const BIGNUM **priv_key) {
 	if (pub_key)
@@ -1387,7 +1427,7 @@ static void compat_DH_get0_key(const DH *d, const BIGNUM **pub_key, const BIGNUM
 #endif
 
 #if !HAVE_DH_GET0_PQG
-#define DH_get0_pqg(...) compat_DH_get0_pqg(__VA_ARGS__)
+#define DH_get0_pqg(...) EXPAND( compat_DH_get0_pqg(__VA_ARGS__) )
 
 static void compat_DH_get0_pqg(const DH *d, const BIGNUM **p, const BIGNUM **q, const BIGNUM **g) {
 	if (p)
@@ -1400,7 +1440,7 @@ static void compat_DH_get0_pqg(const DH *d, const BIGNUM **p, const BIGNUM **q, 
 #endif
 
 #if !HAVE_DH_SET0_KEY
-#define DH_set0_key(...) compat_DH_set0_key(__VA_ARGS__)
+#define DH_set0_key(...) EXPAND( compat_DH_set0_key(__VA_ARGS__) )
 
 static void compat_DH_set0_key(DH *d, BIGNUM *pub_key, BIGNUM *priv_key) {
 	if (pub_key)
@@ -1411,7 +1451,7 @@ static void compat_DH_set0_key(DH *d, BIGNUM *pub_key, BIGNUM *priv_key) {
 #endif
 
 #if !HAVE_DH_SET0_PQG
-#define DH_set0_pqg(...) compat_DH_set0_pqg(__VA_ARGS__)
+#define DH_set0_pqg(...) EXPAND( compat_DH_set0_pqg(__VA_ARGS__) )
 
 static void compat_DH_set0_pqg(DH *d, BIGNUM *p, BIGNUM *q, BIGNUM *g) {
 	if (p)
@@ -1424,7 +1464,7 @@ static void compat_DH_set0_pqg(DH *d, BIGNUM *p, BIGNUM *q, BIGNUM *g) {
 #endif
 
 #if !HAVE_DSA_GET0_KEY
-#define DSA_get0_key(...) compat_DSA_get0_key(__VA_ARGS__)
+#define DSA_get0_key(...) EXPAND( compat_DSA_get0_key(__VA_ARGS__) )
 
 static void compat_DSA_get0_key(const DSA *d, const BIGNUM **pub_key, const BIGNUM **priv_key) {
 	if (pub_key)
@@ -1435,7 +1475,7 @@ static void compat_DSA_get0_key(const DSA *d, const BIGNUM **pub_key, const BIGN
 #endif
 
 #if !HAVE_DSA_GET0_PQG
-#define DSA_get0_pqg(...) compat_DSA_get0_pqg(__VA_ARGS__)
+#define DSA_get0_pqg(...) EXPAND( compat_DSA_get0_pqg(__VA_ARGS__) )
 
 static void compat_DSA_get0_pqg(const DSA *d, const BIGNUM **p, const BIGNUM **q, const BIGNUM **g) {
 	if (p)
@@ -1448,7 +1488,7 @@ static void compat_DSA_get0_pqg(const DSA *d, const BIGNUM **p, const BIGNUM **q
 #endif
 
 #if !HAVE_DSA_SET0_KEY
-#define DSA_set0_key(...) compat_DSA_set0_key(__VA_ARGS__)
+#define DSA_set0_key(...) EXPAND( compat_DSA_set0_key(__VA_ARGS__) )
 
 static void compat_DSA_set0_key(DSA *d, BIGNUM *pub_key, BIGNUM *priv_key) {
 	if (pub_key)
@@ -1459,7 +1499,7 @@ static void compat_DSA_set0_key(DSA *d, BIGNUM *pub_key, BIGNUM *priv_key) {
 #endif
 
 #if !HAVE_DSA_SET0_PQG
-#define DSA_set0_pqg(...) compat_DSA_set0_pqg(__VA_ARGS__)
+#define DSA_set0_pqg(...) EXPAND( compat_DSA_set0_pqg(__VA_ARGS__) )
 
 static void compat_DSA_set0_pqg(DSA *d, BIGNUM *p, BIGNUM *q, BIGNUM *g) {
 	if (p)
@@ -1517,7 +1557,7 @@ static int compat_EVP_PKEY_base_id(EVP_PKEY *key) {
 
 #if !HAVE_EVP_PKEY_GET_DEFAULT_DIGEST_NID
 #define EVP_PKEY_get_default_digest_nid(...) \
-	compat_EVP_PKEY_get_default_digest_nid(__VA_ARGS__)
+	EXPAND( compat_EVP_PKEY_get_default_digest_nid(__VA_ARGS__) )
 
 static int compat_EVP_PKEY_get_default_digest_nid(EVP_PKEY *key, int *nid) {
 	switch (EVP_PKEY_base_id(key)) {
@@ -1598,7 +1638,7 @@ static HMAC_CTX *compat_HMAC_CTX_new(void) {
 #endif
 
 #if !HAVE_RSA_GET0_CRT_PARAMS
-#define RSA_get0_crt_params(...) compat_RSA_get0_crt_params(__VA_ARGS__)
+#define RSA_get0_crt_params(...) EXPAND( compat_RSA_get0_crt_params(__VA_ARGS__) )
 
 static void compat_RSA_get0_crt_params(const RSA *r, const BIGNUM **dmp1, const BIGNUM **dmq1, const BIGNUM **iqmp) {
 	if (dmp1)
@@ -1611,7 +1651,7 @@ static void compat_RSA_get0_crt_params(const RSA *r, const BIGNUM **dmp1, const 
 #endif
 
 #if !HAVE_RSA_GET0_FACTORS
-#define RSA_get0_factors(...) compat_RSA_get0_factors(__VA_ARGS__)
+#define RSA_get0_factors(...) EXPAND( compat_RSA_get0_factors(__VA_ARGS__) )
 
 static void compat_RSA_get0_factors(const RSA *r, const BIGNUM **p, const BIGNUM **q) {
 	if (p)
@@ -1622,7 +1662,7 @@ static void compat_RSA_get0_factors(const RSA *r, const BIGNUM **p, const BIGNUM
 #endif
 
 #if !HAVE_RSA_GET0_KEY
-#define RSA_get0_key(...) compat_RSA_get0_key(__VA_ARGS__)
+#define RSA_get0_key(...) EXPAND( compat_RSA_get0_key(__VA_ARGS__) )
 
 static void compat_RSA_get0_key(const RSA *r, const BIGNUM **n, const BIGNUM **e, const BIGNUM **d) {
 	if (n)
@@ -1635,7 +1675,7 @@ static void compat_RSA_get0_key(const RSA *r, const BIGNUM **n, const BIGNUM **e
 #endif
 
 #if !HAVE_RSA_SET0_CRT_PARAMS
-#define RSA_set0_crt_params(...) compat_RSA_set0_crt_params(__VA_ARGS__)
+#define RSA_set0_crt_params(...) EXPAND( compat_RSA_set0_crt_params(__VA_ARGS__) )
 
 static void compat_RSA_set0_crt_params(RSA *r, BIGNUM *dmp1, BIGNUM *dmq1, BIGNUM *iqmp) {
 	if (dmp1)
@@ -1648,7 +1688,7 @@ static void compat_RSA_set0_crt_params(RSA *r, BIGNUM *dmp1, BIGNUM *dmq1, BIGNU
 #endif
 
 #if !HAVE_RSA_SET0_FACTORS
-#define RSA_set0_factors(...) compat_RSA_set0_factors(__VA_ARGS__)
+#define RSA_set0_factors(...) EXPAND( compat_RSA_set0_factors(__VA_ARGS__) )
 
 static void compat_RSA_set0_factors(RSA *r, BIGNUM *p, BIGNUM *q) {
 	if (p)
@@ -1659,7 +1699,7 @@ static void compat_RSA_set0_factors(RSA *r, BIGNUM *p, BIGNUM *q) {
 #endif
 
 #if !HAVE_RSA_SET0_KEY
-#define RSA_set0_key(...) compat_RSA_set0_key(__VA_ARGS__)
+#define RSA_set0_key(...) EXPAND( compat_RSA_set0_key(__VA_ARGS__) )
 
 static void compat_RSA_set0_key(RSA *r, BIGNUM *n, BIGNUM *e, BIGNUM *d) {
 	if (n)
@@ -1672,7 +1712,7 @@ static void compat_RSA_set0_key(RSA *r, BIGNUM *n, BIGNUM *e, BIGNUM *d) {
 #endif
 
 #if !HAVE_SSL_GET_CLIENT_RANDOM
-#define SSL_get_client_random(...) compat_SSL_get_client_random(__VA_ARGS__)
+#define SSL_get_client_random(...) EXPAND( compat_SSL_get_client_random(__VA_ARGS__) )
 static size_t compat_SSL_get_client_random(const SSL *ssl, unsigned char *out, size_t outlen) {
     if (outlen == 0)
         return sizeof(ssl->s3->client_random);
@@ -1684,7 +1724,7 @@ static size_t compat_SSL_get_client_random(const SSL *ssl, unsigned char *out, s
 #endif
 
 #if !HAVE_SSL_CLIENT_VERSION
-#define SSL_client_version(...) compat_SSL_client_version(__VA_ARGS__)
+#define SSL_client_version(...) EXPAND( compat_SSL_client_version(__VA_ARGS__) )
 
 static int compat_SSL_client_version(const SSL *ssl) {
 	return ssl->client_version;
@@ -1708,7 +1748,7 @@ static int compat_SSL_set1_param(SSL *ssl, X509_VERIFY_PARAM *vpm) {
 #endif
 
 #if !HAVE_SSL_UP_REF
-#define SSL_up_ref(...) compat_SSL_up_ref(__VA_ARGS__)
+#define SSL_up_ref(...) EXPAND( compat_SSL_up_ref(__VA_ARGS__) )
 
 static int compat_SSL_up_ref(SSL *ssl) {
 	/* our caller should already have had a proper reference */
@@ -1874,7 +1914,7 @@ static void compat_init_X509_STORE_onfree(void *store, void *data NOTUSED, CRYPT
 } /* compat_init_X509_STORE_onfree() */
 
 #if !HAVE_X509_STORE_UP_REF
-#define X509_STORE_up_ref(...) compat_X509_STORE_up_ref(__VA_ARGS__)
+#define X509_STORE_up_ref(...) EXPAND( compat_X509_STORE_up_ref(__VA_ARGS__) )
 
 static int compat_X509_STORE_up_ref(X509_STORE *crt) {
 	/* our caller should already have had a proper reference */
@@ -1886,7 +1926,7 @@ static int compat_X509_STORE_up_ref(X509_STORE *crt) {
 #endif
 
 #if !HAVE_X509_UP_REF
-#define X509_up_ref(...) compat_X509_up_ref(__VA_ARGS__)
+#define X509_up_ref(...) EXPAND( compat_X509_up_ref(__VA_ARGS__) )
 
 static int compat_X509_up_ref(X509 *crt) {
 	/* our caller should already have had a proper reference */
@@ -2289,7 +2329,7 @@ static void initall(lua_State *L);
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-int luaopen__openssl_compat(lua_State *L) {
+EXPORT int luaopen__openssl_compat(lua_State *L) {
 	initall(L);
 
 	lua_newtable(L);
@@ -2486,7 +2526,7 @@ static const auxL_IntegerReg ssleay_version[] = {
 	{ NULL, 0 },
 };
 
-int luaopen__openssl(lua_State *L) {
+EXPORT int luaopen__openssl(lua_State *L) {
 	size_t i;
 
 	auxL_newlib(L, ossl_globals, 0);
@@ -2552,7 +2592,7 @@ static BIGNUM *bn_dup_nil(lua_State *L, const BIGNUM *src) {
 
 
 #define checkbig_(a, b, c, ...) checkbig((a), (b), (c))
-#define checkbig(...) checkbig_(__VA_ARGS__, &(_Bool){ 0 }, 0)
+#define checkbig(...) EXPAND( checkbig_(__VA_ARGS__, &(_Bool){ 0 }, 0) )
 
 static BIGNUM *(checkbig)(lua_State *, int, _Bool *);
 
@@ -3153,7 +3193,7 @@ static const auxL_Reg bn_globals[] = {
 	{ NULL,            NULL },
 };
 
-int luaopen__openssl_bignum(lua_State *L) {
+EXPORT int luaopen__openssl_bignum(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, bn_globals, 0);
@@ -4504,7 +4544,7 @@ static const auxL_IntegerReg pk_rsa_pad_opts[] = {
 	{ NULL, 0 },
 };
 
-int luaopen__openssl_pkey(lua_State *L) {
+EXPORT int luaopen__openssl_pkey(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, pk_globals, 0);
@@ -4517,7 +4557,7 @@ int luaopen__openssl_pkey(lua_State *L) {
 /*
  * Deprecated module name.
  */
-int luaopen__openssl_pubkey(lua_State *L) {
+EXPORT int luaopen__openssl_pubkey(lua_State *L) {
 	return luaopen__openssl_pkey(L);
 } /* luaopen__openssl_pubkey() */
 
@@ -4693,7 +4733,7 @@ static const auxL_Reg ecg_globals[] = {
 
 #endif /* OPENSSL_NO_EC */
 
-int luaopen__openssl_ec_group(lua_State *L) {
+EXPORT int luaopen__openssl_ec_group(lua_State *L) {
 #ifndef OPENSSL_NO_EC
 	initall(L);
 
@@ -4900,7 +4940,7 @@ static const auxL_Reg xn_globals[] = {
 	{ NULL,        NULL },
 };
 
-int luaopen__openssl_x509_name(lua_State *L) {
+EXPORT int luaopen__openssl_x509_name(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, xn_globals, 0);
@@ -5154,7 +5194,7 @@ static const auxL_Reg gn_globals[] = {
 	{ NULL,        NULL },
 };
 
-int luaopen__openssl_x509_altname(lua_State *L) {
+EXPORT int luaopen__openssl_x509_altname(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, gn_globals, 0);
@@ -5456,7 +5496,7 @@ static const auxL_IntegerReg xe_textopts[] = {
 	{ NULL, 0 },
 };
 
-int luaopen__openssl_x509_extension(lua_State *L) {
+EXPORT int luaopen__openssl_x509_extension(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, xe_globals, 0);
@@ -6508,7 +6548,7 @@ static const auxL_Reg xc_globals[] = {
 	{ NULL,        NULL },
 };
 
-int luaopen__openssl_x509_cert(lua_State *L) {
+EXPORT int luaopen__openssl_x509_cert(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, xc_globals, 0);
@@ -6815,7 +6855,7 @@ static const auxL_Reg xr_globals[] = {
 	{ NULL,        NULL },
 };
 
-int luaopen__openssl_x509_csr(lua_State *L) {
+EXPORT int luaopen__openssl_x509_csr(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, xr_globals, 0);
@@ -7234,7 +7274,7 @@ static const auxL_Reg xx_globals[] = {
 	{ NULL,        NULL },
 };
 
-int luaopen__openssl_x509_crl(lua_State *L) {
+EXPORT int luaopen__openssl_x509_crl(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, xx_globals, 0);
@@ -7392,7 +7432,7 @@ static const auxL_Reg xl_globals[] = {
 	{ NULL,        NULL },
 };
 
-int luaopen__openssl_x509_chain(lua_State *L) {
+EXPORT int luaopen__openssl_x509_chain(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, xl_globals, 0);
@@ -7586,7 +7626,7 @@ static const auxL_Reg xs_globals[] = {
 	{ NULL,        NULL },
 };
 
-int luaopen__openssl_x509_store(lua_State *L) {
+EXPORT int luaopen__openssl_x509_store(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, xs_globals, 0);
@@ -7665,7 +7705,7 @@ static const auxL_Reg stx_globals[] = {
 	{ NULL,        NULL },
 };
 
-int luaopen__openssl_x509_store_context(lua_State *L) {
+EXPORT int luaopen__openssl_x509_store_context(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, stx_globals, 0);
@@ -7838,7 +7878,7 @@ static const auxL_Reg p12_globals[] = {
 	{ NULL,        NULL },
 };
 
-int luaopen__openssl_pkcs12(lua_State *L) {
+EXPORT int luaopen__openssl_pkcs12(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, p12_globals, 0);
@@ -8551,7 +8591,7 @@ static const auxL_IntegerReg sx_option[] = {
 	{ NULL, 0 },
 };
 
-int luaopen__openssl_ssl_context(lua_State *L) {
+EXPORT int luaopen__openssl_ssl_context(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, sx_globals, 0);
@@ -9098,7 +9138,7 @@ static const auxL_IntegerReg ssl_version[] = {
 };
 
 
-int luaopen__openssl_ssl(lua_State *L) {
+EXPORT int luaopen__openssl_ssl(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, ssl_globals, 0);
@@ -9366,7 +9406,7 @@ static const auxL_IntegerReg xp_inherit_flags[] = {
 	{ NULL, 0 }
 };
 
-int luaopen__openssl_x509_verify_param(lua_State *L) {
+EXPORT int luaopen__openssl_x509_verify_param(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, xp_globals, 0);
@@ -9478,7 +9518,7 @@ static const auxL_Reg md_globals[] = {
 	{ NULL,        NULL },
 };
 
-int luaopen__openssl_digest(lua_State *L) {
+EXPORT int luaopen__openssl_digest(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, md_globals, 0);
@@ -9590,7 +9630,7 @@ static const auxL_Reg hmac_globals[] = {
 	{ NULL,        NULL },
 };
 
-int luaopen__openssl_hmac(lua_State *L) {
+EXPORT int luaopen__openssl_hmac(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, hmac_globals, 0);
@@ -9797,7 +9837,7 @@ static const auxL_Reg cipher_globals[] = {
 	{ NULL,        NULL },
 };
 
-int luaopen__openssl_cipher(lua_State *L) {
+EXPORT int luaopen__openssl_cipher(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, cipher_globals, 0);
@@ -9884,7 +9924,7 @@ static const auxL_Reg or_globals[] = {
 	{ NULL, NULL },
 };
 
-int luaopen__openssl_ocsp_response(lua_State *L) {
+EXPORT int luaopen__openssl_ocsp_response(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, or_globals, 0);
@@ -9956,7 +9996,7 @@ static const auxL_IntegerReg ob_verify_flags[] = {
 	{ NULL, 0 },
 };
 
-int luaopen__openssl_ocsp_basic(lua_State *L) {
+EXPORT int luaopen__openssl_ocsp_basic(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, ob_globals, 0);
@@ -9972,7 +10012,11 @@ int luaopen__openssl_ocsp_basic(lua_State *L) {
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 struct randL_state {
+#ifdef _WIN32
+	DWORD pid;
+#else
 	pid_t pid;
+#endif
 }; /* struct randL_state */
 
 static struct randL_state *randL_getstate(lua_State *L) {
@@ -9992,6 +10036,31 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 	int error;
 	unsigned char data[256];
 
+#ifdef _WIN32
+	HCRYPTPROV hCryptProv;
+	BOOL ok;
+
+	if (!CryptAcquireContext(&hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
+		error = GetLastError();
+		goto error;
+	}
+	while (count < rqstd) {
+		ok = CryptGenRandom(hCryptProv, sizeof data, (BYTE*)data);
+		if (!ok) {
+			CryptReleaseContext(hCryptProv, 0);
+			error = GetLastError();
+			goto error;
+		}
+
+		RAND_seed(data, sizeof data);
+
+		count += sizeof data;
+	}
+
+	CryptReleaseContext(hCryptProv, 0);
+
+	st->pid = GetCurrentProcessId();
+#else
 #if HAVE_ARC4RANDOM_BUF
 	while (count < rqstd) {
 		size_t n = MIN(rqstd - count, sizeof data);
@@ -10043,8 +10112,10 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 		int fd = open("/dev/urandom", O_RDONLY);
 #endif
 
-		if (fd == -1)
-			goto syserr;
+		if (fd == -1) {
+			error = errno;
+			goto error;
+		}
 
 		while (count < rqstd) {
 			ssize_t n = read(fd, data, MIN(rqstd - count, sizeof data));
@@ -10074,16 +10145,21 @@ static int randL_stir(struct randL_state *st, unsigned rqstd) {
 	}
 
 	st->pid = getpid();
+#endif /* _WIN32 */
 
 	return 0;
-syserr:
-	error = errno;
 error:;
 	struct {
-		struct timeval tv;
+#ifdef _WIN32
+		DWORD pid;
+		SYSTEMTIME tv;
+		FILETIME ftCreation, ftExit, ftKernel, ftUser;
+#else
 		pid_t pid;
+		struct timeval tv;
 		struct rusage ru;
 		struct utsname un;
+#endif
 		uintptr_t aslr;
 #if defined __APPLE__
 		uint64_t mt;
@@ -10092,10 +10168,16 @@ error:;
 #endif
 	} junk;
 
-	gettimeofday(&junk.tv, NULL);
+#ifdef _WIN32
+	junk.pid = GetCurrentProcessId();
+	GetSystemTime(&junk.tv);
+	GetProcessTimes(GetCurrentProcess(), &junk.ftCreation, &junk.ftExit, &junk.ftKernel, &junk.ftUser);
+#else
 	junk.pid = getpid();
+	gettimeofday(&junk.tv, NULL);
 	getrusage(RUSAGE_SELF, &junk.ru);
 	uname(&junk.un);
+#endif
 	junk.aslr = (uintptr_t)&strcpy ^ (uintptr_t)&randL_stir;
 #if defined __APPLE__
 	junk.mt = mach_absolute_time();
@@ -10117,14 +10199,22 @@ error:;
 
 	RAND_add(&junk, sizeof junk, 0.1);
 
+#ifdef _WIN32
+	st->pid = GetCurrentProcessId();
+#else
 	st->pid = getpid();
+#endif
 
 	return error;
 } /* randL_stir() */
 
 
 static void randL_checkpid(struct randL_state *st) {
+#ifdef _WIN32
+	if (st->pid != GetCurrentProcessId())
+#else
 	if (st->pid != getpid())
+#endif
 		(void)randL_stir(st, 16);
 } /* randL_checkpid() */
 
@@ -10307,7 +10397,7 @@ static const auxL_Reg rand_globals[] = {
 	{ NULL,      NULL },
 };
 
-int luaopen__openssl_rand(lua_State *L) {
+EXPORT int luaopen__openssl_rand(lua_State *L) {
 	struct randL_state *st;
 
 	initall(L);
@@ -10355,7 +10445,7 @@ static const auxL_Reg des_globals[] = {
 	{ NULL,            NULL },
 };
 
-int luaopen__openssl_des(lua_State *L) {
+EXPORT int luaopen__openssl_des(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, des_globals, 0);
@@ -10373,15 +10463,27 @@ int luaopen__openssl_des(lua_State *L) {
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 static struct {
+#if _WIN32
+	HANDLE *lock;
+#else
 	pthread_mutex_t *lock;
+#endif
 	int nlock;
 } mt_state;
 
 static void mt_lock(int mode, int type, const char *file NOTUSED, int line NOTUSED) {
 	if (mode & CRYPTO_LOCK)
+#if _WIN32
+		WaitForSingleObject(mt_state.lock[type], INFINITE);
+#else
 		pthread_mutex_lock(&mt_state.lock[type]);
+#endif
 	else
+#if _WIN32
+		ReleaseMutex(mt_state.lock[type]);
+#else
 		pthread_mutex_unlock(&mt_state.lock[type]);
+#endif
 } /* mt_lock() */
 
 /*
@@ -10407,6 +10509,8 @@ static unsigned long mt_gettid(void) {
 	return id;
 #elif __NetBSD__
 	return _lwp_self();
+#elif _WIN32
+	return GetCurrentThreadId();
 #else
 	/*
 	 * pthread_t is an integer on Solaris and Linux, an unsigned integer
@@ -10436,9 +10540,18 @@ static int mt_init(void) {
 			}
 
 			for (i = 0; i < mt_state.nlock; i++) {
+#if _WIN32
+				if (!(mt_state.lock[i] = CreateMutex(NULL, FALSE, NULL))) {
+					error = GetLastError();
+#else
 				if ((error = pthread_mutex_init(&mt_state.lock[i], NULL))) {
+#endif
 					while (i > 0) {
+#if _WIN32
+						CloseHandle(mt_state.lock[--i]);
+#else
 						pthread_mutex_destroy(&mt_state.lock[--i]);
+#endif
 					}
 
 					free(mt_state.lock);
@@ -10470,11 +10583,24 @@ epilog:
 
 
 static void initall(lua_State *L) {
-	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 	static int initssl;
 	int error = 0;
 
+#if _WIN32
+	static volatile HANDLE mutex = NULL;
+	if (mutex == NULL) {
+		HANDLE p;
+		if (!(p = CreateMutex(NULL, FALSE, NULL)))
+			auxL_error(L, GetLastError(), "openssl.init");
+		if (InterlockedCompareExchangePointer((PVOID*)&mutex, (PVOID)p, NULL) != NULL)
+			CloseHandle(p);
+	}
+	if (WaitForSingleObject(mutex, INFINITE) == WAIT_FAILED)
+		auxL_error(L, GetLastError(), "openssl.init");
+#else
+	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_lock(&mutex);
+#endif
 
 #if !OPENSSL_PREREQ(1,1,0)
 	if (!error)
@@ -10501,7 +10627,11 @@ static void initall(lua_State *L) {
 	if (!error)
 		error = ex_init();
 
+#if _WIN32
+	ReleaseMutex(mutex);
+#else
 	pthread_mutex_unlock(&mutex);
+#endif
 
 	if (error)
 		auxL_error(L, error, "openssl.init");
