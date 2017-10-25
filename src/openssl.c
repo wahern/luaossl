@@ -3262,72 +3262,77 @@ static int pk_new(lua_State *L) {
 		const char *dhparam = NULL;
 		lua_Number n;
 
-		if (!lua_istable(L, 1))
-			goto creat;
+		if (lua_istable(L, 1)) {
+			if (loadfield(L, 1, "type", LUA_TSTRING, (void*)&id)) {
+				static const struct { int nid; const char *sn; } types[] = {
+					{ EVP_PKEY_RSA, "RSA" },
+					{ EVP_PKEY_DSA, "DSA" },
+					{ EVP_PKEY_DH,  "DH" },
+					{ EVP_PKEY_EC,  "EC" },
+				};
+				unsigned i;
 
-		if (loadfield(L, 1, "type", LUA_TSTRING, (void*)&id)) {
-			static const struct { int nid; const char *sn; } types[] = {
-				{ EVP_PKEY_RSA, "RSA" },
-				{ EVP_PKEY_DSA, "DSA" },
-				{ EVP_PKEY_DH,  "DH" },
-				{ EVP_PKEY_EC,  "EC" },
-			};
-			unsigned i;
-
-			if (NID_undef == (type = EVP_PKEY_type(OBJ_sn2nid(id)))) {
-				for (i = 0; i < countof(types); i++) {
-					if (strieq(id, types[i].sn)) {
-						type = types[i].nid;
-						break;
+				if (NID_undef == (type = EVP_PKEY_type(OBJ_sn2nid(id)))) {
+					for (i = 0; i < countof(types); i++) {
+						if (strieq(id, types[i].sn)) {
+							type = types[i].nid;
+							break;
+						}
 					}
 				}
+
+				luaL_argcheck(L, type != NID_undef, 1, lua_pushfstring(L, "%s: invalid key type", id));
 			}
 
-			luaL_argcheck(L, type != NID_undef, 1, lua_pushfstring(L, "%s: invalid key type", id));
+			switch(type) {
+			case EVP_PKEY_RSA:
+				if (loadfield(L, 1, "bits", LUA_TNUMBER, &n)) {
+					luaL_argcheck(L, n > 0 && n < UINT_MAX, 1, lua_pushfstring(L, "%f: `bits' invalid", n));
+					bits = (unsigned)n;
+				}
+
+				if (getfield(L, 1, "exp")) {
+					exp = checkbig(L, -1);
+				}
+				break;
+			case EVP_PKEY_DH:
+				/* dhparam field can contain a PEM encoded string.
+				   The "dhparam" field takes precedence over "bits" */
+				if (loadfield(L, 1, "dhparam", LUA_TSTRING, (void*)&dhparam))
+					break;
+
+				if (loadfield(L, 1, "bits", LUA_TNUMBER, &n)) {
+					luaL_argcheck(L, n > 0 && n < UINT_MAX, 1, lua_pushfstring(L, "%f: `bits' invalid", n));
+					bits = (unsigned)n;
+				}
+
+				/* compat: DH used to use the 'exp' field for the generator */
+				if (loadfield(L, 1, "generator", LUA_TNUMBER, &n) || loadfield(L, 1, "exp", LUA_TNUMBER, &n)) {
+					luaL_argcheck(L, n > 0 && n <= INT_MAX, 1, lua_pushfstring(L, "%f: `exp' invalid", n));
+					generator = (int)n;
+				}
+				break;
+			case EVP_PKEY_EC:
+				if (loadfield(L, 1, "curve", LUA_TSTRING, (void*)&id)) {
+					if (!auxS_txt2nid(&curve, id))
+						luaL_argerror(L, 1, lua_pushfstring(L, "%s: invalid curve", id));
+				}
+				break;
+			}
 		}
 
-		switch(type) {
+		/* defaults that require allocation */
+		switch (type) {
 		case EVP_PKEY_RSA:
-			if (loadfield(L, 1, "bits", LUA_TNUMBER, &n)) {
-				luaL_argcheck(L, n > 0 && n < UINT_MAX, 1, lua_pushfstring(L, "%f: `bits' invalid", n));
-				bits = (unsigned)n;
-			}
-
-			if (getfield(L, 1, "exp")) {
-				exp = checkbig(L, -1);
-			} else {
+			if(!exp) {
 				/* default to 65537 */
 				exp = bn_push(L);
 				if (!BN_add_word(exp, 65537))
 					return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 			}
 			break;
-		case EVP_PKEY_DH:
-			/* dhparam field can contain a PEM encoded string.
-			   The "dhparam" field takes precedence over "bits" */
-			if (loadfield(L, 1, "dhparam", LUA_TSTRING, (void*)&dhparam))
-				break;
-
-			if (loadfield(L, 1, "bits", LUA_TNUMBER, &n)) {
-				luaL_argcheck(L, n > 0 && n < UINT_MAX, 1, lua_pushfstring(L, "%f: `bits' invalid", n));
-				bits = (unsigned)n;
-			}
-
-			/* compat: DH used to use the 'exp' field for the generator */
-			if (loadfield(L, 1, "generator", LUA_TNUMBER, &n) || loadfield(L, 1, "exp", LUA_TNUMBER, &n)) {
-				luaL_argcheck(L, n > 0 && n <= INT_MAX, 1, lua_pushfstring(L, "%f: `exp' invalid", n));
-				generator = (int)n;
-			}
-			break;
-		case EVP_PKEY_EC:
-			if (loadfield(L, 1, "curve", LUA_TSTRING, (void*)&id)) {
-				if (!auxS_txt2nid(&curve, id))
-					luaL_argerror(L, 1, lua_pushfstring(L, "%s: invalid curve", id));
-			}
-			break;
 		}
 
-creat:
 		ud = prepsimple(L, PKEY_CLASS);
 
 		if (!(*ud = EVP_PKEY_new()))
