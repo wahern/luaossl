@@ -357,6 +357,10 @@
 #define HAVE_SSL_OP_NO_DTLS_MASK OPENSSL_PREREQ(1,1,0)
 #endif
 
+#ifndef HAVE_SSL_SESSION_MASTER_KEY
+#define HAVE_SSL_SESSION_MASTER_KEY OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HAVE_STACK_OPENSSL_STRING_FUNCS
 #define HAVE_STACK_OPENSSL_STRING_FUNCS (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
 #endif
@@ -1719,6 +1723,22 @@ static size_t compat_SSL_get_client_random(const SSL *ssl, unsigned char *out, s
 	if (outlen > sizeof(ssl->s3->client_random))
 		outlen = sizeof(ssl->s3->client_random);
 	memcpy(out, ssl->s3->client_random, outlen);
+	return outlen;
+}
+#endif
+
+#if !HAVE_SSL_SESSION_MASTER_KEY
+#define SSL_SESSION_get_master_key(...) EXPAND( compat_SSL_SESSION_get_master_key(__VA_ARGS__) )
+static size_t compat_SSL_SESSION_get_master_key(const SSL_SESSION *session, unsigned char *out, size_t outlen) {
+	if (session->master_key_length < 0) {
+		/* Should never happen */
+		return 0;
+	}
+	if (outlen == 0)
+		return session->master_key_length;
+	if (outlen > (size_t)session->master_key_length)
+		outlen = session->master_key_length;
+	memcpy(out, session->master_key, outlen);
 	return outlen;
 }
 #endif
