@@ -1714,12 +1714,12 @@ static void compat_RSA_set0_key(RSA *r, BIGNUM *n, BIGNUM *e, BIGNUM *d) {
 #if !HAVE_SSL_GET_CLIENT_RANDOM
 #define SSL_get_client_random(...) EXPAND( compat_SSL_get_client_random(__VA_ARGS__) )
 static size_t compat_SSL_get_client_random(const SSL *ssl, unsigned char *out, size_t outlen) {
-    if (outlen == 0)
-        return sizeof(ssl->s3->client_random);
-    if (outlen > sizeof(ssl->s3->client_random))
-        outlen = sizeof(ssl->s3->client_random);
-    memcpy(out, ssl->s3->client_random, outlen);
-    return outlen;
+	if (outlen == 0)
+		return sizeof(ssl->s3->client_random);
+	if (outlen > sizeof(ssl->s3->client_random))
+		outlen = sizeof(ssl->s3->client_random);
+	memcpy(out, ssl->s3->client_random, outlen);
+	return outlen;
 }
 #endif
 
@@ -1848,9 +1848,8 @@ static void (compat_X509_STORE_free)(X509_STORE *store) {
 	int i;
 
 	i = CRYPTO_add(&store->references, -1, CRYPTO_LOCK_X509_STORE);
-
-        if (i > 0)
-                return;
+	if (i > 0)
+		return;
 
 	(X509_STORE_free)(store);
 } /* compat_X509_STORE_free() */
