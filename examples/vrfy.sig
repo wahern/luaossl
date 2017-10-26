@@ -3,7 +3,7 @@
 -- Example public-key signature verification.
 --
 
-local keytype = ...
+local keytype, hash = ...
 
 local openssl = require"openssl"
 local pkey = require"openssl.pkey"
@@ -23,10 +23,11 @@ local function genkey(type)
 end
 
 local key = genkey(keytype)
-local hash = key:getDefaultDigestName()
+if hash == nil then
+	hash = key:getDefaultDigestName()
+end
 
--- digest our message using an appropriate digest ("ecdsa-with-SHA1" for EC;
--- "dss1" for DSA; and "sha1", "sha256", etc for RSA).
+-- digest our message using an appropriate digest
 local data = digest.new(hash)
 data:update(... or "hello world")
 
