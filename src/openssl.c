@@ -3338,7 +3338,7 @@ static int pk_new(lua_State *L) {
 		if (!(*ud = EVP_PKEY_new()))
 			return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
-		switch (EVP_PKEY_type(type)) {
+		switch (type) {
 		case EVP_PKEY_RSA: {
 			RSA *rsa;
 
