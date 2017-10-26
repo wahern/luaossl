@@ -1903,6 +1903,7 @@ static void compat_init_SSL_CTX_onfree(void *_ctx, void *data NOTUSED, CRYPTO_EX
 
 #endif
 
+#if defined compat_X509_STORE_free
 /* helper routine to determine if X509_STORE_free obeys reference count */
 static void compat_init_X509_STORE_onfree(void *store, void *data NOTUSED, CRYPTO_EX_DATA *ad NOTUSED, int idx NOTUSED, long argl NOTUSED, void *argp NOTUSED) {
 	/* unfortunately there's no way to remove a handler */
@@ -1912,6 +1913,8 @@ static void compat_init_X509_STORE_onfree(void *store, void *data NOTUSED, CRYPT
 	/* signal that we were freed by nulling our reference */
 	compat.tmp.store = NULL;
 } /* compat_init_X509_STORE_onfree() */
+#endif
+
 
 #if !HAVE_X509_STORE_UP_REF
 #define X509_STORE_up_ref(...) EXPAND( compat_X509_STORE_up_ref(__VA_ARGS__) )
