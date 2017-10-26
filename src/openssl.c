@@ -8919,6 +8919,28 @@ static int ssl_getClientRandom(lua_State *L) {
 } /* ssl_getClientRandom() */
 
 
+static int ssl_getMasterKey(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	SSL_SESSION *session;
+	luaL_Buffer B;
+	size_t len;
+	unsigned char *out;
+
+	session = SSL_get0_session(ssl);
+	if (!session) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	len = SSL_SESSION_get_master_key(session, NULL, 0);
+	out = (unsigned char*)luaL_buffinitsize(L, &B, len);
+	len = SSL_SESSION_get_master_key(session, out, len);
+	luaL_pushresultsize(&B, len);
+
+	return 1;
+} /* ssl_getMasterKey() */
+
+
 static int ssl_getClientVersion(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	int format = luaL_checkoption(L, 2, "d", (const char *[]){ "d", ".", "f", NULL });
@@ -9104,6 +9126,7 @@ static const auxL_Reg ssl_methods[] = {
 	{ "setHostName",      &ssl_setHostName },
 	{ "getVersion",       &ssl_getVersion },
 	{ "getClientRandom",  &ssl_getClientRandom },
+	{ "getMasterKey",     &ssl_getMasterKey },
 	{ "getClientVersion", &ssl_getClientVersion },
 #if HAVE_SSL_GET0_ALPN_SELECTED
 	{ "getAlpnSelected",  &ssl_getAlpnSelected },
