@@ -313,7 +313,7 @@ Set the private key component to that described by the PEM encoded private key i
 
 \subsubsection[\fn{pkey:sign}]{\fn{pkey:sign($digest$)}}
 
-Sign data which has been consumed by the specified \module{openssl.digest} $digest$. Digests and keys are not all interchangeable. For example, an elliptic curve key requires a digest of type ``ecdsa-with-SHA1'', while DSA requires ``dss1''. OpenSSL supports more varied digests for RSA.
+Sign data which has been consumed by the specified \module{openssl.digest} $digest$. Digests and keys are not all interchangeable.
 
 Returns the signature as an opaque binary string\footnote{Elliptic curve signatures are two X.509 DER-encoded numbers, for example, while RSA signatures are encrypted DER structures.} on success, and throws an error otherwise.
 
@@ -1349,9 +1349,8 @@ local digest = require"openssl.digest"
 -- generate a public/private key pair
 local key = pkey.new{ type = "EC", curve = "prime192v1" }
 
--- digest our message using an appropriate digest ("ecdsa-with-SHA1" for EC;
--- "dss1" for DSA; and "sha1", "sha256", etc for RSA).
-local data = digest.new"ecdsa-with-SHA1"
+-- digest our message using an appropriate digest
+local data = digest.new "sha1"
 data:update(... or "hello world")
 
 -- generate a signature for our data
