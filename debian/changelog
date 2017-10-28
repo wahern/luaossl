@@ -1,3 +1,10 @@
+liblua-openssl (20171028-0) unstable; urgency=low
+
+  * Add win32 support
+  * Fix bug where exp would be NULL in pkey.new()
+
+ -- Daurnimator <quae@daurnimator.com>  Sat, 28 Oct 2017 13:19:32 +1100
+
 liblua-openssl (20170903-0) unstable; urgency=low
 
   * Fix pkey.new failing when generating RSA keys
