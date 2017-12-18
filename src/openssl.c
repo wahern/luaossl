@@ -2999,6 +2999,19 @@ static int bn_mod_mul(lua_State *L) {
 } /* bn_mod_mul() */
 
 
+static int bn_mod_sqr(lua_State *L) {
+	BIGNUM *r, *a, *b;
+
+	lua_settop(L, 2);
+	bn_prepbop(L, &r, &a, &b, 0);
+
+	if (!BN_mod_sqr(r, a, b, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:mod_sqr");
+
+	return 1;
+} /* bn_mod_sqr() */
+
+
 static int bn__pow(lua_State *L) {
 	BIGNUM *r, *a, *b;
 
@@ -3221,6 +3234,7 @@ static const auxL_Reg bn_methods[] = {
 	{ "mod_add",   &bn_mod_add },
 	{ "mod_sub",   &bn_mod_sub },
 	{ "mod_mul",   &bn_mod_mul },
+	{ "mod_sqr",   &bn_mod_sqr },
 	{ "exp",       &bn__pow },
 	{ "mod_exp",   &bn_mod_exp },
 	{ "gcd",       &bn_gcd },
