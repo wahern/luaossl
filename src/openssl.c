@@ -2960,6 +2960,45 @@ static int bn_nnmod(lua_State *L) {
 } /* bn_nnmod() */
 
 
+static int bn_mod_add(lua_State *L) {
+	BIGNUM *r, *a, *b, *c;
+
+	lua_settop(L, 3);
+	bn_preptop(L, &r, &a, &b, &c);
+
+	if (!BN_mod_add(r, a, b, c, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:mod_add");
+
+	return 1;
+} /* bn_mod_add() */
+
+
+static int bn_mod_sub(lua_State *L) {
+	BIGNUM *r, *a, *b, *c;
+
+	lua_settop(L, 3);
+	bn_preptop(L, &r, &a, &b, &c);
+
+	if (!BN_mod_sub(r, a, b, c, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:mod_sub");
+
+	return 1;
+} /* bn_mod_sub() */
+
+
+static int bn_mod_mul(lua_State *L) {
+	BIGNUM *r, *a, *b, *c;
+
+	lua_settop(L, 3);
+	bn_preptop(L, &r, &a, &b, &c);
+
+	if (!BN_mod_mul(r, a, b, c, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:mod_mul");
+
+	return 1;
+} /* bn_mod_mul() */
+
+
 static int bn__pow(lua_State *L) {
 	BIGNUM *r, *a, *b;
 
@@ -3179,6 +3218,9 @@ static const auxL_Reg bn_methods[] = {
 	{ "idiv",      &bn__idiv },
 	{ "mod",       &bn__mod },
 	{ "nnmod",     &bn_nnmod },
+	{ "mod_add",   &bn_mod_add },
+	{ "mod_sub",   &bn_mod_sub },
+	{ "mod_mul",   &bn_mod_mul },
 	{ "exp",       &bn__pow },
 	{ "mod_exp",   &bn_mod_exp },
 	{ "gcd",       &bn_gcd },
