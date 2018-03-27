@@ -329,6 +329,14 @@
 #define HAVE_SSL_SET_ALPN_PROTOS HAVE_SSL_CTX_SET_ALPN_PROTOS
 #endif
 
+#ifndef HAVE_SSL_SET1_CHAIN_CERT_STORE
+#define HAVE_SSL_SET1_CHAIN_CERT_STORE OPENSSL_PREREQ(1,0,2)
+#endif
+
+#ifndef HAVE_SSL_SET1_VERIFY_CERT_STORE
+#define HAVE_SSL_SET1_VERIFY_CERT_STORE OPENSSL_PREREQ(1,0,2)
+#endif
+
 #ifndef HAVE_SSL_SET_CURVES_LIST
 #define HAVE_SSL_SET_CURVES_LIST (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,5,1))
 #endif
@@ -1729,6 +1737,34 @@ static size_t compat_SSL_get_client_random(const SSL *ssl, unsigned char *out, s
 static int compat_SSL_client_version(const SSL *ssl) {
 	return ssl->client_version;
 } /* compat_SSL_client_version() */
+#endif
+
+#if !HAVE_SSL_SET1_CHAIN_CERT_STORE
+#define SSL_set1_chain_cert_store(...) EXPAND( compat_SSL_set1_chain_cert_store(__VA_ARGS__) )
+
+static int compat_SSL_set1_chain_cert_store(SSL *ssl, X509_STORE* st) {
+    X509_STORE **pstore = &ssl->cert->chain_store;
+    if (*pstore)
+        X509_STORE_free(*pstore);
+    *pstore = store;
+    if (store)
+        CRYPTO_add(&store->references, 1, CRYPTO_LOCK_X509_STORE);
+    return 1;
+}
+#endif
+
+#if !HAVE_SSL_SET1_VERIFY_CERT_STORE
+#define SSL_set1_verify_cert_store(...) EXPAND( compat_SSL_set1_verify_cert_store(__VA_ARGS__) )
+
+static int compat_SSL_set1_verify_cert_store(SSL *ssl, X509_STORE* st) {
+    X509_STORE **pstore = &ssl->cert->verify_store;
+    if (*pstore)
+        X509_STORE_free(*pstore);
+    *pstore = store;
+    if (store)
+        CRYPTO_add(&store->references, 1, CRYPTO_LOCK_X509_STORE);
+    return 1;
+}
 #endif
 
 #if !HAVE_SSL_GET0_PARAM
