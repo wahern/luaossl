@@ -298,7 +298,7 @@
 #endif
 
 #ifndef HAVE_SSL_CTX_SET1_CERT_STORE
-#define HAVE_SSL_CTX_SET1_CERT_STORE (HAVE_SSL_CTX_set1_cert_store || 0) /* backwards compatible with old macro name */
+#define HAVE_SSL_CTX_SET1_CERT_STORE (HAVE_SSL_CTX_set1_cert_store || OPENSSL_PREREQ(1,1,1)) /* backwards compatible with old macro name */
 #endif
 
 #ifndef HAVE_SSL_CTX_SET1_PARAM
