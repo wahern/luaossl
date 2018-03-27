@@ -329,6 +329,14 @@
 #define HAVE_SSL_SET_ALPN_PROTOS HAVE_SSL_CTX_SET_ALPN_PROTOS
 #endif
 
+#ifndef HAVE_SSL_SET1_CHAIN_CERT_STORE
+#define HAVE_SSL_SET1_CHAIN_CERT_STORE OPENSSL_PREREQ(1,0,2)
+#endif
+
+#ifndef HAVE_SSL_SET1_VERIFY_CERT_STORE
+#define HAVE_SSL_SET1_VERIFY_CERT_STORE OPENSSL_PREREQ(1,0,2)
+#endif
+
 #ifndef HAVE_SSL_SET_CURVES_LIST
 #define HAVE_SSL_SET_CURVES_LIST (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,5,1))
 #endif
@@ -8681,6 +8689,7 @@ static int ssl_clearOptions(lua_State *L) {
 } /* ssl_clearOptions() */
 
 
+#if HAVE_SSL_SET1_CHAIN_CERT_STORE
 static int ssl_setChainStore(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	X509_STORE *store = checksimple(L, 2, X509_STORE_CLASS);
@@ -8691,8 +8700,10 @@ static int ssl_setChainStore(lua_State *L) {
 
 	return 1;
 } /* ssl_setChainStore() */
+#endif
 
 
+#if HAVE_SSL_SET1_VERIFY_CERT_STORE
 static int ssl_setVerifyStore(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	X509_STORE *store = checksimple(L, 2, X509_STORE_CLASS);
@@ -8703,6 +8714,7 @@ static int ssl_setVerifyStore(lua_State *L) {
 
 	return 1;
 } /* ssl_setVerifyStore() */
+#endif
 
 
 static int ssl_setParam(lua_State *L) {
@@ -9110,8 +9122,12 @@ static const auxL_Reg ssl_methods[] = {
 	{ "setOptions",       &ssl_setOptions },
 	{ "getOptions",       &ssl_getOptions },
 	{ "clearOptions",     &ssl_clearOptions },
+#if HAVE_SSL_SET1_CHAIN_CERT_STORE
 	{ "setChainStore",    &ssl_setChainStore },
+#endif
+#if HAVE_SSL_SET1_VERIFY_CERT_STORE
 	{ "setVerifyStore",   &ssl_setVerifyStore },
+#endif
 	{ "setParam",         &ssl_setParam },
 	{ "getParam",         &ssl_getParam },
 	{ "setVerify",        &ssl_setVerify },
