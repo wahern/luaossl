@@ -1005,6 +1005,18 @@ Returns the option flags of the SSL connection instance. See \fn{openssl.ssl.con
 
 Clears the option flags of the SSL connection instance. See \fn{openssl.ssl.context:clearOptions}.
 
+\subsubsection[\fn{ssl:setStore}]{\fn{ssl:setStore($store$)}}
+
+Associate the \module{openssl.x509.store} object $store$ with $ssl$ for both verification and chain building. Replaces any existing stores.
+
+\subsubsection[\fn{ssl:setChainStore}]{\fn{ssl:setChainStore($store$)}}
+
+Associate the \module{openssl.x509.store} object $store$ with $ssl$ for chain building. Replaces any existing store.
+
+\subsubsection[\fn{ssl:setVerifyStore}]{\fn{ssl:setVerifyStore($store$)}}
+
+Associate the \module{openssl.x509.store} object $store$ with $ssl$ for verification. Replaces any existing store.
+
 \subsubsection[\fn{ssl:setVerify}]{\fn{ssl:setVerify([$mode$][, $depth$])}}
 
 Sets the verification mode flags and maximum validation chain depth.
