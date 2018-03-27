@@ -1856,18 +1856,16 @@ static void (compat_X509_STORE_free)(X509_STORE *store) {
 #endif
 
 #if !HAVE_SSL_CTX_SET1_CERT_STORE
-#if !HAVE_SSL_CTX_CERT_STORE || !HAVE_X509_STORE_REFERENCES
-#define SSL_CTX_set1_cert_store(ctx, store) \
-	SSL_CTX_set_cert_store((ctx), (store))
-#else
-#define SSL_CTX_set1_cert_store(ctx, store) \
-	compat_SSL_CTX_set1_cert_store((ctx), (store))
 
-/* to support preprocessor detection below */
-#define compat_SSL_CTX_set1_cert_store(ctx, store) \
+#define SSL_CTX_set1_cert_store(ctx, store) \
 	compat_SSL_CTX_set1_cert_store((ctx), (store))
 
 static void (compat_SSL_CTX_set1_cert_store)(SSL_CTX *ctx, X509_STORE *store) {
+#if !HAVE_SSL_CTX_CERT_STORE || !HAVE_X509_STORE_REFERENCES
+	if (store != NULL)
+		X509_STORE_up_ref(store);
+	SSL_CTX_set_cert_store(ctx, store);
+#else
 	int n;
 
 	/*
@@ -1885,8 +1883,9 @@ static void (compat_SSL_CTX_set1_cert_store)(SSL_CTX *ctx, X509_STORE *store) {
 
 	if (n == store->references)
 		CRYPTO_add(&store->references, 1, CRYPTO_LOCK_X509_STORE);
-} /* compat_SSL_CTX_set1_cert_store() */
 #endif
+} /* compat_SSL_CTX_set1_cert_store() */
+
 #endif
 
 #if HAVE_SSL_CTX_CERT_STORE
