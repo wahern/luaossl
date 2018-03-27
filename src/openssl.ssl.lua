@@ -2,6 +2,12 @@ local ssl = require"_openssl.ssl"
 
 local pack = table.pack or function(...) return { n = select("#", ...); ... } end
 
+ssl.interpose("setStore", function(self, store)
+	self:setChainStore(store)
+	self:setVerifyStore(store)
+	return true
+end)
+
 -- Allow passing a vararg of curves, or an array
 local setCurvesList = ssl.interpose("setCurvesList", nil)
 if setCurvesList then
