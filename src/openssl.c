@@ -8681,6 +8681,30 @@ static int ssl_clearOptions(lua_State *L) {
 } /* ssl_clearOptions() */
 
 
+static int ssl_setChainStore(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	X509_STORE *store = checksimple(L, 2, X509_STORE_CLASS);
+
+	SSL_set1_chain_cert_store(ssl, store);
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setChainStore() */
+
+
+static int ssl_setVerifyStore(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	X509_STORE *store = checksimple(L, 2, X509_STORE_CLASS);
+
+	SSL_set1_verify_cert_store(ssl, store);
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setVerifyStore() */
+
+
 static int ssl_setParam(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	X509_VERIFY_PARAM *xp = checksimple(L, 2, X509_VERIFY_PARAM_CLASS);
@@ -9086,6 +9110,8 @@ static const auxL_Reg ssl_methods[] = {
 	{ "setOptions",       &ssl_setOptions },
 	{ "getOptions",       &ssl_getOptions },
 	{ "clearOptions",     &ssl_clearOptions },
+	{ "setChainStore",    &ssl_setChainStore },
+	{ "setVerifyStore",   &ssl_setVerifyStore },
 	{ "setParam",         &ssl_setParam },
 	{ "getParam",         &ssl_getParam },
 	{ "setVerify",        &ssl_setVerify },
