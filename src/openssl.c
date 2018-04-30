@@ -31,7 +31,7 @@
 
 #include <limits.h>       /* INT_MAX INT_MIN LLONG_MAX LLONG_MIN UCHAR_MAX ULLONG_MAX */
 #include <stdint.h>       /* uintptr_t */
-#include <string.h>       /* memset(3) strerror_r(3) */
+#include <string.h>       /* memset(3) strerror_r(3) strlen(3) */
 #include <math.h>         /* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
 #include <time.h>         /* struct tm time_t strptime(3) time(2) */
 #include <ctype.h>        /* isdigit(3), isxdigit(3), tolower(3) */
@@ -4725,11 +4725,16 @@ static int pk_toPEM(lua_State *L) {
 			NULL,
 		};
 		int type;
+		const char *cname = NULL;
+		const EVP_CIPHER *cipher = NULL;
+		const char *pass = NULL;
 
-		if (!lua_istable(L, i))
+		if (lua_istable(L, i)) {
+			loadfield(L, i, "cipher", LUA_TSTRING, &cname);
+			if (!getfield(L, i, "type"))
+				lua_pushstring(L, cname ? "private" : "public");
+		} else
 			lua_pushvalue(L, i);
-		else if (!getfield(L, i, "type"))
-			lua_pushliteral(L, "public");
 
 		type = auxL_checkoption(L, -1, NULL, types, 1);
 		lua_pop(L, 1);
@@ -4745,7 +4750,15 @@ static int pk_toPEM(lua_State *L) {
 
 			break;
 		case 2: case 3: /* private, PrivateKey */
-			if (!PEM_write_bio_PrivateKey(bio, key, 0, 0, 0, 0, 0))
+			if (cname) {
+				cipher = EVP_get_cipherbyname(cname);
+				if (!cipher)
+					return luaL_error(L, "pkey:toPEM: unknown cipher: %s", cname);
+				if (!loadfield(L, i, "password", LUA_TSTRING, &pass))
+					return luaL_error(L, "pkey:toPEM: password not defined");
+			}
+
+			if (!PEM_write_bio_PrivateKey(bio, key, cipher, pass, pass ? strlen(pass) : 0, 0, 0))
 				return auxL_error(L, auxL_EOPENSSL, "pkey:__tostring");
 
 			len = BIO_get_mem_data(bio, &pem);
