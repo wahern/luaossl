@@ -31,7 +31,7 @@
 
 #include <limits.h>       /* INT_MAX INT_MIN LLONG_MAX LLONG_MIN UCHAR_MAX ULLONG_MAX */
 #include <stdint.h>       /* uintptr_t */
-#include <string.h>       /* memset(3) strerror_r(3) strlen(3) */
+#include <string.h>       /* memset(3) strerror_r(3) strlen(3) strncpy(3) */
 #include <math.h>         /* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
 #include <time.h>         /* struct tm time_t strptime(3) time(2) */
 #include <ctype.h>        /* isdigit(3), isxdigit(3), tolower(3) */
@@ -4105,6 +4105,15 @@ static BIO *getbio(lua_State *L) {
 } /* getbio() */
 
 
+static int pem_pw_cb(char *buf, int size, int rwflag, void *u) {
+	if (!u)
+		return -1;
+	char *pass = (char *) u;
+	strncpy(buf, pass, size);
+	return MIN(strlen(pass), (unsigned int) size);
+} /* pem_pw_cb() */
+
+
 static int pk_new(lua_State *L) {
 	EVP_PKEY **ud;
 
@@ -4344,7 +4353,7 @@ static int pk_new(lua_State *L) {
 	} else if (lua_isstring(L, 1)) {
 		int format;
 		int pubonly = 0, prvtonly = 0;
-		const char *type, *data;
+		const char *type, *data, *pass;
 		size_t len;
 		BIO *bio;
 		EVP_PKEY *pub = NULL, *prvt = NULL;
@@ -4354,10 +4363,12 @@ static int pk_new(lua_State *L) {
 			lua_pop(L, 1);
 			lua_getfield(L, 2, "format");
 			lua_getfield(L, 2, "type");
+			lua_getfield(L, 2, "password");
 			lua_remove(L, 2);
-		}
+		} else
+			lua_pushnil(L);
 
-		/* #1 key, #2 format, #3 type */
+		/* #1 key, #2 format, #3 type, #4 password or callback */
 
 		data = luaL_checklstring(L, 1, &len);
 		format = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
@@ -4371,6 +4382,13 @@ static int pk_new(lua_State *L) {
 			} else {
 				return luaL_error(L, "invalid key type: %s", type);
 			}
+		}
+
+		pass = luaL_optstring(L, 4, NULL);
+		if (pass) {
+			if (format == X509_DER)
+				return luaL_error(L, "decryption supported only for PEM keys");
+			else format = X509_PEM;
 		}
 
 		ud = prepsimple(L, PKEY_CLASS);
@@ -4387,14 +4405,14 @@ static int pk_new(lua_State *L) {
 				 */
 				BIO_reset(bio);
 
-				if (!(pub = PEM_read_bio_PUBKEY(bio, NULL, 0, "")))
+				if (!(pub = PEM_read_bio_PUBKEY(bio, NULL, pem_pw_cb, pass)))
 					goterr = 1;
 			}
 
 			if (!pubonly && !prvt) {
 				BIO_reset(bio);
 
-				if (!(prvt = PEM_read_bio_PrivateKey(bio, NULL, 0, "")))
+				if (!(prvt = PEM_read_bio_PrivateKey(bio, NULL, pem_pw_cb, pass)))
 					goterr = 1;
 			}
 		}
