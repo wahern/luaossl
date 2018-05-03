@@ -4786,7 +4786,7 @@ static int pk_toPEM(lua_State *L) {
 					return luaL_error(L, "pkey:toPEM: password not defined");
 			}
 
-			if (!PEM_write_bio_PrivateKey(bio, key, cipher, pass, pass ? strlen(pass) : 0, 0, 0))
+			if (!PEM_write_bio_PrivateKey(bio, key, cipher, NULL, 0, pem_pw_cb, pass))
 				return auxL_error(L, auxL_EOPENSSL, "pkey:__tostring");
 
 			len = BIO_get_mem_data(bio, &pem);
