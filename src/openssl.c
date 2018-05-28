@@ -5456,7 +5456,7 @@ static int xe_text(lua_State *L) {
 	size_t len;
 
 	if (!X509V3_EXT_print(bio, ext, flags, indent))
-		return auxL_error(L, auxL_EOPENSSL, "x509.extension.text");
+		return auxL_error(L, auxL_EOPENSSL, "x509.extension:text");
 
 	len = BIO_get_mem_data(bio, &data);
 
@@ -6696,7 +6696,7 @@ static int xr_getPublicKey(lua_State *L) {
 	EVP_PKEY **key = prepsimple(L, PKEY_CLASS);
 
 	if (!(*key = X509_REQ_get_pubkey(csr)))
-		return auxL_error(L, auxL_EOPENSSL, "x509.cert:getPublicKey");
+		return auxL_error(L, auxL_EOPENSSL, "x509.csr:getPublicKey");
 
 	return 1;
 } /* xr_getPublicKey() */
@@ -8799,7 +8799,7 @@ static int ssl_setContext(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 2, SSL_CTX_CLASS);
 
 	if (!SSL_set_SSL_CTX(ssl, ctx))
-		return auxL_error(L, auxL_EOPENSSL, "ssl.setContext");
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setContext");
 
 	lua_pushboolean(L, 1);
 
