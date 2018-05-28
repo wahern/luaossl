@@ -2805,6 +2805,20 @@ static void bn_prepbop(lua_State *L, BIGNUM **r, BIGNUM **a, BIGNUM **b, _Bool c
 } /* bn_prepbop() */
 
 
+/* prepare numbers at top of stack for ternary operation, and push result object onto stack  */
+static void bn_preptop(lua_State *L, BIGNUM **r, BIGNUM **a, BIGNUM **b, BIGNUM **c) {
+	_Bool a_lvalue, b_lvalue, c_lvalue;
+
+	*a = checkbig(L, 1, &a_lvalue);
+	*b = checkbig(L, 2, &b_lvalue);
+	*c = checkbig(L, 3, &c_lvalue);
+
+	bn_push(L);
+
+	*r = *(BIGNUM **)lua_touserdata(L, -1);
+} /* bn_preptop() */
+
+
 static int ctx__gc(lua_State *L) {
 	BN_CTX **ctx = lua_touserdata(L, 1);
 
@@ -2953,6 +2967,58 @@ static int bn_nnmod(lua_State *L) {
 } /* bn_nnmod() */
 
 
+static int bn_mod_add(lua_State *L) {
+	BIGNUM *r, *a, *b, *c;
+
+	lua_settop(L, 3);
+	bn_preptop(L, &r, &a, &b, &c);
+
+	if (!BN_mod_add(r, a, b, c, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:mod_add");
+
+	return 1;
+} /* bn_mod_add() */
+
+
+static int bn_mod_sub(lua_State *L) {
+	BIGNUM *r, *a, *b, *c;
+
+	lua_settop(L, 3);
+	bn_preptop(L, &r, &a, &b, &c);
+
+	if (!BN_mod_sub(r, a, b, c, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:mod_sub");
+
+	return 1;
+} /* bn_mod_sub() */
+
+
+static int bn_mod_mul(lua_State *L) {
+	BIGNUM *r, *a, *b, *c;
+
+	lua_settop(L, 3);
+	bn_preptop(L, &r, &a, &b, &c);
+
+	if (!BN_mod_mul(r, a, b, c, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:mod_mul");
+
+	return 1;
+} /* bn_mod_mul() */
+
+
+static int bn_mod_sqr(lua_State *L) {
+	BIGNUM *r, *a, *b;
+
+	lua_settop(L, 2);
+	bn_prepbop(L, &r, &a, &b, 0);
+
+	if (!BN_mod_sqr(r, a, b, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:mod_sqr");
+
+	return 1;
+} /* bn_mod_sqr() */
+
+
 static int bn__pow(lua_State *L) {
 	BIGNUM *r, *a, *b;
 
@@ -2964,6 +3030,19 @@ static int bn__pow(lua_State *L) {
 
 	return 1;
 } /* bn__pow() */
+
+
+static int bn_mod_exp(lua_State *L) {
+	BIGNUM *r, *a, *b, *c;
+
+	lua_settop(L, 3);
+	bn_preptop(L, &r, &a, &b, &c);
+
+	if (!BN_mod_exp(r, a, b, c, getctx(L)))
+		return auxL_error(L, auxL_EOPENSSL, "bignum:mod_exp");
+
+	return 1;
+} /* bn_mod_exp() */
 
 
 static int bn_gcd(lua_State *L) {
@@ -3159,7 +3238,12 @@ static const auxL_Reg bn_methods[] = {
 	{ "idiv",      &bn__idiv },
 	{ "mod",       &bn__mod },
 	{ "nnmod",     &bn_nnmod },
+	{ "mod_add",   &bn_mod_add },
+	{ "mod_sub",   &bn_mod_sub },
+	{ "mod_mul",   &bn_mod_mul },
+	{ "mod_sqr",   &bn_mod_sqr },
 	{ "exp",       &bn__pow },
+	{ "mod_exp",   &bn_mod_exp },
 	{ "gcd",       &bn_gcd },
 	{ "lshift",    &bn__shl },
 	{ "rshift",    &bn__shr },
