@@ -6811,6 +6811,71 @@ static int xr_setRequestedExtension(lua_State *L) {
 } /* xr_setRequestedExtension() */
 
 
+static int xr_getRequestedExtension(lua_State *L) {
+	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
+	STACK_OF(X509_EXTENSION) *exts = NULL;
+	X509_EXTENSION *ext = NULL, **ud;
+	int i;
+
+	luaL_checkany(L, 2);
+
+	ud = prepsimple(L, X509_EXT_CLASS);
+
+	if (lua_type(L, 2) == LUA_TNUMBER) {
+		/* NB: Lua 1-based indexing */
+		i = auxL_checkinteger(L, 2, 1, INT_MAX) - 1;
+		exts = X509_REQ_get_extensions(csr);
+	} else {
+		ASN1_OBJECT *obj;
+
+		if (!auxS_txt2obj(&obj, luaL_checkstring(L, 2))) {
+			goto error;
+		} else if (!obj) {
+			goto undef;
+		}
+
+		exts = X509_REQ_get_extensions(csr);
+		i = X509v3_get_ext_by_OBJ(exts, obj, -1);
+
+		ASN1_OBJECT_free(obj);
+	}
+
+	if (i < 0 || !(ext = X509v3_get_ext(exts, i)))
+		goto undef;
+
+	if (!(*ud = X509_EXTENSION_dup(ext)))
+		goto error;
+
+	sk_X509_EXTENSION_pop_free(exts, X509_EXTENSION_free);
+	exts = NULL;
+
+	return 1;
+undef:
+	if (exts)
+		sk_X509_EXTENSION_pop_free(exts, X509_EXTENSION_free);
+	return 0;
+error:
+	if (exts)
+		sk_X509_EXTENSION_pop_free(exts, X509_EXTENSION_free);
+	return auxL_error(L, auxL_EOPENSSL, "x509.csr:getRequestedExtension");
+} /* xr_getRequestedExtension() */
+
+
+static int xr_getRequestedExtensionCount(lua_State *L) {
+	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
+	STACK_OF(X509_EXTENSION) *exts = NULL;
+	auxL_Integer len = 0;
+
+	exts = X509_REQ_get_extensions(csr);
+	len = sk_X509_EXTENSION_num(exts);
+	sk_X509_EXTENSION_pop_free(exts, X509_EXTENSION_free);
+
+	auxL_pushinteger(L, len);
+
+	return 1;
+} /* xr_getRequestedExtensionCount() */
+
+
 static int xr_sign(lua_State *L) {
 	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
@@ -6870,6 +6935,8 @@ static const auxL_Reg xr_methods[] = {
 	{ "setPublicKey", &xr_setPublicKey },
 	{ "getSubjectAlt", &xr_getSubjectAlt },
 	{ "setSubjectAlt", &xr_setSubjectAlt },
+	{ "getRequestedExtension", &xr_getRequestedExtension },
+	{ "getRequestedExtensionCount", &xr_getRequestedExtensionCount },
 	{ "setRequestedExtension", &xr_setRequestedExtension },
 	{ "sign",         &xr_sign },
 	{ "tostring",     &xr__tostring },
