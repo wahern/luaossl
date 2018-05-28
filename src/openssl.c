@@ -4682,6 +4682,23 @@ static int ecg_interpose(lua_State *L) {
 	return interpose(L, EC_GROUP_CLASS);
 } /* ecg_interpose() */
 
+
+static int ecg_toPEM(lua_State *L) {
+	EC_GROUP *group = checksimple(L, 1, EC_GROUP_CLASS);
+	BIO *bio = getbio(L);
+	size_t len;
+	char *bytes;
+
+	if (!PEM_write_bio_ECPKParameters(bio, group))
+		return auxL_error(L, auxL_EOPENSSL, "group:toPEM");
+
+	len = BIO_get_mem_data(bio, &bytes);
+	lua_pushlstring(L, bytes, len);
+
+	return 1;
+} /* ecg_toPEM() */
+
+
 static int ecg_tostring(lua_State *L) {
 	EC_GROUP *group = checksimple(L, 1, EC_GROUP_CLASS);
 	int how = optencoding(L, 2, "pem", X509_PEM|X509_DER|X509_TXT);
@@ -4729,6 +4746,7 @@ static int ecg__gc(lua_State *L) {
 } /* ecg__gc() */
 
 static const auxL_Reg ecg_methods[] = {
+	{ "toPEM",    &ecg_toPEM },
 	{ "tostring", &ecg_tostring },
 	{ NULL,       NULL },
 };
@@ -6489,6 +6507,22 @@ static int xc_text(lua_State *L) {
 } /* xc_text() */
 
 
+static int xc_toPEM(lua_State *L) {
+	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
+	BIO *bio = getbio(L);
+	size_t len;
+	char *bytes;
+
+	if (!PEM_write_bio_X509(bio, crt))
+		return auxL_error(L, auxL_EOPENSSL, "x509.cert:toPEM");
+
+	len = BIO_get_mem_data(bio, &bytes);
+	lua_pushlstring(L, bytes, len);
+
+	return 1;
+} /* xc_toPEM() */
+
+
 static int xc__tostring(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	int type = optencoding(L, 2, "pem", X509_PEM|X509_DER);
@@ -6565,6 +6599,7 @@ static const auxL_Reg xc_methods[] = {
 	{ "getSignatureName", &xc_getSignatureName },
 	{ "sign",          &xc_sign },
 	{ "text",          &xc_text },
+	{ "toPEM",         &xc_toPEM },
 	{ "tostring",      &xc__tostring },
 	{ NULL,            NULL },
 };
@@ -6927,6 +6962,22 @@ static int xr_sign(lua_State *L) {
 } /* xr_sign() */
 
 
+static int xr_toPEM(lua_State *L) {
+	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
+	BIO *bio = getbio(L);
+	size_t len;
+	char *bytes;
+
+	if (!PEM_write_bio_X509_REQ(bio, csr))
+		return auxL_error(L, auxL_EOPENSSL, "x509.csr:toPEM");
+
+	len = BIO_get_mem_data(bio, &bytes);
+	lua_pushlstring(L, bytes, len);
+
+	return 1;
+} /* xr_toPEM() */
+
+
 static int xr__tostring(lua_State *L) {
 	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
 	int type = optencoding(L, 2, "pem", X509_PEM|X509_DER);
@@ -6978,6 +7029,7 @@ static const auxL_Reg xr_methods[] = {
 	{ "addRequestedExtension", &xr_addRequestedExtension },
 	{ "setRequestedExtension", &xr_setRequestedExtension },
 	{ "sign",         &xr_sign },
+	{ "toPEM",        &xr_toPEM },
 	{ "tostring",     &xr__tostring },
 	{ NULL,           NULL },
 };
@@ -7363,6 +7415,22 @@ static int xx_text(lua_State *L) {
 } /* xx_text() */
 
 
+static int xx_toPEM(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	BIO *bio = getbio(L);
+	size_t len;
+	char *bytes;
+
+	if (!PEM_write_bio_X509_CRL(bio, crl))
+		return auxL_error(L, auxL_EOPENSSL, "x509.crl:toPEM");
+
+	len = BIO_get_mem_data(bio, &bytes);
+	lua_pushlstring(L, bytes, len);
+
+	return 1;
+} /* xx_toPEM() */
+
+
 static int xx__tostring(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 	int type = optencoding(L, 2, "pem", X509_PEM|X509_DER);
@@ -7417,6 +7485,7 @@ static const auxL_Reg xx_methods[] = {
 	{ "sign",           &xx_sign },
 	{ "verify",         &xx_verify },
 	{ "text",           &xx_text },
+	{ "toPEM",          &xx_toPEM },
 	{ "tostring",       &xx__tostring },
 	{ NULL,             NULL },
 };
