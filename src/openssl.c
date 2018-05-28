@@ -6793,6 +6793,24 @@ error:
 } /* xr_getSubjectAlt() */
 
 
+static int xr_addRequestedExtension(lua_State *L) {
+	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
+	X509_EXTENSION *ext = checksimple(L, 2, X509_EXT_CLASS);
+	int nid, crit;
+	void *value;
+
+	nid = OBJ_obj2nid(X509_EXTENSION_get_object(ext));
+	crit = X509_EXTENSION_get_critical(ext);
+	value = X509_EXTENSION_get_data(ext);
+
+	if (xr_modifyRequestedExtension(csr, nid, crit, value, X509V3_ADD_APPEND))
+		return auxL_error(L, auxL_EOPENSSL, "x509.csr:addRequestedExtension");
+
+	lua_pushboolean(L, 1);
+	return 1;
+} /* xr_addRequestedExtension() */
+
+
 static int xr_setRequestedExtension(lua_State *L) {
 	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
 	X509_EXTENSION *ext = checksimple(L, 2, X509_EXT_CLASS);
@@ -6937,6 +6955,7 @@ static const auxL_Reg xr_methods[] = {
 	{ "setSubjectAlt", &xr_setSubjectAlt },
 	{ "getRequestedExtension", &xr_getRequestedExtension },
 	{ "getRequestedExtensionCount", &xr_getRequestedExtensionCount },
+	{ "addRequestedExtension", &xr_addRequestedExtension },
 	{ "setRequestedExtension", &xr_setRequestedExtension },
 	{ "sign",         &xr_sign },
 	{ "tostring",     &xr__tostring },
