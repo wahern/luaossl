@@ -6221,6 +6221,25 @@ static int xc_addExtension(lua_State *L) {
 } /* xc_addExtension() */
 
 
+static int xc_setExtension(lua_State *L) {
+	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
+	X509_EXTENSION *ext = checksimple(L, 2, X509_EXT_CLASS);
+	int nid, crit;
+	void *value;
+
+	nid = OBJ_obj2nid(X509_EXTENSION_get_object(ext));
+	crit = X509_EXTENSION_get_critical(ext);
+	value = X509_EXTENSION_get_data(ext);
+
+	if (!X509_add1_ext_i2d(crt, nid, value, crit, X509V3_ADD_REPLACE))
+		return auxL_error(L, auxL_EOPENSSL, "x509.cert:setExtension");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* xc_setExtension() */
+
+
 static int xc_getExtension(lua_State *L) {
 	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
 	X509_EXTENSION *ext = NULL, **ud;
@@ -6535,6 +6554,7 @@ static const auxL_Reg xc_methods[] = {
 	{ "getBasicConstraintsCritical", &xc_getBasicConstraintsCritical },
 	{ "setBasicConstraintsCritical", &xc_setBasicConstraintsCritical },
 	{ "addExtension",  &xc_addExtension },
+	{ "setExtension",  &xc_setExtension },
 	{ "getExtension",  &xc_getExtension },
 	{ "getExtensionCount", &xc_getExtensionCount },
 	{ "getOCSP",       &xc_getOCSP },
@@ -7233,6 +7253,25 @@ static int xx_addExtension(lua_State *L) {
 } /* xx_addExtension() */
 
 
+static int xx_setExtension(lua_State *L) {
+	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
+	X509_EXTENSION *ext = checksimple(L, 2, X509_EXT_CLASS);
+	int nid, crit;
+	void *value;
+
+	nid = OBJ_obj2nid(X509_EXTENSION_get_object(ext));
+	crit = X509_EXTENSION_get_critical(ext);
+	value = X509_EXTENSION_get_data(ext);
+
+	if (!X509_CRL_add1_ext_i2d(crl, nid, value, crit, X509V3_ADD_REPLACE))
+		return auxL_error(L, auxL_EOPENSSL, "x509.crl:setExtension");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* xx_setExtension() */
+
+
 static int xx_getExtension(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 	X509_EXTENSION *ext = NULL, **ud;
@@ -7372,6 +7411,7 @@ static const auxL_Reg xx_methods[] = {
 	{ "setIssuer",      &xx_setIssuer },
 	{ "add",            &xx_add },
 	{ "addExtension",   &xx_addExtension },
+	{ "setExtension",   &xx_setExtension },
 	{ "getExtension",   &xx_getExtension },
 	{ "getExtensionCount", &xx_getExtensionCount },
 	{ "sign",           &xx_sign },
