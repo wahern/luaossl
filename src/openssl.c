@@ -365,6 +365,10 @@
 #define HAVE_SSL_OP_NO_DTLS_MASK OPENSSL_PREREQ(1,1,0)
 #endif
 
+#ifndef HAVE_SSL_SESSION_MASTER_KEY
+#define HAVE_SSL_SESSION_MASTER_KEY OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HAVE_STACK_OPENSSL_STRING_FUNCS
 #define HAVE_STACK_OPENSSL_STRING_FUNCS (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
 #endif
@@ -1727,6 +1731,22 @@ static size_t compat_SSL_get_client_random(const SSL *ssl, unsigned char *out, s
 	if (outlen > sizeof(ssl->s3->client_random))
 		outlen = sizeof(ssl->s3->client_random);
 	memcpy(out, ssl->s3->client_random, outlen);
+	return outlen;
+}
+#endif
+
+#if !HAVE_SSL_SESSION_MASTER_KEY
+#define SSL_SESSION_get_master_key(...) EXPAND( compat_SSL_SESSION_get_master_key(__VA_ARGS__) )
+static size_t compat_SSL_SESSION_get_master_key(const SSL_SESSION *session, unsigned char *out, size_t outlen) {
+	if (session->master_key_length < 0) {
+		/* Should never happen */
+		return 0;
+	}
+	if (outlen == 0)
+		return session->master_key_length;
+	if (outlen > (size_t)session->master_key_length)
+		outlen = session->master_key_length;
+	memcpy(out, session->master_key, outlen);
 	return outlen;
 }
 #endif
@@ -9254,6 +9274,28 @@ static int ssl_getClientRandom(lua_State *L) {
 } /* ssl_getClientRandom() */
 
 
+static int ssl_getMasterKey(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	SSL_SESSION *session;
+	luaL_Buffer B;
+	size_t len;
+	unsigned char *out;
+
+	session = SSL_get0_session(ssl);
+	if (!session) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	len = SSL_SESSION_get_master_key(session, NULL, 0);
+	out = (unsigned char*)luaL_buffinitsize(L, &B, len);
+	len = SSL_SESSION_get_master_key(session, out, len);
+	luaL_pushresultsize(&B, len);
+
+	return 1;
+} /* ssl_getMasterKey() */
+
+
 static int ssl_getClientVersion(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	int format = luaL_checkoption(L, 2, "d", (const char *[]){ "d", ".", "f", NULL });
@@ -9445,6 +9487,7 @@ static const auxL_Reg ssl_methods[] = {
 	{ "setHostName",      &ssl_setHostName },
 	{ "getVersion",       &ssl_getVersion },
 	{ "getClientRandom",  &ssl_getClientRandom },
+	{ "getMasterKey",     &ssl_getMasterKey },
 	{ "getClientVersion", &ssl_getClientVersion },
 #if HAVE_SSL_GET0_ALPN_SELECTED
 	{ "getAlpnSelected",  &ssl_getAlpnSelected },
