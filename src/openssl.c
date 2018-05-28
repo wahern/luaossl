@@ -6695,7 +6695,7 @@ static int xr_setPublicKey(lua_State *L) {
 } /* xr_setPublicKey() */
 
 
-static int xr_setExtensionByNid(lua_State *L, X509_REQ *csr, int target_nid, void* value) {
+static int xr_modifyRequestedExtension(X509_REQ *csr, int target_nid, int crit, void* value, unsigned long flags) {
 	STACK_OF(X509_EXTENSION) *sk = NULL;
 	int has_attrs=0;
 
@@ -6708,7 +6708,7 @@ static int xr_setExtensionByNid(lua_State *L, X509_REQ *csr, int target_nid, voi
 	 * everything is stored under a list in a single "attribute" so we
 	 * can't use X509_REQ_add1_attr or similar.
 	 *
-	 * Instead we have to get the extensions, find and replace the SAN
+	 * Instead we have to get the extensions, find and replace the extension
 	 * if it's in there, then *replace* the extensions in the list of
 	 * attributes. (If we just try to add it the old ones are found
 	 * first and don't take priority.)
@@ -6716,7 +6716,7 @@ static int xr_setExtensionByNid(lua_State *L, X509_REQ *csr, int target_nid, voi
 	has_attrs = X509_REQ_get_attr_count(csr);
 
 	sk = X509_REQ_get_extensions(csr);
-	if (!X509V3_add1_i2d(&sk, target_nid, value, 0, X509V3_ADD_REPLACE))
+	if (!X509V3_add1_i2d(&sk, target_nid, value, crit, flags))
 		goto error;
 	if (X509_REQ_add_extensions(csr, sk) == 0)
 		goto error;
@@ -6754,22 +6754,24 @@ static int xr_setExtensionByNid(lua_State *L, X509_REQ *csr, int target_nid, voi
 	csr->req_info->enc.modified = 1;
 #endif
 
-	lua_pushboolean(L, 1);
-
-	return 1;
+	return 0;
 error:
 	if (sk)
 		sk_X509_EXTENSION_pop_free(sk, X509_EXTENSION_free);
 
-	return auxL_error(L, auxL_EOPENSSL, "x509.csr.setExtensionByNid");
-} /* xr_setExtensionByNid() */
+	return 1;
+} /* xr_modifyRequestedExtension() */
 
 
 static int xr_setSubjectAlt(lua_State *L) {
 	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
 	GENERAL_NAMES *gens = checksimple(L, 2, X509_GENS_CLASS);
 
-	return xr_setExtensionByNid(L, csr, NID_subject_alt_name, gens);
+	if (xr_modifyRequestedExtension(csr, NID_subject_alt_name, 0, gens, X509V3_ADD_REPLACE))
+		return auxL_error(L, auxL_EOPENSSL, "x509.csr:setSubjectAlt");
+
+	lua_pushboolean(L, 1);
+	return 1;
 } /* xr_setSubjectAlt */
 
 
