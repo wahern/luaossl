@@ -4512,6 +4512,7 @@ static const auxL_Reg pk_methods[] = {
 	{ "verify",        &pk_verify },
 	{ "getDefaultDigestName", &pk_getDefaultDigestName },
 	{ "toPEM",         &pk_toPEM },
+	{ "tostring",      &pk__tostring },
 	{ "getParameters", &pk_getParameters },
 	{ "setParameters", &pk_setParameters },
 	{ NULL,            NULL },
