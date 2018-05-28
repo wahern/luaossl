@@ -4504,17 +4504,17 @@ static const auxL_Reg pk_methods[] = {
 	{ "type",          &pk_type },
 	{ "setPublicKey",  &pk_setPublicKey },
 	{ "setPrivateKey", &pk_setPrivateKey },
+	{ "getDefaultDigestName", &pk_getDefaultDigestName },
+	{ "getParameters", &pk_getParameters },
+	{ "setParameters", &pk_setParameters },
 #if HAVE_EVP_PKEY_CTX_NEW
 	{ "decrypt",       &pk_decrypt },
 	{ "encrypt",       &pk_encrypt },
 #endif
 	{ "sign",          &pk_sign },
-	{ "verify",        &pk_verify },
-	{ "getDefaultDigestName", &pk_getDefaultDigestName },
 	{ "toPEM",         &pk_toPEM },
 	{ "tostring",      &pk__tostring },
-	{ "getParameters", &pk_getParameters },
-	{ "setParameters", &pk_setParameters },
+	{ "verify",        &pk_verify },
 	{ NULL,            NULL },
 };
 
