@@ -5648,6 +5648,18 @@ EXPORT int luaopen__openssl_x509_extension(lua_State *L) {
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+static void xc_dup(lua_State *L, X509 *x509) {
+	X509 **ud = prepsimple(L, X509_CERT_CLASS);
+
+	if (!(*ud = X509_dup(x509)))
+		goto error;
+
+	return;
+error:
+	auxL_error(L, auxL_EOPENSSL, "X509_dup");
+} /* xc_dup() */
+
+
 static int xc_new(lua_State *L) {
 	const char *data;
 	size_t len;
@@ -7713,10 +7725,7 @@ static int xl__next(lua_State *L) {
 
 		lua_pushinteger(L, i);
 
-		ret = prepsimple(L, X509_CERT_CLASS);
-
-		if (!(*ret = X509_dup(crt)))
-			return auxL_error(L, auxL_EOPENSSL, "x509.chain:__next");
+		xc_dup(L, crt);
 
 		break;
 	}
