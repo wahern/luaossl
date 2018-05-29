@@ -765,7 +765,7 @@ static void *loadfield_udata(lua_State *L, int index, const char *k, const char 
 
 
 /* Forward declaration */
-static SSL *ssl_push(lua_State *, SSL *);
+static void ssl_push(lua_State *, SSL *);
 
 /* push an ssl object into lua in a way that is safe from OOM
  * Lua 5.1 does not support normally returning values from lua_cpcall
@@ -8941,13 +8941,11 @@ EXPORT int luaopen__openssl_ssl_context(lua_State *L) {
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-static SSL *ssl_push(lua_State *L, SSL *ssl) {
+static void ssl_push(lua_State *L, SSL *ssl) {
 	SSL **ud = prepsimple(L, SSL_CLASS);
 
 	SSL_up_ref(ssl);
 	*ud = ssl;
-
-	return *ud;
 } /* ssl_push() */
 
 
