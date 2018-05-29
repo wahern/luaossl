@@ -277,6 +277,10 @@
 #define HAVE_SSL_CTX_GET0_PARAM OPENSSL_PREREQ(1,0,2)
 #endif
 
+#ifndef HAVE_SSL_CTX_GET0_CERTIFICATE
+#define HAVE_SSL_CTX_GET0_CERTIFICATE (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,7,0))
+#endif
+
 #ifndef HAVE_SSL_CTX_SET_CURVES_LIST
 #define HAVE_SSL_CTX_SET_CURVES_LIST (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,5,1))
 #endif
@@ -1809,6 +1813,17 @@ static int compat_SSL_up_ref(SSL *ssl) {
 static X509_VERIFY_PARAM *compat_SSL_CTX_get0_param(SSL_CTX *ctx) {
 	return ctx->param;
 } /* compat_SSL_CTX_get0_param() */
+#endif
+
+#if !HAVE_SSL_CTX_GET0_CERTIFICATE
+#define SSL_CTX_get0_certificate(ctx) compat_SSL_CTX_get0_certificate((ctx))
+
+static X509 *compat_SSL_CTX_get0_certificate(const SSL_CTX *ctx) {
+    if (ctx->cert != NULL)
+        return ctx->cert->key->x509;
+    else
+        return NULL;
+} /* compat_SSL_CTX_get0_certificate() */
 #endif
 
 #if !HAVE_SSL_CTX_SET1_PARAM
@@ -8493,6 +8508,19 @@ static int sx_setCertificate(lua_State *L) {
 } /* sx_setCertificate() */
 
 
+static int sx_getCertificate(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	X509 *x509;
+
+	if (!(x509 = SSL_CTX_get0_certificate(ctx)))
+		return 0;
+
+	xc_dup(L, x509);
+
+	return 1;
+} /* sx_getCertificate() */
+
+
 static int sx_setPrivateKey(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
@@ -8845,6 +8873,7 @@ static const auxL_Reg sx_methods[] = {
 	{ "setVerify",        &sx_setVerify },
 	{ "getVerify",        &sx_getVerify },
 	{ "setCertificate",   &sx_setCertificate },
+	{ "getCertificate",   &sx_getCertificate },
 	{ "setPrivateKey",    &sx_setPrivateKey },
 	{ "setCipherList",    &sx_setCipherList },
 #if HAVE_SSL_CTX_SET_CURVES_LIST
