@@ -7870,8 +7870,13 @@ static int xs_add(lua_State *L) {
 
 			if (S_ISDIR(st.st_mode))
 				ok = X509_STORE_load_locations(store, NULL, path);
-			else
+			else {
+				/* X509_STORE_load_locations on a file returns 0 if no certs were found */
+				ERR_clear_error();
 				ok = X509_STORE_load_locations(store, path, NULL);
+				if (ok == 0 && !ERR_peek_error())
+					ok = 1;
+			}
 
 			if (!ok)
 				return auxL_error(L, auxL_EOPENSSL, "x509.store:add");
