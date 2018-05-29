@@ -1827,17 +1827,6 @@ static X509_VERIFY_PARAM *compat_SSL_CTX_get0_param(SSL_CTX *ctx) {
 } /* compat_SSL_CTX_get0_param() */
 #endif
 
-#if !HAVE_SSL_CTX_GET0_CERTIFICATE
-#define SSL_CTX_get0_certificate(ctx) compat_SSL_CTX_get0_certificate((ctx))
-
-static X509 *compat_SSL_CTX_get0_certificate(const SSL_CTX *ctx) {
-    if (ctx->cert != NULL)
-        return ctx->cert->key->x509;
-    else
-        return NULL;
-} /* compat_SSL_CTX_get0_certificate() */
-#endif
-
 #if !HAVE_SSL_CTX_SET1_PARAM
 #define SSL_CTX_set1_param(ctx, vpm) compat_SSL_CTX_set1_param((ctx), (vpm))
 
@@ -8525,6 +8514,7 @@ static int sx_setCertificate(lua_State *L) {
 } /* sx_setCertificate() */
 
 
+#if HAVE_SSL_CTX_GET0_CERTIFICATE
 static int sx_getCertificate(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	X509 *x509;
@@ -8536,6 +8526,7 @@ static int sx_getCertificate(lua_State *L) {
 
 	return 1;
 } /* sx_getCertificate() */
+#endif
 
 
 static int sx_setPrivateKey(lua_State *L) {
@@ -8890,7 +8881,9 @@ static const auxL_Reg sx_methods[] = {
 	{ "setVerify",        &sx_setVerify },
 	{ "getVerify",        &sx_getVerify },
 	{ "setCertificate",   &sx_setCertificate },
+#if HAVE_SSL_CTX_GET0_CERTIFICATE
 	{ "getCertificate",   &sx_getCertificate },
+#endif
 	{ "setPrivateKey",    &sx_setPrivateKey },
 	{ "setCipherList",    &sx_setCipherList },
 #if HAVE_SSL_CTX_SET_CURVES_LIST
