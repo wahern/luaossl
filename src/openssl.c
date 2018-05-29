@@ -353,6 +353,10 @@
 #define HAVE_SSL_GET_CLIENT_RANDOM (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(2,7,0))
 #endif
 
+#ifndef HAVE_SSL_GET_SERVER_TMP_KEY
+#define HAVE_SSL_GET_SERVER_TMP_KEY OPENSSL_PREREQ(1,0,2)
+#endif
+
 #ifndef HAVE_SSL_GET_TLSEXT_STATUS_TYPE
 #define HAVE_SSL_GET_TLSEXT_STATUS_TYPE OPENSSL_PREREQ(1,1,0)
 #endif
@@ -9394,6 +9398,18 @@ static int ssl_getMasterKey(lua_State *L) {
 } /* ssl_getMasterKey() */
 
 
+#if HAVE_SSL_GET_SERVER_TMP_KEY
+static int ssl_getServerTemporaryKey(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	EVP_PKEY **key = prepsimple(L, PKEY_CLASS);
+
+	if (!SSL_get_server_tmp_key(ssl, key))
+		return 0;
+
+	return 1;
+} /* ssl_getServerTemporaryKey() */
+#endif
+
 static int ssl_getClientVersion(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	int format = luaL_checkoption(L, 2, "d", (const char *[]){ "d", ".", "f", NULL });
@@ -9587,6 +9603,9 @@ static const auxL_Reg ssl_methods[] = {
 	{ "getVersion",       &ssl_getVersion },
 	{ "getClientRandom",  &ssl_getClientRandom },
 	{ "getMasterKey",     &ssl_getMasterKey },
+#if HAVE_SSL_GET_SERVER_TMP_KEY
+	{ "getServerTemporaryKey", &ssl_getServerTemporaryKey },
+#endif
 	{ "getClientVersion", &ssl_getClientVersion },
 #if HAVE_SSL_GET0_ALPN_SELECTED
 	{ "getAlpnSelected",  &ssl_getAlpnSelected },
