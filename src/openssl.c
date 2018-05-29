@@ -8942,7 +8942,7 @@ EXPORT int luaopen__openssl_ssl_context(lua_State *L) {
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 static void ssl_push(lua_State *L, SSL *ssl) {
-	lua_rawgetp(L, LUA_REGISTRYINDEX, (void *)&ssl_push);
+	lua_rawgetp(L, LUA_REGISTRYINDEX, (void *)&initall);
 	if (LUA_TNIL == lua_rawgetp(L, -1, ssl)) {
 		SSL **ud;
 
@@ -8988,7 +8988,7 @@ static int ssl_new(lua_State *L) {
 		return auxL_error(L, auxL_EOPENSSL, "ssl.new");
 
 	/* Add to SSL* cache */
-	lua_rawgetp(L, LUA_REGISTRYINDEX, (void *)&ssl_push);
+	lua_rawgetp(L, LUA_REGISTRYINDEX, (void *)&initall);
 	lua_pushvalue(L, -2);
 	lua_rawsetp(L, -2, *ud);
 	lua_pop(L, 1);
@@ -11107,12 +11107,14 @@ static void initall(lua_State *L) {
 	auxL_addclass(L, OCSP_RESPONSE_CLASS, or_methods, or_metatable, 0);
 	auxL_addclass(L, OCSP_BASICRESP_CLASS, ob_methods, ob_metatable, 0);
 
-	/* Create cache for SSL* pointers */
+	/* Create cache for pointers */
 	lua_newtable(L);
-	lua_createtable(L, 0, 1);
+	lua_createtable(L, 0, 2);
 	lua_pushliteral(L, "kv");
 	lua_setfield(L, -2, "__mode");
+	lua_pushliteral(L, "luaossl cache");
+	lua_setfield(L, -2, "__name");
 	lua_setmetatable(L, -2);
-	lua_rawsetp(L, LUA_REGISTRYINDEX, (void *)&ssl_push);
+	lua_rawsetp(L, LUA_REGISTRYINDEX, (void *)&initall);
 } /* initall() */
 
