@@ -9186,6 +9186,19 @@ static int ssl_setPrivateKey(lua_State *L) {
 } /* ssl_setPrivateKey() */
 
 
+static int ssl_getCertificate(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	X509 *x509;
+
+	if (!(x509 = SSL_get_certificate(ssl)))
+		return 0;
+
+	xc_dup(L, x509);
+
+	return 1;
+} /* ssl_getCertificate() */
+
+
 static int ssl_getPeerCertificate(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	X509 **x509 = prepsimple(L, X509_CERT_CLASS);
@@ -9520,6 +9533,7 @@ static const auxL_Reg ssl_methods[] = {
 	{ "getVerifyResult",  &ssl_getVerifyResult },
 	{ "setCertificate",   &ssl_setCertificate },
 	{ "setPrivateKey",    &ssl_setPrivateKey },
+	{ "getCertificate",   &ssl_getCertificate },
 	{ "getPeerCertificate", &ssl_getPeerCertificate },
 	{ "getPeerChain",     &ssl_getPeerChain },
 	{ "getCipherInfo",    &ssl_getCipherInfo },
