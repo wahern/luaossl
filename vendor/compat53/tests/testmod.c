@@ -1,7 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <lua.h>
-#include <lauxlib.h>
 #include "compat-5.3.h"
 
 
@@ -12,7 +10,7 @@ static int test_isinteger (lua_State *L) {
 
 
 static int test_rotate (lua_State *L) {
-  int r = luaL_checkint(L, 1);
+  int r = (int)luaL_checkinteger(L, 1);
   int n = lua_gettop(L)-1;
   luaL_argcheck(L, (r < 0 ? -r : r) <= n, 1, "not enough arguments");
   lua_rotate(L, 2, r);
@@ -274,6 +272,33 @@ static int test_exec (lua_State *L) {
   return luaL_execresult(L, system(cmd));
 }
 
+static int test_loadstring (lua_State *L) {
+  size_t len = 0;
+  char const* s = luaL_checklstring(L, 1, &len);
+  char const* mode = luaL_optstring(L, 2, "bt");
+  lua_pushinteger(L, luaL_loadbufferx(L, s, len, s, mode));
+  return 2;
+}
+
+static int test_loadfile (lua_State *L) {
+  char filename[L_tmpnam+1] = { 0 };
+  size_t len = 0;
+  char const* s = luaL_checklstring(L, 1, &len);
+  char const* mode = luaL_optstring(L, 2, "bt");
+  if (tmpnam(filename)) {
+    FILE* f = fopen(filename, "wb");
+    if (f) {
+      fwrite(s, 1, len, f);
+      fclose(f);
+      lua_pushinteger(L, luaL_loadfilex(L, filename, mode));
+      remove(filename);
+      return 2;
+    } else
+      remove(filename);
+  }
+  return 0;
+}
+
 
 static const luaL_Reg funcs[] = {
   { "isinteger", test_isinteger },
@@ -297,6 +322,8 @@ static const luaL_Reg funcs[] = {
   { "pushstring", test_pushstring },
   { "buffer", test_buffer },
   { "exec", test_exec },
+  { "loadstring", test_loadstring },
+  { "loadfile", test_loadfile },
   { NULL, NULL }
 };
 
@@ -307,6 +334,9 @@ static const luaL_Reg more_funcs[] = {
 };
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 int luaopen_testmod (lua_State *L) {
   int i = 1;
   luaL_newlib(L, funcs);
@@ -315,4 +345,7 @@ int luaopen_testmod (lua_State *L) {
   luaL_setfuncs(L, more_funcs, NUP);
   return 1;
 }
+#ifdef __cplusplus
+}
+#endif
 
