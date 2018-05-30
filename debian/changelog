@@ -1,3 +1,18 @@
+liblua-openssl (20180530-0) unstable; urgency=low
+
+  * Bind functions for manipulating csr requested extensions
+  * Add :toPEM() to various objects
+  * Bind modular bignum functions
+  * Add ssl:getMasterKey()
+  * Add ssl.pushffi()
+  * Add ssl:getCertificate() and context:getCertificate()
+  * store:add("./empty-file") no longer throws
+  * Add ssl:getServerTemporaryKey()
+  * Add x509.cert:lookupSerial() and x509.cert:lookupCertificate()
+  * Fix precision loss when using Lua 5.3 with 64bit integers.
+
+-- Daurnimator <quae@daurnimator.com>  Wed, 30 May 2018 17:44:42 +1000
+
 liblua-openssl (20171028-0) unstable; urgency=low
 
   * Add win32 support
