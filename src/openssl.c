@@ -3919,19 +3919,12 @@ static int pk_sign(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
 	EVP_MD_CTX *md = checksimple(L, 2, DIGEST_CLASS);
 	luaL_Buffer B;
-	unsigned n;
+	unsigned n = EVP_PKEY_size(key);
 
-	if (LUAL_BUFFERSIZE < EVP_PKEY_size(key))
-		return luaL_error(L, "pkey:sign: LUAL_BUFFERSIZE(%u) < EVP_PKEY_size(%u)", (unsigned)LUAL_BUFFERSIZE, (unsigned)EVP_PKEY_size(key));
-
-	luaL_buffinit(L, &B);
-	n = LUAL_BUFFERSIZE;
-
-	if (!EVP_SignFinal(md, (void *)luaL_prepbuffer(&B), &n, key))
+	if (!EVP_SignFinal(md, (void *)luaL_buffinitsize(L, &B, n), &n, key))
 		return auxL_error(L, auxL_EOPENSSL, "pkey:sign");
 
-	luaL_addsize(&B, n);
-	luaL_pushresult(&B);
+	luaL_pushresultsize(&B, n);
 
 	return 1;
 } /* pk_sign() */
@@ -10318,30 +10311,17 @@ static int cipher_decrypt(lua_State *L) {
 
 
 static _Bool cipher_update_(lua_State *L, EVP_CIPHER_CTX *ctx, luaL_Buffer *B, int from, int to) {
-	const unsigned char *p, *pe;
-	size_t block, step, n;
-	int i;
-
-	block = EVP_CIPHER_CTX_block_size(ctx);
-
-	if (LUAL_BUFFERSIZE < block * 2)
-		luaL_error(L, "cipher:update: LUAL_BUFFERSIZE(%d) < 2 * EVP_CIPHER_CTX_block_size(%d)", (int)LUAL_BUFFERSIZE, (int)block);
-
-	step = LUAL_BUFFERSIZE - block;
+	const unsigned char *p;
+	size_t n;
+	int i, out;
 
 	for (i = from; i <= to; i++) {
 		p = (const unsigned char *)luaL_checklstring(L, i, &n);
-		pe = p + n;
 
-		while (p < pe) {
-			int in = (int)MIN((size_t)(pe - p), step), out;
+		if (!EVP_CipherUpdate(ctx, (void *)luaL_prepbuffsize(B, n+EVP_MAX_BLOCK_LENGTH), &out, p, n))
+			return 0;
 
-			if (!EVP_CipherUpdate(ctx, (void *)luaL_prepbuffer(B), &out, p, in))
-				return 0;
-
-			p += in;
-			luaL_addsize(B, out);
-		}
+		luaL_addsize(B, out);
 	}
 
 	return 1;
@@ -10381,14 +10361,10 @@ static int cipher_final(lua_State *L) {
 
 	block = EVP_CIPHER_CTX_block_size(ctx);
 
-	if (LUAL_BUFFERSIZE < block)
-		return luaL_error(L, "cipher:update: LUAL_BUFFERSIZE(%d) < EVP_CIPHER_CTX_block_size(%d)", (int)LUAL_BUFFERSIZE, (int)block);
-
-	if (!EVP_CipherFinal(ctx, (void *)luaL_prepbuffer(&B), &out))
+	if (!EVP_CipherFinal(ctx, (void *)luaL_prepbuffsize(&B, block), &out))
 		goto sslerr;
 
-	luaL_addsize(&B, out);
-	luaL_pushresult(&B);
+	luaL_pushresultsize(&B, out);
 
 	return 1;
 sslerr:
@@ -10846,23 +10822,13 @@ static int rand_add(lua_State *L) {
 static int rand_bytes(lua_State *L) {
 	int size = luaL_checkinteger(L, 1);
 	luaL_Buffer B;
-	int count = 0, n;
 
 	randL_checkpid(randL_getstate(L));
 
-	luaL_buffinit(L, &B);
+	if (!RAND_bytes((void *)luaL_buffinitsize(L, &B, size), size))
+		return auxL_error(L, auxL_EOPENSSL, "rand.bytes");
 
-	while (count < size) {
-		n = MIN((size - count), LUAL_BUFFERSIZE);
-
-		if (!RAND_bytes((void *)luaL_prepbuffer(&B), n))
-			return auxL_error(L, auxL_EOPENSSL, "rand.bytes");
-
-		luaL_addsize(&B, n);
-		count += n;
-	}
-
-	luaL_pushresult(&B);
+	luaL_pushresultsize(&B, size);
 
 	return 1;
 } /* rand_bytes() */
