@@ -2802,6 +2802,24 @@ static BIGNUM *(checkbig)(lua_State *L, int index, _Bool *lvalue) {
 
 		bn = prepsimple(L, BIGNUM_CLASS);
 
+#if LUA_VERSION_NUM >= 503
+		if (lua_isinteger(L, index)) {
+			lua_Integer n = lua_tointeger(L, index);
+			auxL_Unsigned lu;
+
+			if (!*bn && !(*bn = BN_new()))
+				auxL_error(L, auxL_EOPENSSL, "bignum");
+
+			neg = n < 0;
+			lu = neg ? (0 - n) : n;
+
+			if (!BN_set_word(*bn, lu))
+				auxL_error(L, auxL_EOPENSSL, "bignum");
+
+			if (neg)
+				BN_set_negative(*bn, 1);
+		} else
+#endif
 		if (!f2bn(bn, lua_tonumber(L, index)))
 			auxL_error(L, auxL_EOPENSSL, "bignum");
 
