@@ -397,6 +397,14 @@
 #define HAVE_X509_CRL_GET0_NEXTUPDATE (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(2,7,0))
 #endif
 
+#ifndef HAVE_X509_CRL_GET0_BY_CERT
+#define HAVE_X509_CRL_GET0_BY_CERT (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
+#endif
+
+#ifndef HAVE_X509_CRL_GET0_BY_SERIAL
+#define HAVE_X509_CRL_GET0_BY_SERIAL (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
+#endif
+
 #ifndef HAVE_X509_CRL_SET1_LASTUPDATE
 #define HAVE_X509_CRL_SET1_LASTUPDATE (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(2,7,0))
 #endif
@@ -7424,6 +7432,7 @@ error:
 } /* xx_add() */
 
 
+#if HAVE_X509_CRL_GET0_BY_SERIAL
 static int xx_lookupSerial(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 	ASN1_INTEGER *serial;
@@ -7450,8 +7459,10 @@ static int xx_lookupSerial(lua_State *L) {
 		return luaL_error(L, "x509.crl:lookupSerial: unexpected return value");
 	}
 } /* xx_lookupSerial() */
+#endif
 
 
+#if HAVE_X509_CRL_GET0_BY_CERT
 static int xx_lookupCertificate(lua_State *L) {
 	X509_CRL *crl = checksimple(L, 1, X509_CRL_CLASS);
 	X509 *crt = checksimple(L, 2, X509_CERT_CLASS);
@@ -7470,6 +7481,7 @@ static int xx_lookupCertificate(lua_State *L) {
 		return luaL_error(L, "x509.crl:lookupCertificate: unexpected return value");
 	}
 } /* xx_lookupCertificate() */
+#endif
 
 
 static int xx_addExtension(lua_State *L) {
@@ -7659,8 +7671,12 @@ static const auxL_Reg xx_methods[] = {
 	{ "getIssuer",      &xx_getIssuer },
 	{ "setIssuer",      &xx_setIssuer },
 	{ "add",            &xx_add },
+#if HAVE_X509_CRL_GET0_BY_SERIAL
 	{ "lookupSerial",   &xx_lookupSerial },
+#endif
+#if HAVE_X509_CRL_GET0_BY_CERT
 	{ "lookupCertificate", &xx_lookupCertificate },
+#endif
 	{ "addExtension",   &xx_addExtension },
 	{ "setExtension",   &xx_setExtension },
 	{ "getExtension",   &xx_getExtension },
