@@ -1338,7 +1338,7 @@ static const char *auxL_pusherror(lua_State *L, int error, const char *fun) {
 		char txt[256];
 
 		if (!ERR_peek_error())
-			return lua_pushstring(L, "oops: no OpenSSL errors set");
+			return lua_pushliteral(L, "oops: no OpenSSL errors set");
 
 		code = ERR_get_error_line(&path, &line);
 
@@ -3988,7 +3988,7 @@ static int pk_toPEM(lua_State *L) {
 	long len;
 
 	if (1 == (top = lua_gettop(L))) {
-		lua_pushstring(L, "publickey");
+		lua_pushliteral(L, "publickey");
 		++top;
 	}
 
@@ -4496,7 +4496,7 @@ static int pk_getParameters(lua_State *L) {
 		 * Use special "{" parameter to tell loop to push table.
 		 * Subsequent parameters will be assigned as fields.
 		 */
-		lua_pushstring(L, "{");
+		lua_pushliteral(L, "{");
 		luaL_checkstack(L, nopts, "too many arguments");
 		for (optname = optlist; *optname; optname++) {
 			lua_pushstring(L, *optname);
@@ -5277,17 +5277,17 @@ static int gn__next(lua_State *L) {
 
 		switch (name->type) {
 		case GEN_EMAIL:
-			lua_pushstring(L, "email");
+			lua_pushliteral(L, "email");
 			GN_PUSHSTRING(L, name->d.rfc822Name);
 
 			break;
 		case GEN_URI:
-			lua_pushstring(L, "URI");
+			lua_pushliteral(L, "URI");
 			GN_PUSHSTRING(L, name->d.uniformResourceIdentifier);
 
 			break;
 		case GEN_DNS:
-			lua_pushstring(L, "DNS");
+			lua_pushliteral(L, "DNS");
 			GN_PUSHSTRING(L, name->d.dNSName);
 
 			break;
@@ -5313,14 +5313,12 @@ static int gn__next(lua_State *L) {
 			if (!(txt = inet_ntop(af, &ip, buf, sizeof buf)))
 				continue;
 
-			len = strlen(txt);
-
-			lua_pushstring(L, "IP");
-			lua_pushlstring(L, txt, len);
+			lua_pushliteral(L, "IP");
+			lua_pushstring(L, txt);
 
 			break;
 		case GEN_DIRNAME:
-			lua_pushstring(L, "DirName");
+			lua_pushliteral(L, "DirName");
 			xn_dup(L, name->d.dirn);
 
 			break;
