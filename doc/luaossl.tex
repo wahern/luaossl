@@ -86,7 +86,11 @@ morestring=[b]"
 }
 
 \date{\today}
-\author{William Ahern}
+\author{
+	William Ahern
+	\and
+	Daurnimator
+}
 %\setlength{\droptitle}{85pt}
 \maketitle
 \thispagestyle{empty}
@@ -927,6 +931,12 @@ Returns two values: the bitwise verification mode flags, and the maximum validat
 
 Sets the X.509 certificate \module{openssl.x509} object $crt$ to send during SSL connection instance handshakes.
 
+\subsubsection[\fn{context:getCertificate}]{\fn{context:getCertificate()}}
+
+Returns the X.509 certificate \module{openssl.x509} object to be sent during SSL connection instance handshakes.
+
+\emph{Only supported since OpenSSL 1.0.2.}
+
 \subsubsection[\fn{context:setPrivateKey}]{\fn{context:setPrivateKey($key$)}}
 
 Sets the private key \module{openssl.pkey} object $key$ for use during SSL connection instance handshakes.
@@ -961,6 +971,12 @@ Sets the callback used to select an ALPN protocol. $cb$ should be a function tha
 
 \emph{Only supported since OpenSSL 1.0.2.}
 
+\subsubsection[\fn{context:setHostNameCallback}]{\fn{context:setHostNameCallback($cb$)}}
+
+Sets the callback used to process the SNI in a ClientHello. $cb$ should be a function that one argument: a \module{openssl.ssl} object; it should return $true$ to indicate success, $false$ if no acknowledgement should be send to the client, or $nil$ and an integer to send an error to the peer.
+
+\emph{Only supported since OpenSSL 1.0.0.}
+
 \subsubsection[\fn{context:setTLSextStatusType}]{\fn{context:setTLSextStatusType($type$)}}
 
 Sets the default TLS extension status for SSL objects derived from this context.
@@ -974,6 +990,26 @@ Gets the default TLS extension status for SSL objects derived from this context 
 See \fn{ssl:getTLSextStatusType}
 
 \emph{Only supported since OpenSSL 1.1.0.}
+
+\subsubsection[\fn{context:getTicketKeysLength}]{\fn{context:getTicketKeysLength()}}
+
+Returns the expected length of ticket keys data.
+See \fn{context:setTicketKeys}
+
+\emph{Only supported since OpenSSL 1.0.0.}
+
+\subsubsection[\fn{context:setTicketKeys}]{\fn{context:setTicketKeys($keys$)}}
+
+Sets the current random data used to generate tickets. $keys$ should be a string of the length returned by \fn{context:getTicketKeysLength}.
+
+\emph{Only supported since OpenSSL 1.0.0.}
+
+\subsubsection[\fn{context:getTicketKeys}]{\fn{context:getTicketKeys()}}
+
+Returns the current random data used to generate tickets.
+See \fn{context:setTicketKeys}
+
+\emph{Only supported since OpenSSL 1.0.0.}
 
 \end{Module}
 
