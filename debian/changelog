@@ -1,3 +1,11 @@
+liblua-openssl (20180708-0) unstable; urgency=low
+
+  * Fix incorrect class check in :getTLSextStatusType()
+  * Update lua-compat-5.3
+  * Add context:setTicketKeys(), context:getTicketKeys(), context:getTicketKeysLength()
+
+-- Daurnimator <quae@daurnimator.com>  Sun, 08 Jul 2018 23:49:25 +1000
+
 liblua-openssl (20180530-0) unstable; urgency=low
 
   * Bind functions for manipulating csr requested extensions
