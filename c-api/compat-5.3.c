@@ -37,8 +37,8 @@
 #endif /* strerror_r */
 
 #ifndef COMPAT53_HAVE_STRERROR_S
-#  if defined(_MSC_VER) || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L) || \
-      (defined(__STDC_LIB_EXT1__) && __STDC_LIB_EXT1__)
+#  if defined(_MSC_VER) || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && \
+      defined(__STDC_LIB_EXT1__) && __STDC_LIB_EXT1__)
 #    define COMPAT53_HAVE_STRERROR_S 1
 #  else /* not VC++ or C11 */
 #    define COMPAT53_HAVE_STRERROR_S 0
@@ -201,15 +201,6 @@ COMPAT53_API void lua_rawsetp (lua_State *L, int i, const void *p) {
   lua_pushlightuserdata(L, (void*)p);
   lua_insert(L, -2);
   lua_rawset(L, abs_i);
-}
-
-
-COMPAT53_API lua_Integer lua_tointegerx (lua_State *L, int i, int *isnum) {
-  lua_Integer n = lua_tointeger(L, i);
-  if (isnum != NULL) {
-    *isnum = (n != 0 || lua_isnumber(L, i));
-  }
-  return n;
 }
 
 
@@ -736,6 +727,22 @@ COMPAT53_API int lua_isinteger (lua_State *L, int index) {
     if (i == n)
       return 1;
   }
+  return 0;
+}
+
+
+COMPAT53_API lua_Integer lua_tointegerx (lua_State *L, int i, int *isnum) {
+  int ok = 0;
+  lua_Number n = lua_tonumberx(L, i, &ok);
+  if (ok) {
+    if (n == (lua_Integer)n) {
+      if (isnum)
+        *isnum = 1;
+      return (lua_Integer)n;
+    }
+  }
+  if (isnum)
+    *isnum = 0;
   return 0;
 }
 
