@@ -8946,20 +8946,23 @@ static int sx_getTLSextStatusType(lua_State *L) {
 
 
 #if HAVE_SSL_CTX_SET_TLSEXT_TICKET_KEYS
+static int sx_getTicketKeysLength(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+
+	int res = SSL_CTX_set_tlsext_ticket_keys(ctx, NULL, 0);
+
+	lua_pushinteger(L, res);
+
+	return 1;
+} /* sx_getTicketKeysLength() */
+
+
 static int sx_setTicketKeys(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	size_t keylen;
-	const char *keys = luaL_optlstring(L, 2, NULL, &keylen);
+	const char *keys = luaL_checklstring(L, 2, &keylen);
 
-	int res = SSL_CTX_set_tlsext_ticket_keys(ctx, (void*)keys, keylen);
-
-	if (keys == NULL) {
-		/* returns expected 'keys' length */
-		lua_pushinteger(L, res);
-		return 1;
-	}
-
-	if (res == 0)
+	if (!SSL_CTX_set_tlsext_ticket_keys(ctx, (void*)keys, keylen))
 		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setTicketKeys");
 
 	lua_pushboolean(L, 1);
@@ -9036,6 +9039,7 @@ static const auxL_Reg sx_methods[] = {
 	{ "getTLSextStatusType", &sx_getTLSextStatusType },
 #endif
 #if HAVE_SSL_CTX_SET_TLSEXT_TICKET_KEYS
+	{ "getTicketKeysLength", &sx_getTicketKeysLength },
 	{ "setTicketKeys", &sx_setTicketKeys },
 #endif
 #if HAVE_SSL_CTX_GET_TLSEXT_TICKET_KEYS
