@@ -8918,7 +8918,7 @@ static int sx_setTLSextStatusType(lua_State *L) {
 
 #if HAVE_SSL_CTX_GET_TLSEXT_STATUS_TYPE
 static int sx_getTLSextStatusType(lua_State *L) {
-	SSL_CTX *ctx = checksimple(L, 1, SSL_CLASS);
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 
 	int type = SSL_CTX_get_tlsext_status_type(ctx);
 	switch(type) {
