@@ -8351,9 +8351,10 @@ static int sx_new(lua_State *L) {
 		[5] = "TLSv1", [6] = "TLSv1.0",
 		[7] = "TLSv1_1", [8] = "TLSv1.1",
 		[9] = "TLSv1_2", [10] = "TLSv1.2",
-		[11] = "DTLS",
-		[12] = "DTLSv1", [13] = "DTLSv1.0",
-		[14] = "DTLSv1_2", [15] = "DTLSv1.2",
+		[11] = "TLSv1_3", [12] = "TLSv1.3",
+		[13] = "DTLS",
+		[14] = "DTLSv1", [15] = "DTLSv1.0",
+		[16] = "DTLSv1_2", [17] = "DTLSv1.2",
 		NULL
 	};
 	int method_enum;
@@ -8396,18 +8397,24 @@ static int sx_new(lua_State *L) {
 		options = SSL_OP_NO_SSL_MASK & ~SSL_OP_NO_TLSv1_2;
 		break;
 #endif
+#if defined SSL_OP_NO_TLSv1_3
+	case 11: /* TLSv1_3 */
+	case 12: /* TLSv1.3 */
+		options = SSL_OP_NO_SSL_MASK & ~SSL_OP_NO_TLSv1_3;
+		break;
+#endif
 #if HAVE_DTLS_CLIENT_METHOD
-	case 11: /* DTLS */
+	case 13: /* DTLS */
 		break;
 #ifdef SSL_OP_NO_DTLSv1
-	case 12: /* DTLSv1 */
-	case 13: /* DTLSv1.0 */
+	case 14: /* DTLSv1 */
+	case 15: /* DTLSv1.0 */
 		options = SSL_OP_NO_DTLS_MASK & ~SSL_OP_NO_DTLSv1;
 		break;
 #endif
 #ifdef SSL_OP_NO_DTLSv1_2
-	case 14: /* DTLSv1_2 */
-	case 15: /* DTLSv1.2 */
+	case 16: /* DTLSv1_2 */
+	case 17: /* DTLSv1.2 */
 		options = SSL_OP_NO_DTLS_MASK & ~SSL_OP_NO_DTLSv1_2;
 		break;
 #endif
@@ -8430,14 +8437,16 @@ static int sx_new(lua_State *L) {
 	case 8: /* TLSv1.1 */
 	case 9: /* TLSv1_2 */
 	case 10: /* TLSv1.2 */
+	case 11: /* TLSv1_3 */
+	case 12: /* TLSv1.3 */
 		*ud = SSL_CTX_new(srv?SSLv23_server_method():SSLv23_client_method());
 		break;
 #if HAVE_DTLS_CLIENT_METHOD
-	case 11: /* DTLS */
-	case 12: /* DTLSv1 */
-	case 13: /* DTLSv1.0 */
-	case 14: /* DTLSv1_2 */
-	case 15: /* DTLSv1.2 */
+	case 13: /* DTLS */
+	case 14: /* DTLSv1 */
+	case 15: /* DTLSv1.0 */
+	case 16: /* DTLSv1_2 */
+	case 17: /* DTLSv1.2 */
 		*ud = SSL_CTX_new(srv?DTLS_server_method():DTLS_client_method());
 		break;
 #endif
