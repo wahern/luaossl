@@ -1097,7 +1097,8 @@ Returns a table of information on the current cipher.
 
 \begin{tabular}{ c | l }
 field & description\\\hline
-.name & cipher name returned by \fn{SSL\_CIPHER\_get\_name}\\
+.name & OpenSSL cipher name returned by \fn{SSL\_CIPHER\_get\_name}\\
+.standard_name & standard cipher name returned by \fn{SSL\_CIPHER\_get\_standard\_name}\\
 .bits & number of secret bits returned by \fn{SSL\_CIPHER\_get\_bits}\\
 .version & SSL/TLS version string returned by \fn{SSL\_CIPHER\_get\_version}\\
 .description & key:value cipher description returned by \fn{SSL\_CIPHER\_description}
