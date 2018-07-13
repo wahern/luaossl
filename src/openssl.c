@@ -1789,7 +1789,8 @@ static size_t compat_SSL_SESSION_get_master_key(const SSL_SESSION *session, unsi
 }
 #endif
 
-#if !HAVE_SSL_CIPHER_STANDARD_NAME
+#if !HAVE_SSL_CIPHER_STANDARD_NAME || !OPENSSL_PREREQ(1,1,1)
+/* OpenSSL < 1.1.1 has some outdated names; prefer this list */
 static const struct {int num; const char *name;} ssl_ciphers_tbl[] = {
 	{0x0000, "TLS_NULL_WITH_NULL_NULL"},
 	{0x0001, "TLS_RSA_WITH_NULL_MD5"},
