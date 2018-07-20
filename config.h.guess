@@ -610,7 +610,12 @@
 #endif
 
 #ifndef HAVE_DECL_RANDOM_UUID
-#define HAVE_DECL_RANDOM_UUID (HAVE_SYS_SYSCTL_H && defined __linux__) /* RANDOM_UUID is an enum, not macro */
+/* RANDOM_UUID is an enum, not macro */
+#if (HAVE_SYS_SYSCTL_H && defined __linux__)
+#define HAVE_DECL_RANDOM_UUID 1
+#else
+#define HAVE_DECL_RANDOM_UUID 0
+#endif
 #endif
 
 #ifndef HAVE_DECL_STRERROR_R
@@ -622,7 +627,11 @@
 #endif
 
 #ifndef HAVE_DECL_SYS_GETRANDOM
-#define HAVE_DECL_SYS_GETRANDOM (defined SYS_getrandom)
+#ifdef SYS_getrandom
+#define HAVE_DECL_SYS_GETRANDOM 1
+#else
+#define HAVE_DECL_SYS_GETRANDOM 0
+#endif
 #endif
 
 
