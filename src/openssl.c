@@ -311,6 +311,10 @@
 #define HAVE_SSL_CTX_SET1_PARAM (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,1,0))
 #endif
 
+#ifndef HAVE_SSL_CTX_UP_REF
+#define HAVE_SSL_CTX_UP_REF (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(2,7,0))
+#endif
+
 #ifndef HAVE_SSL_CTX_CERT_STORE
 #define HAVE_SSL_CTX_CERT_STORE (!OPENSSL_PREREQ(1,1,0))
 #endif
@@ -1851,6 +1855,18 @@ static X509_VERIFY_PARAM *compat_SSL_CTX_get0_param(SSL_CTX *ctx) {
 static int compat_SSL_CTX_set1_param(SSL_CTX *ctx, X509_VERIFY_PARAM *vpm) {
 	return X509_VERIFY_PARAM_set1(ctx->param, vpm);
 } /* compat_SSL_CTX_set1_param() */
+#endif
+
+#if !HAVE_SSL_CTX_UP_REF
+#define SSL_CTX_up_ref(...) EXPAND( compat_SSL_CTX_up_ref(__VA_ARGS__) )
+
+static int compat_SSL_CTX_up_ref(SSL_CTX *ctx) {
+	/* our caller should already have had a proper reference */
+	if (CRYPTO_add(&ctx->references, 1, CRYPTO_LOCK_SSL_CTX) < 2)
+		return 0; /* fail */
+
+	return 1;
+} /* compat_SSL_CTX_up_ref() */
 #endif
 
 #if !HAVE_STACK_OPENSSL_STRING_FUNCS
