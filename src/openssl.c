@@ -8341,6 +8341,26 @@ EXPORT int luaopen__openssl_pkcs12(lua_State *L) {
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+static void sx_push(lua_State *L, SSL_CTX *ctx) {
+	lua_rawgetp(L, LUA_REGISTRYINDEX, (void *)&initall);
+	if (LUA_TNIL == lua_rawgetp(L, -1, ctx)) {
+		SSL_CTX **ud;
+
+		lua_pop(L, 1); /* pop nil */
+
+		ud = prepsimple(L, SSL_CTX_CLASS);
+
+		SSL_CTX_up_ref(ctx);
+		*ud = ctx;
+
+		/* Add to cache */
+		lua_pushvalue(L, -1);
+		lua_rawsetp(L, -3, ctx);
+	}
+	lua_remove(L, -2);
+} /* sx_push() */
+
+
 static int sx_new(lua_State *L) {
 	static const char *const opts[] = {
 		[0] = "SSL",
@@ -8467,6 +8487,12 @@ static int sx_new(lua_State *L) {
 	if (!SSL_CTX_set_ecdh_auto(*ud, 1))
 		return auxL_error(L, auxL_EOPENSSL, "ssl.context.new");
 #endif
+
+	/* Add to cache */
+	lua_rawgetp(L, LUA_REGISTRYINDEX, (void *)&initall);
+	lua_pushvalue(L, -2);
+	lua_rawsetp(L, -2, *ud);
+	lua_pop(L, 1);
 
 	return 1;
 } /* sx_new() */
