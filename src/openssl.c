@@ -11357,14 +11357,17 @@ static void initall(lua_State *L) {
 	auxL_addclass(L, OCSP_RESPONSE_CLASS, or_methods, or_metatable, 0);
 	auxL_addclass(L, OCSP_BASICRESP_CLASS, ob_methods, ob_metatable, 0);
 
-	/* Create cache for pointers */
-	lua_newtable(L);
-	lua_createtable(L, 0, 2);
-	lua_pushliteral(L, "kv");
-	lua_setfield(L, -2, "__mode");
-	lua_pushliteral(L, "luaossl cache");
-	lua_setfield(L, -2, "__name");
-	lua_setmetatable(L, -2);
-	lua_rawsetp(L, LUA_REGISTRYINDEX, (void *)&initall);
+	if (LUA_TNIL == lua_rawgetp(L, LUA_REGISTRYINDEX, (void *)&initall)) {
+		/* Create cache for pointers */
+		lua_newtable(L);
+		lua_createtable(L, 0, 2);
+		lua_pushliteral(L, "kv");
+		lua_setfield(L, -2, "__mode");
+		lua_pushliteral(L, "luaossl cache");
+		lua_setfield(L, -2, "__name");
+		lua_setmetatable(L, -2);
+		lua_rawsetp(L, LUA_REGISTRYINDEX, (void *)&initall);
+	}
+	lua_pop(L, 1);
 } /* initall() */
 
