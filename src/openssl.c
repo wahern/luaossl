@@ -9937,8 +9937,14 @@ static int xp_interpose(lua_State *L) {
  */
 static int xp_inherit(lua_State *L) {
 	X509_VERIFY_PARAM *dest = checksimple(L, 1, X509_VERIFY_PARAM_CLASS);
-	X509_VERIFY_PARAM *src = checksimple(L, 2, X509_VERIFY_PARAM_CLASS);
+	X509_VERIFY_PARAM *src = testsimple(L, 2, X509_VERIFY_PARAM_CLASS);
 	int ret;
+
+	if (!src) {
+		luaL_argcheck(L, lua_isstring(L, 2), 2, "expected " X509_VERIFY_PARAM_CLASS " or string");
+		src = (X509_VERIFY_PARAM*)X509_VERIFY_PARAM_lookup(lua_tostring(L, 2));
+		luaL_argcheck(L, src != NULL, 2, "unknown param preset");
+	}
 
 	ret = X509_VERIFY_PARAM_inherit(dest, src);
 	if (!ret)
