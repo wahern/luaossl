@@ -6353,7 +6353,7 @@ static int xc_setBasicConstraint(lua_State *L) {
 	}
 
 	if (CA != -1)
-		bs->ca = CA;
+		bs->ca = CA ? 0xFF : 0; /* use DER value */
 
 	if (pathLen >= 0) {
 		ASN1_INTEGER_free(bs->pathlen);
