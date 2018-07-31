@@ -1821,7 +1821,7 @@ static const struct {int num; const char *name;} ssl_ciphers_tbl[] = {
 	{0x001A, "TLS_DH_anon_WITH_DES_CBC_SHA"},
 	{0x001B, "TLS_DH_anon_WITH_3DES_EDE_CBC_SHA"},
 	{0x001D, "TLS_FORTEZZA_KEA_WITH_FORTEZZA_CBC_SHA"},
-	{0x001E, "TLS_FORTEZZA_KEA_WITH_RC4_128_SHA"},
+	{0x001E, "TLS_KRB5_WITH_DES_CBC_SHA"}, /* Note: https://github.com/openssl/openssl/issues/6710 */
 	{0x001F, "TLS_KRB5_WITH_3DES_EDE_CBC_SHA"},
 	{0x0020, "TLS_KRB5_WITH_RC4_128_SHA"},
 	{0x0021, "TLS_KRB5_WITH_IDEA_CBC_SHA"},
