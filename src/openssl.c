@@ -5121,6 +5121,7 @@ static int xn__tostring(lua_State *L) {
 static const auxL_Reg xn_methods[] = {
 	{ "add", &xn_add },
 	{ "all", &xn_all },
+	{ "each", &xn__pairs },
 	{ NULL,  NULL },
 };
 
