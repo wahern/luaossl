@@ -1,3 +1,5 @@
+#!/usr/bin/env lua
+
 local auxlib = require"openssl.auxlib"
 local pkey = require "openssl.pkey"
 local x509_csr = require"_openssl.x509.csr"
