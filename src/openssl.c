@@ -4724,8 +4724,17 @@ static int pk_toPEM(lua_State *L) {
 //			"params", "Parameters",
 			NULL,
 		};
+		int type;
 
-		switch (auxL_checkoption(L, i, NULL, types, 1)) {
+		if (!lua_istable(L, i))
+			lua_pushvalue(L, i);
+		else if (!getfield(L, i, "type"))
+			lua_pushliteral(L, "public");
+
+		type = auxL_checkoption(L, -1, NULL, types, 1);
+		lua_pop(L, 1);
+
+		switch (type) {
 		case 0: case 1: /* public, PublicKey */
 			if (!PEM_write_bio_PUBKEY(bio, key))
 				return auxL_error(L, auxL_EOPENSSL, "pkey:__tostring");
