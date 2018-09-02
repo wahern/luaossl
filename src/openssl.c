@@ -4108,7 +4108,7 @@ static BIO *getbio(lua_State *L) {
 static int pk_new(lua_State *L) {
 	EVP_PKEY **ud;
 
-	/* #1 table or key; if key, #2 format and #3 type */
+	/* #1 table or key; if key, #2 option table or format; if format, #3 type */
 	lua_settop(L, 3);
 
 	if (lua_istable(L, 1) || lua_isnil(L, 1)) {
@@ -4342,13 +4342,25 @@ static int pk_new(lua_State *L) {
 #endif
 		} /* switch() */
 	} else if (lua_isstring(L, 1)) {
-		int format = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
+		int format;
 		int pubonly = 0, prvtonly = 0;
 		const char *type, *data;
 		size_t len;
 		BIO *bio;
 		EVP_PKEY *pub = NULL, *prvt = NULL;
 		int goterr = 0;
+
+		if (lua_istable(L, 2)) {
+			lua_pop(L, 1);
+			lua_getfield(L, 2, "format");
+			lua_getfield(L, 2, "type");
+			lua_remove(L, 2);
+		}
+
+		/* #1 key, #2 format, #3 type */
+
+		data = luaL_checklstring(L, 1, &len);
+		format = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
 
 		/* check if specified publickey or privatekey */
 		if ((type = luaL_optstring(L, 3, NULL))) {
@@ -4357,11 +4369,9 @@ static int pk_new(lua_State *L) {
 			} else if (xtolower(type[0]) == 'p' && xtolower(type[1]) == 'r') {
 				prvtonly = 1;
 			} else {
-				return luaL_argerror(L, 3, lua_pushfstring(L, "invalid type: %s", type));
+				return luaL_error(L, "invalid key type: %s", type);
 			}
 		}
-
-		data = luaL_checklstring(L, 1, &len);
 
 		ud = prepsimple(L, PKEY_CLASS);
 
