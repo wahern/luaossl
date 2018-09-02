@@ -4718,14 +4718,14 @@ static int pk_toPEM(lua_State *L) {
 	bio = getbio(L);
 
 	for (i = 2; i <= top; i++) {
-		static const char *const opts[] = {
+		static const char *const types[] = {
 			"public", "PublicKey",
 			"private", "PrivateKey",
 //			"params", "Parameters",
 			NULL,
 		};
 
-		switch (auxL_checkoption(L, i, NULL, opts, 1)) {
+		switch (auxL_checkoption(L, i, NULL, types, 1)) {
 		case 0: case 1: /* public, PublicKey */
 			if (!PEM_write_bio_PUBKEY(bio, key))
 				return auxL_error(L, auxL_EOPENSSL, "pkey:__tostring");
