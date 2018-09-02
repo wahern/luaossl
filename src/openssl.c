@@ -4344,20 +4344,20 @@ static int pk_new(lua_State *L) {
 	} else if (lua_isstring(L, 1)) {
 		int format = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
 		int pubonly = 0, prvtonly = 0;
-		const char *opt, *data;
+		const char *type, *data;
 		size_t len;
 		BIO *bio;
 		EVP_PKEY *pub = NULL, *prvt = NULL;
 		int goterr = 0;
 
 		/* check if specified publickey or privatekey */
-		if ((opt = luaL_optstring(L, 3, NULL))) {
-			if (xtolower(opt[0]) == 'p' && xtolower(opt[1]) == 'u') {
+		if ((type = luaL_optstring(L, 3, NULL))) {
+			if (xtolower(type[0]) == 'p' && xtolower(type[1]) == 'u') {
 				pubonly = 1;
-			} else if (xtolower(opt[0]) == 'p' && xtolower(opt[1]) == 'r') {
+			} else if (xtolower(type[0]) == 'p' && xtolower(type[1]) == 'r') {
 				prvtonly = 1;
 			} else {
-				return luaL_argerror(L, 3, lua_pushfstring(L, "invalid option %s", opt));
+				return luaL_argerror(L, 3, lua_pushfstring(L, "invalid type: %s", type));
 			}
 		}
 
