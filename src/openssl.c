@@ -4342,7 +4342,7 @@ static int pk_new(lua_State *L) {
 #endif
 		} /* switch() */
 	} else if (lua_isstring(L, 1)) {
-		int type = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
+		int format = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
 		int pubonly = 0, prvtonly = 0;
 		const char *opt, *data;
 		size_t len;
@@ -4368,7 +4368,7 @@ static int pk_new(lua_State *L) {
 		if (!(bio = BIO_new_mem_buf((void *)data, len)))
 			return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
-		if (type == X509_PEM || type == X509_ANY) {
+		if (format == X509_PEM || format == X509_ANY) {
 			if (!prvtonly && !pub) {
 				/*
 				 * BIO_reset is a rewind for read-only
@@ -4389,7 +4389,7 @@ static int pk_new(lua_State *L) {
 			}
 		}
 
-		if (type == X509_DER || type == X509_ANY) {
+		if (format == X509_DER || format == X509_ANY) {
 			if (!prvtonly && !pub) {
 				BIO_reset(bio);
 
