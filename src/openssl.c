@@ -275,6 +275,10 @@
 #define HAVE_SSL_CLIENT_VERSION OPENSSL_PREREQ(1,1,0)
 #endif
 
+#ifndef HAVE_SSL_CTX_ADD_CUSTOM_EXT
+#define HAVE_SSL_CTX_ADD_CUSTOM_EXT OPENSSL_PREREQ(1,1,1)
+#endif
+
 #ifndef HAVE_SSL_CTX_GET0_PARAM
 #define HAVE_SSL_CTX_GET0_PARAM (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,7,0))
 #endif
@@ -2183,6 +2187,8 @@ struct ex_data {
 enum {
 	EX_SSL_CTX_ALPN_SELECT_CB,
 	EX_SSL_CTX_TLSEXT_SERVERNAME_CB,
+	EX_SSL_CTX_CUSTOM_EXTENSION_ADD_CB,
+	EX_SSL_CTX_CUSTOM_EXTENSION_PARSE_CB,
 };
 
 static struct ex_type {
@@ -2193,6 +2199,8 @@ static struct ex_type {
 } ex_type[] = {
 	[EX_SSL_CTX_ALPN_SELECT_CB] = { CRYPTO_EX_INDEX_SSL_CTX, -1, &SSL_CTX_get_ex_data, &SSL_CTX_set_ex_data },
 	[EX_SSL_CTX_TLSEXT_SERVERNAME_CB] = { CRYPTO_EX_INDEX_SSL_CTX, -1, &SSL_CTX_get_ex_data, &SSL_CTX_set_ex_data },
+	[EX_SSL_CTX_CUSTOM_EXTENSION_ADD_CB] = { CRYPTO_EX_INDEX_SSL_CTX, -1, &SSL_CTX_get_ex_data, &SSL_CTX_set_ex_data },
+	[EX_SSL_CTX_CUSTOM_EXTENSION_PARSE_CB] = { CRYPTO_EX_INDEX_SSL_CTX, -1, &SSL_CTX_get_ex_data, &SSL_CTX_set_ex_data },
 };
 
 #if OPENSSL_PREREQ(1,1,0)
@@ -9041,6 +9049,294 @@ static int sx_getTicketKeys(lua_State *L) {
 #endif
 
 
+#if HAVE_SSL_CTX_ADD_CUSTOM_EXT
+static int sx_custom_ext_add_cb_helper(lua_State *L) {
+	SSL *s = lua_touserdata(L, 2);
+	/* 3rd is ext_type */
+	/* 4th is context */
+	X509 *x = lua_touserdata(L, 5);
+	/* 6th parameter is chain index */
+
+	/* swap out pointer for SSL object */
+	ssl_push(L, s);
+	lua_replace(L, 2);
+
+	/* swap out pointer for actual cert */
+	if (x)
+		xc_dup(L, x);
+	else
+		lua_pushnil(L);
+	lua_replace(L, 5);
+
+	lua_call(L, 5, 2);
+
+	return 2;
+} /* sx_custom_ext_add_cb_helper() */
+
+
+static int sx_custom_ext_add_cb(SSL *s, unsigned int ext_type,
+	unsigned int context, const unsigned char **out, size_t *outlen,
+	X509 *x, size_t chainidx, int *al, void *add_arg NOTUSED)
+{
+	SSL_CTX *ctx = SSL_get_SSL_CTX(s);
+	lua_State *L = NULL;
+	int otop, status;
+
+	*al = SSL_AD_INTERNAL_ERROR;
+
+	/* expect two values: helper_function, table of callbacks indexed by ext_type */
+	if (ex_getdata(&L, EX_SSL_CTX_CUSTOM_EXTENSION_ADD_CB, ctx) != 2)
+		return -1;
+
+	/* replace table with callback of interest */
+	lua_rawgeti(L, -1, ext_type);
+	lua_remove(L, -2);
+	/* pass SSL placeholder argument */
+	lua_pushlightuserdata(L, (void*)s);
+	/* pass ext_type */
+	lua_pushinteger(L, ext_type);
+	/* pass context */
+	lua_pushinteger(L, context);
+	/* push cert placeholder argument */
+	lua_pushlightuserdata(L, (void*)x);
+	/* push chainidx */
+	if (x)
+		lua_pushinteger(L, chainidx);
+	else
+		lua_pushnil(L);
+
+	/* call protected helper */
+	if (LUA_OK != (status = lua_pcall(L, 6, 2, 0)))
+		/* leave error on the stack */
+		return -1;
+
+	/* callback should return a string for OK, 'false' to skip,
+	 * or nil + an integer for a controlled error
+	 * everything else will be a fatal internal error
+	 */
+	if (lua_isstring(L, -2)) {
+		*out = (const unsigned char*)lua_tolstring(L, -2, outlen);
+
+		/* leave `out` on the stack, we need it to remain valid */
+		lua_pop(L, 1);
+
+		return 1;
+	} else if (lua_isboolean(L, -2) && !lua_toboolean(L, -2)) {
+
+		/* leave false on the stack */
+		lua_pop(L, 1);
+
+		return 0;
+	} else {
+		if (lua_isnil(L, -2) && lua_isinteger(L, -1))
+			*al = lua_tointeger(L, -1);
+
+		/* leave something on the stack */
+		lua_pop(L, 1);
+
+		return -1;
+	}
+} /* sx_custom_ext_add_cb() */
+
+
+static void sx_custom_ext_free_cb(SSL *s, unsigned int ext_type,
+	unsigned int context, const unsigned char *out, void *add_arg)
+{
+	SSL_CTX *ctx = SSL_get_SSL_CTX(s);
+	lua_State *L = NULL;
+	size_t n;
+
+	if ((n = ex_getdata(&L, EX_SSL_CTX_CUSTOM_EXTENSION_ADD_CB, ctx)) < 1)
+		return; /* should be unreachable */
+
+	/* pop data pushed by ex_getdata
+	 * TODO: ex_getdata alternative that doesn't push in the first place?
+	 */
+	lua_pop(L, n);
+
+	/* pop the item left on the stack by add_cb */
+	lua_pop(L, 1);
+} /* sx_custom_ext_free_cb() */
+
+
+static int sx_custom_ext_parse_cb_helper(lua_State *L) {
+	SSL *s = lua_touserdata(L, 2);
+	/* 3rd is ext_type */
+	/* 4th is context */
+	const char *in = lua_touserdata(L, 5);
+	X509 *x = lua_touserdata(L, 6);
+	/* 7th parameter is chain index */
+	size_t inlen = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+
+	/* swap out pointer for SSL object */
+	ssl_push(L, s);
+	lua_replace(L, 2);
+
+	/* swap out pointer for actual string */
+	lua_pushlstring(L, in, inlen);
+	lua_replace(L, 5);
+
+	/* swap out pointer for actual cert */
+	if (x)
+		xc_dup(L, x);
+	else
+		lua_pushnil(L);
+	lua_replace(L, 6);
+
+	lua_call(L, 6, 2);
+
+	return 2;
+} /* sx_custom_ext_parse_cb_helper() */
+
+
+static int sx_custom_ext_parse_cb(SSL *s, unsigned int ext_type,
+	unsigned int context, const unsigned char *in, size_t inlen,
+	X509 *x, size_t chainidx, int *al, void *parse_arg)
+{
+	SSL_CTX *ctx = SSL_get_SSL_CTX(s);
+	lua_State *L = NULL;
+	size_t n;
+	int otop, status;
+
+	*al = SSL_AD_INTERNAL_ERROR;
+
+	/* expect two values: helper_function, table of callbacks indexed by ext_type */
+	if (ex_getdata(&L, EX_SSL_CTX_CUSTOM_EXTENSION_PARSE_CB, ctx) != 2)
+		return -1;
+
+	/* replace table with callback of interest */
+	lua_rawgeti(L, -1, ext_type);
+	lua_remove(L, -2);
+	/* pass SSL placeholder argument */
+	lua_pushlightuserdata(L, (void*)s);
+	/* pass ext_type */
+	lua_pushinteger(L, ext_type);
+	/* pass context */
+	lua_pushinteger(L, context);
+	/* push string placeholder argument */
+	lua_pushlightuserdata(L, (void*)in);
+	/* push cert placeholder argument */
+	lua_pushlightuserdata(L, (void*)x);
+	/* push chainidx */
+	if (x)
+		lua_pushinteger(L, chainidx);
+	else
+		lua_pushnil(L);
+
+	/* push other argument only used in helper */
+	lua_pushinteger(L, inlen);
+
+	/* call protected helper */
+	if (LUA_OK != (status = lua_pcall(L, 8, 2, 0))) {
+		lua_pop(L, 1);
+		return -1;
+	}
+
+	/* callback should return true
+	 * or nil + an integer for a controlled error
+	 * everything else will be a fatal internal error
+	 */
+	if (lua_isboolean(L, -2) && lua_toboolean(L, -2)) {
+		lua_pop(L, 2);
+		return 1;
+	} else {
+		if (lua_isnil(L, -2) && lua_isinteger(L, -1))
+			*al = lua_tointeger(L, -1);
+		lua_pop(L, 2);
+		return -1;
+	}
+} /* sx_custom_ext_parse_cb() */
+
+
+static int sx_addCustomExtension(lua_State *L) {
+	int error;
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	unsigned int ext_type = auxL_checkunsigned(L, 2, 0, 65535);
+	unsigned int context = auxL_checkunsigned(L, 3);
+	SSL_custom_ext_add_cb_ex add_cb = NULL;
+	SSL_custom_ext_free_cb_ex free_cb = NULL;
+	SSL_custom_ext_parse_cb_ex parse_cb = NULL;
+	lua_settop(L, 5);
+
+	if (!lua_isnoneornil(L, 4)) {
+		luaL_checktype(L, 4, LUA_TFUNCTION);
+
+		switch (ex_getdata(&L, EX_SSL_CTX_CUSTOM_EXTENSION_ADD_CB, ctx)) {
+		case 0: { /* first time */
+			lua_createtable(L, 0, 1);
+			/* need to do actual call in protected function. push helper */
+			lua_pushcfunction(L, sx_custom_ext_add_cb_helper);
+			lua_pushvalue(L, -2);
+			if ((error = ex_setdata(L, EX_SSL_CTX_CUSTOM_EXTENSION_ADD_CB, ctx, 2))) {
+				if (error > 0) {
+					return luaL_error(L, "unable to add custom extension add callback: %s", aux_strerror(error));
+				} else if (error == auxL_EOPENSSL && !ERR_peek_error()) {
+					return luaL_error(L, "unable to add custom extension add callback: Unknown internal error");
+				} else {
+					return auxL_error(L, error, "ssl.context:addCustomExtension");
+				}
+			}
+			break;
+		}
+		case 2:
+			lua_remove(L, -2);
+			break;
+		default:
+			return luaL_error(L, "unable to add custom extension add callback");
+		}
+
+		lua_pushvalue(L, 4);
+		lua_rawseti(L, -2, ext_type);
+		lua_pop(L, 1);
+		add_cb = sx_custom_ext_add_cb;
+		free_cb = sx_custom_ext_free_cb;
+	}
+
+	if (!lua_isnoneornil(L, 5)) {
+		luaL_checktype(L, 5, LUA_TFUNCTION);
+
+		switch (ex_getdata(&L, EX_SSL_CTX_CUSTOM_EXTENSION_PARSE_CB, ctx)) {
+		case 0: { /* first time */
+			lua_createtable(L, 0, 1);
+			/* need to do actual call in protected function. push helper */
+			lua_pushcfunction(L, sx_custom_ext_parse_cb_helper);
+			lua_pushvalue(L, -2);
+			if ((error = ex_setdata(L, EX_SSL_CTX_CUSTOM_EXTENSION_PARSE_CB, ctx, 2))) {
+				if (error > 0) {
+					return luaL_error(L, "unable to add custom extension parse callback: %s", aux_strerror(error));
+				} else if (error == auxL_EOPENSSL && !ERR_peek_error()) {
+					return luaL_error(L, "unable to add custom extension parse callback: Unknown internal error");
+				} else {
+					return auxL_error(L, error, "ssl.context:addCustomExtension");
+				}
+			}
+			break;
+		}
+		case 2:
+			lua_remove(L, -2);
+			break;
+		default:
+			return luaL_error(L, "unable to add custom extension add callback");
+		}
+
+		lua_pushvalue(L, 5);
+		lua_rawseti(L, -2, ext_type);
+		lua_pop(L, 1);
+		parse_cb = sx_custom_ext_parse_cb;
+	}
+
+	if (!SSL_CTX_add_custom_ext(ctx, ext_type, context, add_cb, free_cb, NULL, parse_cb, NULL))
+		/* In OpenSSL 1.1.1, no error is set */
+		return luaL_error(L, "ssl.context:addCustomExtension: extension type already handled or internal error");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_addCustomExtension() */
+#endif
+
+
 static int sx__gc(lua_State *L) {
 	SSL_CTX **ud = luaL_checkudata(L, 1, SSL_CTX_CLASS);
 
@@ -9094,6 +9390,9 @@ static const auxL_Reg sx_methods[] = {
 #endif
 #if HAVE_SSL_CTX_GET_TLSEXT_TICKET_KEYS
 	{ "getTicketKeys", &sx_getTicketKeys },
+#endif
+#if HAVE_SSL_CTX_ADD_CUSTOM_EXT
+	{ "addCustomExtension", &sx_addCustomExtension },
 #endif
 	{ NULL, NULL },
 };
@@ -9202,12 +9501,62 @@ static const auxL_IntegerReg sx_option[] = {
 	{ NULL, 0 },
 };
 
+static const auxL_IntegerReg sx_ext[] = {
+#ifdef SSL_EXT_TLS_ONLY
+	{ "EXT_TLS_ONLY", SSL_EXT_TLS_ONLY },
+#endif
+#ifdef SSL_EXT_DTLS_ONLY
+	{ "EXT_DTLS_ONLY", SSL_EXT_DTLS_ONLY },
+#endif
+#ifdef SSL_EXT_TLS_IMPLEMENTATION_ONLY
+	{ "EXT_TLS_IMPLEMENTATION_ONLY", SSL_EXT_TLS_IMPLEMENTATION_ONLY },
+#endif
+#ifdef SSL_EXT_SSL3_ALLOWED
+	{ "EXT_SSL3_ALLOWED", SSL_EXT_SSL3_ALLOWED },
+#endif
+#ifdef SSL_EXT_TLS1_2_AND_BELOW_ONLY
+	{ "EXT_TLS1_2_AND_BELOW_ONLY", SSL_EXT_TLS1_2_AND_BELOW_ONLY },
+#endif
+#ifdef SSL_EXT_TLS1_3_ONLY
+	{ "EXT_TLS1_3_ONLY", SSL_EXT_TLS1_3_ONLY },
+#endif
+#ifdef SSL_EXT_IGNORE_ON_RESUMPTION
+	{ "EXT_IGNORE_ON_RESUMPTION", SSL_EXT_IGNORE_ON_RESUMPTION },
+#endif
+#ifdef SSL_EXT_CLIENT_HELLO
+	{ "EXT_CLIENT_HELLO", SSL_EXT_CLIENT_HELLO },
+#endif
+#ifdef SSL_EXT_TLS1_2_SERVER_HELLO
+	{ "EXT_TLS1_2_SERVER_HELLO", SSL_EXT_TLS1_2_SERVER_HELLO },
+#endif
+#ifdef SSL_EXT_TLS1_3_SERVER_HELLO
+	{ "EXT_TLS1_3_SERVER_HELLO", SSL_EXT_TLS1_3_SERVER_HELLO },
+#endif
+#ifdef SSL_EXT_TLS1_3_ENCRYPTED_EXTENSIONS
+	{ "EXT_TLS1_3_ENCRYPTED_EXTENSIONS", SSL_EXT_TLS1_3_ENCRYPTED_EXTENSIONS },
+#endif
+#ifdef SSL_EXT_TLS1_3_HELLO_RETRY_REQUEST
+	{ "EXT_TLS1_3_HELLO_RETRY_REQUEST", SSL_EXT_TLS1_3_HELLO_RETRY_REQUEST },
+#endif
+#ifdef SSL_EXT_TLS1_3_CERTIFICATE
+	{ "EXT_TLS1_3_CERTIFICATE", SSL_EXT_TLS1_3_CERTIFICATE },
+#endif
+#ifdef SSL_EXT_TLS1_3_NEW_SESSION_TICKET
+	{ "EXT_TLS1_3_NEW_SESSION_TICKET", SSL_EXT_TLS1_3_NEW_SESSION_TICKET },
+#endif
+#ifdef SSL_EXT_TLS1_3_CERTIFICATE_REQUEST
+	{ "EXT_TLS1_3_CERTIFICATE_REQUEST", SSL_EXT_TLS1_3_CERTIFICATE_REQUEST },
+#endif
+	{ NULL, 0 },
+};
+
 EXPORT int luaopen__openssl_ssl_context(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, sx_globals, 0);
 	auxL_setintegers(L, sx_verify);
 	auxL_setintegers(L, sx_option);
+	auxL_setintegers(L, sx_ext);
 
 	return 1;
 } /* luaopen__openssl_ssl_context() */
