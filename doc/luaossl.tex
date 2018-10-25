@@ -1029,6 +1029,37 @@ See \fn{context:setTicketKeys}
 
 \emph{Only supported since OpenSSL 1.0.0.}
 
+\subsubsection[\fn{context:addCustomExtension}]{\fn{context:addCustomExtension($ext\_type$, $ext\_context$, $add\_cb$, $parse\_cb$)}}
+
+Adds a custom extension with the TLS extension type (see RFC 5246) $ext\_type$ that may be present in the context(s) specifed by $ext\_context$, which should be a bitmask of the flags:
+
+\begin{tabular}{ c | l }
+name & description \\\hline
+EXT\_TLS\_ONLY & The extension is only allowed in TLS \\
+EXT\_DTLS\_ONLY & The extension is only allowed in DTLS \\
+EXT\_TLS\_IMPLEMENTATION\_ONLY & The extension is allowed in DTLS, but there is only a TLS implementation available (so it is ignored in DTLS). \\
+EXT\_SSL3\_ALLOWED & Extensions are not typically defined for SSLv3. Setting this value will allow the extension in SSLv3. Applications will not typically need to use this. \\
+EXT\_TLS1\_2\_AND\_BELOW\_ONLY & The extension is only defined for TLSv1.2/DTLSv1.2 and below. Servers will ignore this extension if it is present in the ClientHello and TLSv1.3 is negotiated. \\
+EXT\_TLS1\_3\_ONLY & The extension is only defined for TLS1.3 and above. Servers will ignore this extension if it is present in the ClientHello and TLSv1.2 or below is negotiated. \\
+EXT\_IGNORE\_ON\_RESUMPTION & The extension will be ignored during parsing if a previous session is being successfully resumed. \\
+EXT\_CLIENT\_HELLO & The extension may be present in the ClientHello message. \\
+EXT\_TLS1\_2\_SERVER\_HELLO & The extension may be present in a TLSv1.2 or below compatible ServerHello message. \\
+EXT\_TLS1\_3\_SERVER\_HELLO & The extension may be present in a TLSv1.3 compatible ServerHello message. \\
+EXT\_TLS1\_3\_ENCRYPTED\_EXTENSIONS & The extension may be present in an EncryptedExtensions message. \\
+EXT\_TLS1\_3\_HELLO\_RETRY\_REQUEST & The extension may be present in a HelloRetryRequest message. \\
+EXT\_TLS1\_3\_CERTIFICATE & The extension may be present in a TLSv1.3 compatible Certificate message. \\
+EXT\_TLS1\_3\_NEW\_SESSION\_TICKET & The extension may be present in a TLSv1.3 compatible NewSessionTicket message. \\
+EXT\_TLS1\_3\_CERTIFICATE\_REQUEST & The extension may be present in a TLSv1.3 compatible CertificateRequest message.
+\end{tabular}
+
+$add\_cb$ should be a function with signature \fn{add\_cb($ssl$, $ext\_type$, $ext\_context$, $x509$, $chainidx$)}; it will be called from the relevant context to allow you to insert extension data.
+It receives the $ssl$ object of the connection, the $ext\_type$ you registered the callback for, the current $context$ and, for only some contexts, the current \module{openssl.x509} certificate and chain index (as an integer). You should return the extension data as a string, $false$ if you don't want to add your extension, or $nil$ and an optional integer specifying the TLS error code to raise an error.
+
+$parse\_cb$ should be a function with signature \fn{parse\_cb($ssl$, $ext\_type$, $ext\_context$, $data$, $x509$, $chainidx$)}; it will be called from the relevant context to allow you to parse extension data.
+It receives the $ssl$ object of the connection, the $ext\_type$ you registered the callback for, the current $context$, the extension $data$ as a string, and for only some contexts, the current \module{openssl.x509} certificate and chain index (as an integer). You should return $true$ on success, or $nil$ and an optional integer specifying the TLS error code to raise an error.
+
+\emph{Only supported since OpenSSL 1.1.1.}
+
 \end{Module}
 
 
