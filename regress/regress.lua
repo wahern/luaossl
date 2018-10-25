@@ -1,3 +1,5 @@
+local require = require -- may be overloaded by regress.require
+
 local regress = {
 	openssl = require"openssl",
 	bignum = require"openssl.bignum",
@@ -98,12 +100,20 @@ function regress.export(...)
 	return regress
 end -- export
 
+function regress.require(modname)
+	local ok, module = pcall(require, modname)
+
+	regress.check(ok, "module %s required", modname)
+
+	return module
+end -- regress.require
+
 local counter = 0
 function regress.genkey(type, ca_key, ca_crt)
-	local pkey = require"openssl.pkey"
-	local x509 = require"openssl.x509"
-	local name = require"openssl.x509.name"
-	local altname = require"openssl.x509.altname"
+	local pkey = regress.require"openssl.pkey"
+	local x509 = regress.require"openssl.x509"
+	local name = regress.require"openssl.x509.name"
+	local altname = regress.require"openssl.x509.altname"
 	local key
 
 	type = string.upper(type or "RSA")
@@ -158,5 +168,38 @@ local function getsubtable(t, name, ...)
 		return t[name]
 	end
 end -- getsubtable
+
+function regress.newsslctx(protocol, accept, keytype)
+	local context = regress.require"openssl.ssl.context"
+	local ctx = context.new(protocol, accept)
+
+	if keytype or keytype == nil then
+		local key, crt = regress.genkey(keytype)
+
+		ctx:setCertificate(crt)
+		ctx:setPrivateKey(key)
+	end
+
+	return ctx
+end -- require.newsslctx
+
+local ctxcache = {}
+
+function regress.getsslctx(protocol, accept, keytype)
+	local keycache = getsubtable(ctxcache, protocol, accept)
+
+	if keytype == nil then
+		keytype = "RSA"
+	end
+
+	local ctx = keycache[keytype]
+
+	if not ctx then
+		ctx = regress.newsslctx(protocol, accept, keytype)
+		keycache[keytype] = ctx
+	end
+
+	return ctx
+end -- regress.getsslctx
 
 return regress
