@@ -868,6 +868,7 @@ name & \href{https://www.openssl.org/docs/ssl/SSL_CTX_set_options.html}{descript
 \small{\texttt{OP\_SSLEAY\_080\_CLIENT\_DH\_BUG}} & $\ldots$ \\
 \small{\texttt{OP\_TLS\_D5\_BUG}} & $\ldots$ \\
 \small{\texttt{OP\_TLS\_BLOCK\_PADDING\_BUG}} & $\ldots$ \\
+\small{\texttt{OP\_ALLOW\_NO\_DHE\_KEX}} & Allow a non-(ec)dhe based kex_mode. \\
 \small{\texttt{OP\_DONT\_INSERT\_EMPTY\_FRAGMENTS}} & Disables a countermeasure against a SSL 3.0/TLS 1.0 protocol vulnerability affecting CBC ciphers, which cannot be handled by some broken SSL implementations. This option has no effect for connections using other ciphers. \\
 \small{\texttt{OP\_NO\_QUERY\_MTU}} & $\ldots$ \\
 \small{\texttt{OP\_COOKIE\_EXCHANGE}} & $\ldots$ \\
@@ -880,6 +881,9 @@ name & \href{https://www.openssl.org/docs/ssl/SSL_CTX_set_options.html}{descript
 \small{\texttt{OP\_NO\_ENCRYPT\_THEN MAC}} & $\ldots$ \\
 \small{\texttt{OP\_SINGLE\_DH\_USE}} & Always create a new key when using temporary/ephemeral DH parameters. \\
 \small{\texttt{OP\_EPHEMERAL\_RSA}} & Always use ephemeral (temporary) RSA key when doing RSA operations. \\
+\small{\texttt{OP\_PRIORITIZE\_CHACHA}} & Prioritize ChaCha20Poly1305 on servers when client does. \\
+\small{\texttt{OP\_ENABLE\_MIDDLEBOX\_COMPAT}} & TLSv1.3 Compatibility mode. \\
+\small{\texttt{OP\_NO\_ANTI\_REPLAY}} & TLSv1.3 anti-replay protection for early data. \\
 \small{\texttt{OP\_CIPHER\_SERVER\_PREFERENCE}} & When choosing a cipher, use the server's preferences instead of the client preferences. \\
 \small{\texttt{OP\_TLS\_ROLLBACK\_BUG}} & Disable version rollback attack detection. \\
 \small{\texttt{OP\_NO\_SSLv2}} & Do not use the SSLv2 protocol. \\
