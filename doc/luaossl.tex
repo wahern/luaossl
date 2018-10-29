@@ -860,7 +860,11 @@ name & \href{https://www.openssl.org/docs/ssl/SSL_CTX_set_options.html}{descript
 \small{\texttt{OP\_NETSCAPE\_CHALLENGE\_BUG}} & Workaround for Netscape-Commerce/1.12 servers. \\
 \small{\texttt{OP\_LEGACY\_SERVER\_CONNECT}} & $\ldots$ \\
 \small{\texttt{OP\_NETSCAPE\_REUSE\_CIPHER\_CHANGE\_BUG}} & As of OpenSSL 0.9.8q and 1.0.0c, this option has no effect. \\
+\small{\texttt{OP\_SSLREF2\_REUSE\_CERT\_TYPE\_BUG}} & $\ldots$ \\
+\small{\texttt{OP\_TLSEXT\_PADDING}} & $\ldots$ \\
 \small{\texttt{OP\_MICROSOFT\_BIG\_SSLV3\_BUFFER}} & $\ldots$ \\
+\small{\texttt{OP\_SAFARI\_ECDHE\_ECDSA\_BUG}} & $\ldots$ \\
+\small{\texttt{OP\_MSIE\_SSLV2\_RSA\_PADDING}} & $\ldots$ \\
 \small{\texttt{OP\_SSLEAY\_080\_CLIENT\_DH\_BUG}} & $\ldots$ \\
 \small{\texttt{OP\_TLS\_D5\_BUG}} & $\ldots$ \\
 \small{\texttt{OP\_TLS\_BLOCK\_PADDING\_BUG}} & $\ldots$ \\
@@ -873,18 +877,24 @@ name & \href{https://www.openssl.org/docs/ssl/SSL_CTX_set_options.html}{descript
 \small{\texttt{OP\_NO\_COMPRESSION}} & $\ldots$ \\
 \small{\texttt{OP\_ALLOW\_UNSAFE\_LEGACY\_RENEGOTIATION}} & $\ldots$ \\
 \small{\texttt{OP\_SINGLE\_ECDH\_USE}} & Always create a new key when using temporary/ephemeral ECDH parameters. \\
+\small{\texttt{OP\_NO\_ENCRYPT\_THEN MAC}} & $\ldots$ \\
 \small{\texttt{OP\_SINGLE\_DH\_USE}} & Always create a new key when using temporary/ephemeral DH parameters. \\
 \small{\texttt{OP\_EPHEMERAL\_RSA}} & Always use ephemeral (temporary) RSA key when doing RSA operations. \\
 \small{\texttt{OP\_CIPHER\_SERVER\_PREFERENCE}} & When choosing a cipher, use the server's preferences instead of the client preferences. \\
 \small{\texttt{OP\_TLS\_ROLLBACK\_BUG}} & Disable version rollback attack detection. \\
 \small{\texttt{OP\_NO\_SSLv2}} & Do not use the SSLv2 protocol. \\
 \small{\texttt{OP\_NO\_SSLv3}} & Do not use the SSLv3 protocol. \\
-\small{\texttt{OP\_NO\_TLSv1}} & Do not use the TLSv1.0 protocol. \\
-\small{\texttt{OP\_NO\_TLSv1\_2}} & Do not use the TLSv1.2 protocol. \\
+\small{\texttt{OP\_NO\_TLSv1}/\texttt{OP\_NO\_DTLSv1}} & Do not use the (D)TLSv1.0 protocol. \\
+\small{\texttt{OP\_NO\_TLSv1\_2}/\texttt{OP\_NO\_DTLSv1\_2}} & Do not use the (D)TLSv1.2 protocol. \\
 \small{\texttt{OP\_NO\_TLSv1\_1}} & Do not use the TLSv1.1 protocol. \\
 \small{\texttt{OP\_NETSCAPE\_CA\_DN\_BUG}} & $\ldots$ \\
+\small{\texttt{OP\_NO\_TLSv1\_3}} & $\ldots$ \\
 \small{\texttt{OP\_NETSCAPE\_DEMO\_CIPHER\_CHANGE\_BUG}} & $\ldots$ \\
+\small{\texttt{OP\_NO\_RENEGOTIATION}} & $\ldots$ \\
 \small{\texttt{OP\_CRYPTOPRO\_TLSEXT\_BUG}} & $\ldots$ \\
+\small{\texttt{OP\_PKCS1\_CHECK\_1}} & $\ldots$ \\
+\small{\texttt{OP\_PKCS1\_CHECK\_2}} & $\ldots$ \\
+\small{\texttt{OP\_NO\_SSL\_MASK}} & $\ldots$ \\
 \small{\texttt{OP\_ALL}} & All of the bug workarounds. \\
 \end{ctabular}
 
