@@ -339,6 +339,18 @@
 #define HAVE_SSL_CTX_GET_TLSEXT_TICKET_KEYS OPENSSL_PREREQ(1,0,0)
 #endif
 
+#ifndef HAVE_SSL_CTX_USE_SERVERINFO
+#define HAVE_SSL_CTX_USE_SERVERINFO OPENSSL_PREREQ(1,0,2)
+#endif
+
+#ifndef HAVE_SSL_CTX_USE_SERVERINFO_EX
+#define HAVE_SSL_CTX_USE_SERVERINFO_EX OPENSSL_PREREQ(1,1,1)
+#endif
+
+#ifndef HAVE_SSL_CTX_USE_SERVERINFO_FILE
+#define HAVE_SSL_CTX_USE_SERVERINFO_FILE OPENSSL_PREREQ(1,0,2)
+#endif
+
 #ifndef HAVE_SSL_GET0_ALPN_SELECTED
 #define HAVE_SSL_GET0_ALPN_SELECTED HAVE_SSL_CTX_SET_ALPN_PROTOS
 #endif
@@ -9049,6 +9061,42 @@ static int sx_getTicketKeys(lua_State *L) {
 #endif
 
 
+#if HAVE_SSL_CTX_USE_SERVERINFO_FILE
+static int sx_useServerInfoFile(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	const char *file = luaL_checkstring(L, 2);
+
+	if (!SSL_CTX_use_serverinfo_file(ctx, file))
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:useServerInfoFile");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_useServerInfoFile() */
+#endif
+
+
+#if HAVE_SSL_CTX_USE_SERVERINFO_EX || HAVE_SSL_CTX_USE_SERVERINFO
+static int sx_useServerInfo(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	unsigned int version = auxL_checkunsigned(L, 2, 1, (HAVE_SSL_CTX_USE_SERVERINFO_EX) ? auxL_UnsignedMax : 1);
+	size_t serverinfo_length;
+	const unsigned char *serverinfo = (const unsigned char *)luaL_checklstring(L, 3, &serverinfo_length);
+
+#if HAVE_SSL_CTX_USE_SERVERINFO_EX
+	if (!SSL_CTX_use_serverinfo_ex(ctx, version, serverinfo, serverinfo_length))
+#else
+	if (!SSL_CTX_use_serverinfo(ctx, serverinfo, serverinfo_length))
+#endif
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:useServerInfo");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_useServerInfoFile() */
+#endif
+
+
 #if HAVE_SSL_CTX_ADD_CUSTOM_EXT
 static int sx_custom_ext_add_cb_helper(lua_State *L) {
 	SSL *s = lua_touserdata(L, 2);
@@ -9390,6 +9438,12 @@ static const auxL_Reg sx_methods[] = {
 #endif
 #if HAVE_SSL_CTX_GET_TLSEXT_TICKET_KEYS
 	{ "getTicketKeys", &sx_getTicketKeys },
+#endif
+#if HAVE_SSL_CTX_USE_SERVERINFO_FILE
+	{ "useServerInfoFile", &sx_useServerInfoFile },
+#endif
+#if HAVE_SSL_CTX_USE_SERVERINFO_EX || HAVE_SSL_CTX_USE_SERVERINFO
+	{ "useServerInfo", &sx_useServerInfo },
 #endif
 #if HAVE_SSL_CTX_ADD_CUSTOM_EXT
 	{ "addCustomExtension", &sx_addCustomExtension },
