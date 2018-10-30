@@ -351,6 +351,10 @@
 #define HAVE_SSL_CTX_USE_SERVERINFO_FILE OPENSSL_PREREQ(1,0,2)
 #endif
 
+#ifndef HAVE_SSL_EXTENSION_SUPPORTED
+#define HAVE_SSL_EXTENSION_SUPPORTED OPENSSL_PREREQ(1,0,2)
+#endif
+
 #ifndef HAVE_SSL_GET0_ALPN_SELECTED
 #define HAVE_SSL_GET0_ALPN_SELECTED HAVE_SSL_CTX_SET_ALPN_PROTOS
 #endif
@@ -2456,8 +2460,23 @@ static int ossl_version(lua_State *L) {
 	return 1;
 } /* ossl_version() */
 
+
+#if HAVE_SSL_EXTENSION_SUPPORTED
+static int ossl_extensionSupported(lua_State *L) {
+	unsigned int ext_type = auxL_checkunsigned(L, 1);
+
+	lua_pushboolean(L, SSL_extension_supported(ext_type));
+
+	return 1;
+} /* ossl_extensionSupported() */
+#endif
+
+
 static const auxL_Reg ossl_globals[] = {
 	{ "version", &ossl_version },
+#if HAVE_SSL_EXTENSION_SUPPORTED
+	{ "extensionSupported", &ossl_extensionSupported },
+#endif
 	{ NULL,      NULL },
 };
 
