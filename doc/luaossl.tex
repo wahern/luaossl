@@ -1029,6 +1029,20 @@ See \fn{context:setTicketKeys}
 
 \emph{Only supported since OpenSSL 1.0.0.}
 
+\subsubsection[\fn{context:useServerInfo}]{\fn{context:useServerInfo($version$, $serverinfo$)}}
+
+If version is $1$ then the extensions in the array must consist of a 2-byte Extension Type, a 2-byte length, and then length bytes of extension data. The type value has the same meaning as for \fn{context:addCustomExtension}.
+
+If version is $2$ then the extensions in the array must consist of a 4-byte context, a 2-byte Extension Type, a 2-byte length, and then length bytes of extension_data. The context and type values have the same meaning as for \fn{context:addCustomExtension}. If serverinfo is being loaded for extensions to be added to a Certificate message, then the extension will only be added for the first certificate in the message (which is always the end-entity certificate).
+
+\emph{Only supported since OpenSSL 1.0.2, ServerInfo version 2 is only supported since OpenSSL 1.1.1}
+
+\subsubsection[\fn{context:useServerInfoFile}]{\fn{context:useServerInfoFile($file$)}}
+
+Loads one or more serverinfo extensions from $file$ into $context$. The extensions must be in PEM format. Each extension must be in a format as described above for \fn{context:useServerInfo}. Each PEM extension name must begin with the phrase "BEGIN SERVERINFOV2 FOR " for version 2 data or "BEGIN SERVERINFO FOR " for version 1 data.
+
+\emph{Only supported since OpenSSL 1.0.2}
+
 \subsubsection[\fn{context:addCustomExtension}]{\fn{context:addCustomExtension($ext\_type$, $ext\_context$, $add\_cb$, $parse\_cb$)}}
 
 Adds a custom extension with the TLS extension type (see RFC 5246) $ext\_type$ that may be present in the context(s) specifed by $ext\_context$, which should be a bitmask of the flags:
