@@ -8593,6 +8593,27 @@ static int sx_clearOptions(lua_State *L) {
 } /* sx_clearOptions() */
 
 
+static int sx_setReadAhead(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	int yes = checkbool(L, 2);
+
+	SSL_CTX_set_read_ahead(ctx, yes);
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_setReadAhead() */
+
+
+static int sx_getReadAhead(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+
+	lua_pushboolean(L, SSL_CTX_get_read_ahead(ctx));
+
+	return 1;
+} /* sx_getReadAhead() */
+
+
 static int sx_setStore(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	X509_STORE *store = checksimple(L, 2, X509_STORE_CLASS);
@@ -9425,6 +9446,8 @@ static const auxL_Reg sx_methods[] = {
 	{ "setOptions",       &sx_setOptions },
 	{ "getOptions",       &sx_getOptions },
 	{ "clearOptions",     &sx_clearOptions },
+	{ "setReadAhead",     &sx_setReadAhead },
+	{ "getReadAhead",     &sx_getReadAhead },
 	{ "setStore",         &sx_setStore },
 	{ "getStore",         &sx_getStore },
 	{ "setParam",         &sx_setParam },
@@ -9757,6 +9780,27 @@ static int ssl_clearOptions(lua_State *L) {
 
 	return 1;
 } /* ssl_clearOptions() */
+
+
+static int ssl_setReadAhead(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	int yes = checkbool(L, 2);
+
+	SSL_set_read_ahead(ssl, yes);
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setReadAhead() */
+
+
+static int ssl_getReadAhead(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+
+	lua_pushboolean(L, SSL_get_read_ahead(ssl));
+
+	return 1;
+} /* ssl_getReadAhead() */
 
 
 #if HAVE_SSL_SET1_CHAIN_CERT_STORE
@@ -10240,6 +10284,8 @@ static const auxL_Reg ssl_methods[] = {
 	{ "setOptions",       &ssl_setOptions },
 	{ "getOptions",       &ssl_getOptions },
 	{ "clearOptions",     &ssl_clearOptions },
+	{ "setReadAhead",     &ssl_setReadAhead },
+	{ "getReadAhead",     &ssl_getReadAhead },
 #if HAVE_SSL_SET1_CHAIN_CERT_STORE
 	{ "setChainStore",    &ssl_setChainStore },
 #endif

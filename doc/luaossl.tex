@@ -914,6 +914,14 @@ Returns the option flags of the context instance as an integer.
 
 Clears the option flags of the context instance.
 
+\subsubsection[\fn{context:setReadAhead}]{\fn{context:setReadAhead($yes$)}}
+
+Sets if read ahead is enabled for the context, $yes$ should be a boolean.
+
+\subsubsection[\fn{context:getReadAhead}]{\fn{context:getReadAhead()}}
+
+Returns if read ahead is enable for the context instance as a boolean.
+
 \subsubsection[\fn{context:setStore}]{\fn{context:setStore($store$)}}
 
 Associate the \module{openssl.x509.store} object $store$ with $context$. Replaces any existing store.
@@ -1111,6 +1119,14 @@ Returns the option flags of the SSL connection instance. See \fn{openssl.ssl.con
 \subsubsection[\fn{ssl:clearOptions}]{\fn{ssl:clearOptions()}}
 
 Clears the option flags of the SSL connection instance. See \fn{openssl.ssl.context:clearOptions}.
+
+\subsubsection[\fn{ssl:setReadAhead}]{\fn{ssl:setReadAhead($yes$)}}
+
+Sets if read ahead is enabled for the SSL connection instance, $yes$ should be a boolean.
+
+\subsubsection[\fn{ssl:getReadAhead}]{\fn{ssl:getReadAhead()}}
+
+Returns if read ahead is enable for the SSL connection instance as a boolean.
 
 \subsubsection[\fn{ssl:setStore}]{\fn{ssl:setStore($store$)}}
 
