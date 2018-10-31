@@ -1225,6 +1225,10 @@ TLS1\_2\_VERSION & 16-bit TLSv1.2 identifier (0x0303).  \\
 
 Returns the SSL/TLS version supported by the client, which should be greater than or equal to the negotiated version. See \fn{ssl:getVersion}.
 
+\subsubsection[\fn{ssl:setCipherList}]{\fn{ssl:setCipherList($string$ [, ...])}}
+
+Sets the allowed public key and private key algorithm(s). See \fn{openssl.ssl.context:setCipherList}.
+
 \subsubsection[\fn{ssl:setCurvesList}]{\fn{ssl:setCurvesList($string$ [, ...])}}
 
 Sets the supported curves for this SSL connection instance. See \fn{openssl.ssl.context:setCurvesList}.

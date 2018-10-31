@@ -10026,6 +10026,19 @@ static int ssl_getCipherInfo(lua_State *L) {
 } /* ssl_getCipherInfo() */
 
 
+static int ssl_setCipherList(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	const char *ciphers = luaL_checkstring(L, 2);
+
+	if (!SSL_set_cipher_list(ssl, ciphers))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setCipherList");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setCipherList() */
+
+
 #if HAVE_SSL_SET_CURVES_LIST
 static int ssl_setCurvesList(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
@@ -10344,6 +10357,7 @@ static const auxL_Reg ssl_methods[] = {
 	{ "getPeerCertificate", &ssl_getPeerCertificate },
 	{ "getPeerChain",     &ssl_getPeerChain },
 	{ "getCipherInfo",    &ssl_getCipherInfo },
+	{ "setCipherList",    &ssl_setCipherList },
 #if HAVE_SSL_SET_CURVES_LIST
 	{ "setCurvesList",    &ssl_setCurvesList },
 #endif

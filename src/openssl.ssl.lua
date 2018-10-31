@@ -8,6 +8,17 @@ ssl.interpose("setStore", function(self, store)
 	return true
 end)
 
+-- Allow passing a vararg of ciphers, or an array
+local setCipherList; setCipherList = ssl.interpose("setCipherList", function (self, ciphers, ...)
+	if (...) then
+		local ciphers_t = pack(ciphers, ...)
+		ciphers = table.concat(ciphers_t, ":", 1, ciphers_t.n)
+	elseif type(ciphers) == "table" then
+		ciphers = table.concat(ciphers, ":")
+	end
+	return setCipherList(self, ciphers)
+end)
+
 -- Allow passing a vararg of curves, or an array
 local setCurvesList = ssl.interpose("setCurvesList", nil)
 if setCurvesList then
