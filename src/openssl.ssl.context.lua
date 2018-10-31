@@ -27,4 +27,18 @@ if setCurvesList then
 	end)
 end
 
+-- Allow passing a vararg of ciphersuites, or an array
+local setCipherSuites = ctx.interpose("setCipherSuites", nil)
+if setCipherSuites then
+	ctx.interpose("setCipherSuites", function (self, ciphers, ...)
+		if (...) then
+			local ciphers_t = pack(ciphers, ...)
+			ciphers = table.concat(ciphers_t, ":", 1, ciphers_t.n)
+		elseif type(ciphers) == "table" then
+			ciphers = table.concat(ciphers, ":")
+		end
+		return setCipherSuites(self, ciphers)
+	end)
+end
+
 return ctx

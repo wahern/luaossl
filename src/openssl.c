@@ -287,6 +287,10 @@
 #define HAVE_SSL_CTX_GET0_CERTIFICATE (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,7,0))
 #endif
 
+#ifndef HAVE_SSL_CTX_SET_CIPHERSUITES
+#define HAVE_SSL_CTX_SET_CIPHERSUITES OPENSSL_PREREQ(1,1,1)
+#endif
+
 #ifndef HAVE_SSL_CTX_SET_CURVES_LIST
 #define HAVE_SSL_CTX_SET_CURVES_LIST (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,5,1))
 #endif
@@ -373,6 +377,10 @@
 
 #ifndef HAVE_SSL_SET1_VERIFY_CERT_STORE
 #define HAVE_SSL_SET1_VERIFY_CERT_STORE OPENSSL_PREREQ(1,0,2)
+#endif
+
+#ifndef HAVE_SSL_SET_CIPHERSUITES
+#define HAVE_SSL_SET_CIPHERSUITES OPENSSL_PREREQ(1,1,1)
 #endif
 
 #ifndef HAVE_SSL_SET_CURVES_LIST
@@ -8781,6 +8789,21 @@ static int sx_setCurvesList(lua_State *L) {
 #endif
 
 
+#if HAVE_SSL_CTX_SET_CIPHERSUITES
+static int sx_setCipherSuites(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	const char *ciphers = luaL_checkstring(L, 2);
+
+	if (!SSL_CTX_set_ciphersuites(ctx, ciphers))
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setCipherSuites");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_setCipherSuites() */
+#endif
+
+
 static int sx_setEphemeralKey(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
@@ -9463,6 +9486,9 @@ static const auxL_Reg sx_methods[] = {
 #if HAVE_SSL_CTX_SET_CURVES_LIST
 	{ "setCurvesList",    &sx_setCurvesList },
 #endif
+#if HAVE_SSL_CTX_SET_CIPHERSUITES
+	{ "setCipherSuites",  &sx_setCipherSuites },
+#endif
 	{ "setEphemeralKey",  &sx_setEphemeralKey },
 #if HAVE_SSL_CTX_SET_ALPN_PROTOS
 	{ "setAlpnProtos",    &sx_setAlpnProtos },
@@ -10015,6 +10041,21 @@ static int ssl_setCurvesList(lua_State *L) {
 #endif
 
 
+#if HAVE_SSL_SET_CIPHERSUITES
+static int ssl_setCipherSuites(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	const char *ciphers = luaL_checkstring(L, 2);
+
+	if (!SSL_set_ciphersuites(ssl, ciphers))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setCipherSuites");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setCipherSuites() */
+#endif
+
+
 static int ssl_getHostName(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	const char *host;
@@ -10305,6 +10346,9 @@ static const auxL_Reg ssl_methods[] = {
 	{ "getCipherInfo",    &ssl_getCipherInfo },
 #if HAVE_SSL_SET_CURVES_LIST
 	{ "setCurvesList",    &ssl_setCurvesList },
+#endif
+#if HAVE_SSL_SET_CIPHERSUITES
+	{ "setCipherSuites",  &ssl_setCipherSuites },
 #endif
 	{ "getHostName",      &ssl_getHostName },
 	{ "setHostName",      &ssl_setHostName },

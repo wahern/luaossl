@@ -22,4 +22,18 @@ if setCurvesList then
 	end)
 end
 
+-- Allow passing a vararg of ciphersuites, or an array
+local setCipherSuites = ssl.interpose("setCipherSuites", nil)
+if setCipherSuites then
+	ssl.interpose("setCipherSuites", function (self, ciphers, ...)
+		if (...) then
+			local ciphers_t = pack(ciphers, ...)
+			ciphers = table.concat(ciphers_t, ":", 1, ciphers_t.n)
+		elseif type(ciphers) == "table" then
+			ciphers = table.concat(ciphers, ":")
+		end
+		return setCipherSuites(self, ciphers)
+	end)
+end
+
 return ssl

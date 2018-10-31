@@ -981,6 +981,12 @@ Sets the supported curves. The string format is a list of colon separated curve 
 
 \emph{Only supported since OpenSSL 1.0.2.}
 
+\subsubsection[\fn{context:setCipherSuites}]{\fn{context:setCipherSuites($string$ [, ...])}}
+
+Sets the supported TLS 1.3 cipher suites. The string format is a list of colon separated curve names similar to \texttt{ctx:setCipherList(...)}.
+
+\emph{Only supported since OpenSSL 1.1.1.}
+
 \subsubsection[\fn{context:setEphemeralKey}]{\fn{context:setEphemeralKey($key$)}}
 
 Sets \module{openssl.pkey} object $key$ as the ephemeral key during key exchanges which use that particular key type. Typically $key$ will be either a Diffie-Hellman or Elliptic Curve key.
@@ -1224,6 +1230,12 @@ Returns the SSL/TLS version supported by the client, which should be greater tha
 Sets the supported curves for this SSL connection instance. See \fn{openssl.ssl.context:setCurvesList}.
 
 \emph{Only supported since OpenSSL 1.0.2.}
+
+\subsubsection[\fn{ssl:setCipherSuites}]{\fn{ssl:setCipherSuites($string$ [, ...])}}
+
+Sets the supported TLS 1.3 cipher suites for this SSL connection instance. See \fn{openssl.ssl.context:setCipherSuites}.
+
+\emph{Only supported since OpenSSL 1.1.1.}
 
 \subsubsection[\fn{ssl:getAlpnSelected}]{\fn{ssl:getAlpnSelected()}}
 
