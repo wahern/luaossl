@@ -611,11 +611,16 @@ static const char *xitoa(char *dst, size_t lim, long i) {
 } /* xitoa() */
 
 
+static _Bool checkbool(lua_State *L, int idx) {
+	luaL_checktype(L, idx, LUA_TBOOLEAN);
+	return lua_toboolean(L, idx);
+} /* optbool() */
+
+
 static _Bool optbool(lua_State *L, int idx, _Bool d) {
 	if (lua_isnoneornil(L, idx))
 		return d;
-	luaL_checktype(L, idx, LUA_TBOOLEAN);
-	return lua_toboolean(L, idx);
+	return checkbool(L, idx);
 } /* optbool() */
 
 
