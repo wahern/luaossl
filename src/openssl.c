@@ -801,13 +801,13 @@ static _Bool getfield(lua_State *L, int index, const char *k) {
 } /* getfield() */
 
 
-static _Bool loadfield(lua_State *L, int index, const char *k, int type, void *p) {
+static _Bool (loadfield)(lua_State *L, int index, const char *k, int type, void *p, size_t *l) {
 	if (!getfield(L, index, k))
 		return 0;
 
 	switch (type) {
 	case LUA_TSTRING:
-		*(const char **)p = luaL_checkstring(L, -1);
+		*(const char **)p = luaL_checklstring(L, -1, l);
 		break;
 	case LUA_TNUMBER:
 		*(lua_Number *)p = luaL_checknumber(L, -1);
@@ -821,6 +821,8 @@ static _Bool loadfield(lua_State *L, int index, const char *k, int type, void *p
 
 	return 1;
 } /* loadfield() */
+#define loadfield_(L, idx, k, type, p, l, ...) loadfield((L), (idx), (k), (type), (p), (l))
+#define loadfield(...) EXPAND( loadfield_(__VA_ARGS__, NULL) )
 
 
 static void *loadfield_udata(lua_State *L, int index, const char *k, const char *tname) {
