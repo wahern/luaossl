@@ -10725,14 +10725,23 @@ EXPORT int luaopen__openssl_x509_verify_param(lua_State *L) {
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-static const EVP_MD *md_optdigest(lua_State *L, int index) {
-	const char *name = luaL_optstring(L, index, "sha1");
+
+static const EVP_MD *md_checkdigest(lua_State *L, int index) {
+	const char *name = luaL_checkstring(L, index);
 	const EVP_MD *type;
 
 	if (!(type = EVP_get_digestbyname(name)))
 		luaL_argerror(L, index, lua_pushfstring(L, "%s: invalid digest type", name));
 
 	return type;
+} /* md_checkdigest() */
+
+
+static const EVP_MD *md_optdigest(lua_State *L, int index) {
+	if (lua_isnoneornil(L, index))
+		return EVP_get_digestbyname("sha1");
+
+	return md_checkdigest(L, index);
 } /* md_optdigest() */
 
 
