@@ -1457,6 +1457,37 @@ Applies DES\_set\_odd\_parity to the string $key$. Only the first 8 bytes of $ke
 \end{Module}
 
 
+\begin{Module}{openssl.kdf}
+
+Binds OpenSSL's Key Derivation Function interfaces.
+
+\subsubsection[\fn{kdf.derive}]{\fn{kdf.derive($options$)}}
+
+Derive a key given the table of $options$, different KDF types require different options. Accepted options are:
+
+\begin{ctabular}{ c | c | p{5in}}
+field & type & description\\\hline
+.type & string & key derivation algorithm---``PBKDF2'', ``id-scrypt'', ``hkdf'', ``TLS-PRF1'' or other depending on your version of OpenSSL \\
+.outlen & number & the desired output size \\
+.pass & string & password \\
+.salt & string & salt \\
+.iter & number & iteration count \\
+.md & string & digest to use \\
+.key & string & key \\
+.maxmem\_bytes & number & amount of RAM key derivation may maximally use (in bytes) \\
+.secret & string & TLS1-PRF secret \\
+.seed & string & TLS1-PRF seed \\
+.hkdf\_mode & string & the HKDF mode to use, one of ``extract\_and\_expand'', ``extract\_only'' or ``expand\_only'' \\
+.info & string & HKDF info value \\
+.N & number & scrypt ``N'' parameter to use \\
+.r & number & scrypt ``r'' parameter to use \\
+.p & number & scrypt ``p'' parameter to use
+\end{ctabular}
+
+
+\end{Module}
+
+
 \chapter{Examples}
 
 These examples and others are made available under examples/ in the source tree.

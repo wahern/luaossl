@@ -127,6 +127,18 @@
 #define HAVE_C___DECLSPEC_NORETURN MSC_PREREQ(8,0,0)
 #endif
 
+#ifndef HAVE_OPENSSL_ZALLOC
+#define HAVE_OPENSSL_ZALLOC OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_OPENSSL_CLEAR_FREE
+#define HAVE_OPENSSL_CLEAR_FREE OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_OPENSSL_MEMDUP
+#define HAVE_OPENSSL_MEMDUP OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HAVE_ASN1_STRING_GET0_DATA
 #define HAVE_ASN1_STRING_GET0_DATA (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(2,7,0))
 #endif
@@ -207,6 +219,18 @@
 #define HAVE_EVP_CIPHER_CTX_NEW (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
 #endif
 
+#ifndef HAVE_EVP_KDF_CTX
+#define HAVE_EVP_KDF_CTX OPENSSL_PREREQ(1,2,0)
+#endif
+
+#ifndef HAVE_PKCS5_PBKDF2_HMAC
+#define HAVE_PKCS5_PBKDF2_HMAC (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
+#endif
+
+#ifndef HAVE_SCRYPT
+#define HAVE_SCRYPT OPENSSL_PREREQ(1,1,0)
+#endif
+
 #ifndef HAVE_EVP_MD_CTX_FREE
 #define HAVE_EVP_MD_CTX_FREE (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(2,7,0))
 #endif
@@ -225,6 +249,14 @@
 
 #ifndef HAVE_EVP_PKEY_CTX_NEW
 #define HAVE_EVP_PKEY_CTX_NEW (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
+#endif
+
+#ifndef HAVE_EVP_PKEY_CTX_KDF
+#define HAVE_EVP_PKEY_CTX_KDF OPENSSL_PREREQ(1,1,0)
+#endif
+
+#ifndef HAVE_EVP_PKEY_CTX_HKDF_MODE
+#define HAVE_EVP_PKEY_CTX_HKDF_MODE (HAVE_EVP_PKEY_CTX_KDF && OPENSSL_PREREQ(1,1,1))
 #endif
 
 #ifndef HAVE_EVP_PKEY_GET0
@@ -509,6 +541,10 @@
 
 #ifndef HMAC_INIT_EX_INT
 #define HMAC_INIT_EX_INT OPENSSL_PREREQ(1,0,0)
+#endif
+
+#if HAVE_EVP_PKEY_CTX_KDF || HAVE_EVP_KDF_CTX
+#include <openssl/kdf.h>
 #endif
 
 #ifndef STRERROR_R_CHAR_P
@@ -1497,6 +1533,32 @@ dlerr:
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+#if !HAVE_OPENSSL_ZALLOC
+static void *OPENSSL_zalloc(size_t num) {
+	void *ret = OPENSSL_malloc(num);
+
+	if (ret != NULL)
+		memset(ret, 0, num);
+	return ret;
+}
+#endif
+
+#if !HAVE_OPENSSL_CLEAR_FREE
+static void OPENSSL_clear_free(void *str, size_t num) {
+	if (str == NULL)
+		return;
+	if (num)
+		OPENSSL_cleanse(str, num);
+	CRYPTO_free(str);
+} /* CRYPTO_clear_free() */
+#endif
+
+#if !HAVE_OPENSSL_MEMDUP
+static void *OPENSSL_memdup(const void *data, size_t siz) {
+	return BUF_memdup(data, siz);
+} /* OPENSSL_memdup() */
+#endif
+
 #define COMPAT_X509_STORE_FREE_BUG 0x01
 
 static struct {
@@ -2079,6 +2141,410 @@ static int compat_X509_up_ref(X509 *crt) {
  * NB: See HAVE_X509_VERIFY_PARAM_SET1_EMAIL.
  */
 #endif
+
+
+#if !HAVE_EVP_KDF_CTX
+/*
+ * Emulate EVP_KDF_CTX API (introduced in OpenSSL 1.2.0)
+ */
+
+#ifndef ERR_LIB_KDF
+#define ERR_LIB_KDF 0
+#endif
+
+#ifndef KDFerr
+#define KDFerr(f,r) ERR_PUT_error(ERR_LIB_KDF,f,(r),__FILE__,__LINE__)
+#endif
+
+#ifndef EVP_F_EVP_KDF_CTRL
+#define EVP_F_EVP_KDF_CTRL 0
+#endif
+
+#ifndef EVP_F_EVP_KDF_CTX_NEW_ID
+#define EVP_F_EVP_KDF_CTX_NEW_ID 0
+#endif
+
+typedef struct {
+	int nid;
+	union {
+#if HAVE_PKCS5_PBKDF2_HMAC
+		/* Arguments for PKCS5_PBKDF2_HMAC */
+		struct {
+			unsigned char *pass;
+			size_t passlen;
+			unsigned char *salt;
+			size_t saltlen;
+			int iter;
+			const EVP_MD *md;
+		} pbkdf2;
+#endif
+
+#if HAVE_SCRYPT
+		/* Arguments for EVP_PBE_scrypt */
+		struct {
+			unsigned char *pass;
+			size_t passlen;
+			unsigned char *salt;
+			size_t saltlen;
+			uint64_t N;
+			uint32_t r;
+			uint32_t p;
+			uint64_t maxmem_bytes;
+		} scrypt;
+#endif
+
+#if HAVE_EVP_PKEY_CTX_KDF
+		EVP_PKEY_CTX *pctx;
+#endif
+	};
+} EVP_KDF_CTX;
+
+static void EVP_KDF_CTX_free(EVP_KDF_CTX *kctx) {
+	if (kctx == NULL)
+		return;
+
+	switch(kctx->nid) {
+#if HAVE_PKCS5_PBKDF2_HMAC
+	case NID_id_pbkdf2:
+		OPENSSL_clear_free(kctx->pbkdf2.pass, kctx->pbkdf2.passlen);
+		OPENSSL_clear_free(kctx->pbkdf2.salt, kctx->pbkdf2.saltlen);
+		break;
+#endif
+#if HAVE_SCRYPT
+	case NID_id_scrypt:
+		OPENSSL_clear_free(kctx->scrypt.pass, kctx->scrypt.passlen);
+		OPENSSL_clear_free(kctx->scrypt.salt, kctx->scrypt.saltlen);
+		break;
+#endif
+#if HAVE_EVP_PKEY_CTX_KDF
+	case NID_tls1_prf:
+	case NID_hkdf:
+		EVP_PKEY_CTX_free(kctx->pctx);
+		break;
+#endif
+	}
+
+	OPENSSL_free(kctx);
+} /* EVP_KDF_CTX_free() */
+
+static EVP_KDF_CTX *EVP_KDF_CTX_new_id(int id) {
+	EVP_KDF_CTX *ret;
+
+	ret = OPENSSL_zalloc(sizeof(*ret));
+	if (ret == NULL) {
+		EVPerr(EVP_F_EVP_KDF_CTX_NEW_ID, ERR_R_MALLOC_FAILURE);
+		return NULL;
+	}
+
+	ret->nid = id;
+
+	switch(id) {
+#if HAVE_PKCS5_PBKDF2_HMAC
+	case NID_id_pbkdf2:
+		break;
+#endif
+#if HAVE_SCRYPT
+	case NID_id_scrypt:
+		break;
+#endif
+#if HAVE_EVP_PKEY_CTX_KDF
+	case NID_tls1_prf:
+	case NID_hkdf: {
+			ret->pctx = EVP_PKEY_CTX_new_id(id, NULL);
+			if (!ret->pctx) {
+				OPENSSL_free(ret);
+				return NULL;
+			}
+			if (EVP_PKEY_derive_init(ret->pctx) <= 0) {
+				EVP_KDF_CTX_free(ret);
+				return NULL;
+			}
+			break;
+		}
+		break;
+#endif
+	default:
+		OPENSSL_free(ret);
+		EVPerr(EVP_F_EVP_KDF_CTX_NEW_ID, EVP_R_UNSUPPORTED_ALGORITHM);
+		return NULL;
+	}
+
+	return ret;
+} /* EVP_KDF_CTX_new_id() */
+
+static int set_membuf(unsigned char **buffer, size_t *buflen, const unsigned char *new_buffer, size_t new_buflen) {
+	if (new_buffer == NULL)
+		return 1;
+	OPENSSL_clear_free(*buffer, *buflen);
+	if (new_buflen > 0) {
+		*buffer = OPENSSL_memdup(new_buffer, new_buflen);
+	} else {
+		*buffer = OPENSSL_malloc(1);
+	}
+	if (*buffer == NULL) {
+		KDFerr(EVP_F_EVP_KDF_CTRL, ERR_R_MALLOC_FAILURE);
+		return 0;
+	}
+	*buflen = new_buflen;
+	return 1;
+}
+
+#define EVP_KDF_CTRL_SET_PASS          0x01 /* unsigned char *, size_t */
+#define EVP_KDF_CTRL_SET_SALT          0x02 /* unsigned char *, size_t */
+#define EVP_KDF_CTRL_SET_ITER          0x03 /* int */
+#define EVP_KDF_CTRL_SET_MD            0x04 /* EVP_MD * */
+#define EVP_KDF_CTRL_SET_KEY           0x05 /* unsigned char *, size_t */
+#define EVP_KDF_CTRL_SET_MAXMEM_BYTES  0x06 /* uint64_t */
+#define EVP_KDF_CTRL_SET_TLS_SECRET    0x07 /* unsigned char *, size_t */
+#define EVP_KDF_CTRL_RESET_TLS_SEED    0x08
+#define EVP_KDF_CTRL_ADD_TLS_SEED      0x09 /* unsigned char *, size_t */
+#define EVP_KDF_CTRL_RESET_HKDF_INFO   0x0a
+#define EVP_KDF_CTRL_ADD_HKDF_INFO     0x0b /* unsigned char *, size_t */
+#define EVP_KDF_CTRL_SET_HKDF_MODE     0x0c /* int */
+#define EVP_KDF_CTRL_SET_SCRYPT_N      0x0d /* uint64_t */
+#define EVP_KDF_CTRL_SET_SCRYPT_R      0x0e /* uint32_t */
+#define EVP_KDF_CTRL_SET_SCRYPT_P      0x0f /* uint32_t */
+
+#ifdef EVP_PKEY_HKDEF_MODE_EXTRACT_AND_EXPAND
+#define EVP_KDF_HKDF_MODE_EXTRACT_AND_EXPAND EVP_PKEY_HKDEF_MODE_EXTRACT_AND_EXPAND
+#elif HAVE_EVP_PKEY_CTX_KDF
+#define EVP_KDF_HKDF_MODE_EXTRACT_AND_EXPAND 0
+#endif
+
+#ifdef EVP_PKEY_HKDEF_MODE_EXTRACT_ONLY
+#define EVP_KDF_HKDF_MODE_EXTRACT_ONLY EVP_PKEY_HKDEF_MODE_EXTRACT_ONLY
+#endif
+
+#ifdef EVP_PKEY_HKDEF_MODE_EXPAND_ONLY
+#define EVP_KDF_HKDF_MODE_EXPAND_ONLY EVP_PKEY_HKDEF_MODE_EXPAND_ONLY
+#endif
+
+static int EVP_KDF_vctrl(EVP_KDF_CTX *kctx, int cmd, va_list args) {
+	const EVP_MD *md;
+	const unsigned char *p;
+	size_t len;
+	uint64_t u64_value;
+	uint32_t value;
+	int iter, mode;
+
+	if (kctx == NULL)
+		return 0;
+
+	switch (kctx->nid) {
+#if HAVE_PKCS5_PBKDF2_HMAC
+	case NID_id_pbkdf2: {
+		switch (cmd) {
+		case EVP_KDF_CTRL_SET_PASS:
+			p = va_arg(args, const unsigned char *);
+			len = va_arg(args, size_t);
+			return set_membuf(&kctx->pbkdf2.pass, &(kctx->pbkdf2.passlen), p, len);
+
+		case EVP_KDF_CTRL_SET_SALT:
+			p = va_arg(args, const unsigned char *);
+			len = va_arg(args, size_t);
+			return set_membuf(&kctx->pbkdf2.salt, &kctx->pbkdf2.saltlen, p, len);
+
+		case EVP_KDF_CTRL_SET_ITER:
+			iter = va_arg(args, int);
+			if (iter < 1)
+				return 0;
+			kctx->pbkdf2.iter = iter;
+			return 1;
+
+		case EVP_KDF_CTRL_SET_MD:
+			md = va_arg(args, const EVP_MD *);
+			if (md == NULL)
+				return 0;
+			kctx->pbkdf2.md = md;
+			return 1;
+
+		default:
+			EVPerr(EVP_F_EVP_KDF_CTRL, EVP_R_COMMAND_NOT_SUPPORTED);
+			return -2;
+		}
+	}
+#endif
+#if HAVE_SCRYPT
+	case NID_id_scrypt: {
+		switch (cmd) {
+		case EVP_KDF_CTRL_SET_PASS:
+			p = va_arg(args, const unsigned char *);
+			len = va_arg(args, size_t);
+			return set_membuf(&kctx->scrypt.pass, &kctx->scrypt.passlen, p, len);
+
+		case EVP_KDF_CTRL_SET_SALT:
+			p = va_arg(args, const unsigned char *);
+			len = va_arg(args, size_t);
+			return set_membuf(&kctx->scrypt.salt, &kctx->scrypt.saltlen, p, len);
+
+		case EVP_KDF_CTRL_SET_SCRYPT_N:
+			u64_value = va_arg(args, uint64_t);
+			if ((u64_value <= 1) || ((u64_value & (u64_value - 1)) != 0)) /* is_power_of_two check */
+				return 0;
+			kctx->scrypt.N = u64_value;
+			return 1;
+
+		case EVP_KDF_CTRL_SET_SCRYPT_R:
+			value = va_arg(args, uint32_t);
+			if (value < 1)
+				return 0;
+			kctx->scrypt.r = value;
+			return 1;
+
+		case EVP_KDF_CTRL_SET_SCRYPT_P:
+			value = va_arg(args, uint32_t);
+			if (value < 1)
+				return 0;
+			kctx->scrypt.p = value;
+			return 1;
+
+		case EVP_KDF_CTRL_SET_MAXMEM_BYTES:
+			u64_value = va_arg(args, uint64_t);
+			if (u64_value < 1)
+				return 0;
+			kctx->scrypt.maxmem_bytes = u64_value;
+			return 1;
+
+		default:
+			EVPerr(EVP_F_EVP_KDF_CTRL, EVP_R_COMMAND_NOT_SUPPORTED);
+			return -2;
+		}
+	}
+#endif
+#if HAVE_EVP_PKEY_CTX_KDF
+	case NID_tls1_prf: {
+		switch (cmd) {
+		case EVP_KDF_CTRL_SET_MD:
+			md = va_arg(args, const EVP_MD *);
+			return EVP_PKEY_CTX_set_tls1_prf_md(kctx->pctx, md);
+
+		case EVP_KDF_CTRL_SET_TLS_SECRET:
+			p = va_arg(args, const unsigned char *);
+			len = va_arg(args, size_t);
+			/* XXX: the old api resets the seed when you set the secret. When
+			 * using this compat routine, make sure you set the secret before
+			 * the seed.
+			 * https://github.com/openssl/openssl/issues/7728
+			 */
+			return EVP_PKEY_CTX_set1_tls1_prf_secret(kctx->pctx, p, len);
+
+		case EVP_KDF_CTRL_ADD_TLS_SEED:
+			p = va_arg(args, const unsigned char *);
+			len = va_arg(args, size_t);
+			return EVP_PKEY_CTX_add1_tls1_prf_seed(kctx->pctx, p, len);
+
+		default:
+			EVPerr(EVP_F_EVP_KDF_CTRL, EVP_R_COMMAND_NOT_SUPPORTED);
+			return -2;
+		}
+	}
+	case NID_hkdf: {
+		switch (cmd) {
+		case EVP_KDF_CTRL_SET_SALT:
+			p = va_arg(args, const unsigned char *);
+			len = va_arg(args, size_t);
+			return EVP_PKEY_CTX_set1_hkdf_salt(kctx->pctx, p, len);
+
+		case EVP_KDF_CTRL_SET_MD:
+			md = va_arg(args, const EVP_MD *);
+			return EVP_PKEY_CTX_set_hkdf_md(kctx->pctx, md);
+
+		case EVP_KDF_CTRL_SET_KEY:
+			p = va_arg(args, const unsigned char *);
+			len = va_arg(args, size_t);
+			return EVP_PKEY_CTX_set1_hkdf_key(kctx->pctx, p, len);
+
+		case EVP_KDF_CTRL_ADD_HKDF_INFO:
+			p = va_arg(args, const unsigned char *);
+			len = va_arg(args, size_t);
+			return EVP_PKEY_CTX_add1_hkdf_info(kctx->pctx, p, len);
+
+		case EVP_KDF_CTRL_SET_HKDF_MODE:
+			mode = va_arg(args, int);
+#if HAVE_EVP_PKEY_CTX_HKDF_MODE
+			return EVP_PKEY_CTX_hkdf_mode(kctx->pctx, mode);
+#else
+			if (mode == EVP_KDF_HKDF_MODE_EXTRACT_AND_EXPAND)
+				return 1;
+			else
+				/* XXX: OpenSSL doesn't set an error here */
+				return 0;
+
+#endif
+		default:
+			EVPerr(EVP_F_EVP_KDF_CTRL, EVP_R_COMMAND_NOT_SUPPORTED);
+			return -2;
+		}
+	}
+#endif
+	default:
+		(void)cmd;
+		(void)args;
+		return 0;
+	}
+} /* EVP_KDF_vctrl() */
+
+static int EVP_KDF_ctrl(EVP_KDF_CTX *kctx, int cmd, ...) {
+	int ret;
+	va_list args;
+	va_start(args, cmd);
+	ret = EVP_KDF_vctrl(kctx, cmd, args);
+	va_end(args);
+	if (ret == -2)
+		EVPerr(EVP_F_EVP_KDF_CTRL, EVP_R_COMMAND_NOT_SUPPORTED);
+	return ret;
+} /* EVP_KDF_ctrl() */
+
+static size_t EVP_KDF_size(EVP_KDF_CTX *kctx) {
+	if (kctx == NULL)
+		return 0;
+
+	switch(kctx->nid) {
+#if HAVE_EVP_PKEY_CTX_KDF
+	case NID_tls1_prf:
+	case NID_hkdf: {
+			size_t outlen = 0;
+			EVP_PKEY_derive(kctx->pctx, NULL, &outlen);
+			return outlen;
+		}
+#endif
+	default:
+		return SIZE_MAX;
+	}
+} /* EVP_KDF_size() */
+
+static int EVP_KDF_derive(EVP_KDF_CTX *kctx, unsigned char *out, size_t *outlen) {
+	switch(kctx->nid) {
+#if HAVE_PKCS5_PBKDF2_HMAC
+	case NID_id_pbkdf2:
+		return PKCS5_PBKDF2_HMAC((const char*)kctx->pbkdf2.pass, kctx->pbkdf2.passlen,
+			kctx->pbkdf2.salt, kctx->pbkdf2.saltlen,
+			kctx->pbkdf2.iter,
+			kctx->pbkdf2.md,
+			*outlen, out);
+#endif
+#if HAVE_SCRYPT
+	case NID_id_scrypt:
+		return EVP_PBE_scrypt((const char*)kctx->scrypt.pass, kctx->scrypt.passlen,
+			kctx->scrypt.salt, kctx->scrypt.saltlen,
+			kctx->scrypt.N, kctx->scrypt.r, kctx->scrypt.p,
+			kctx->scrypt.maxmem_bytes,
+			out, *outlen);
+#endif
+#if HAVE_EVP_PKEY_CTX_KDF
+	case NID_tls1_prf:
+	case NID_hkdf:
+		return EVP_PKEY_derive(kctx->pctx, out, outlen);
+#endif
+	default:
+		(void)out;
+		(void)outlen;
+		return 0;
+	}
+} /* EVP_KDF_derive() */
+
+#endif
+
 
 /* compat_init must not be called from multiple threads at once */
 static int compat_init(void) {
@@ -11266,6 +11732,229 @@ EXPORT int luaopen__openssl_cipher(lua_State *L) {
 
 	return 1;
 } /* luaopen__openssl_cipher() */
+
+
+/*
+ * openssl.kdf
+ *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+static int EVP_KDF__gc(lua_State *L) {
+	EVP_KDF_CTX **res = lua_touserdata(L, 1);
+
+	if (*res) {
+		EVP_KDF_CTX_free(*res);
+		*res = NULL;
+	}
+
+	return 0;
+} /* EVP_KDF__gc() */
+
+
+static int kdf_derive(lua_State *L) {
+	int nid;
+	luaL_Buffer b;
+	EVP_KDF_CTX *kctx, **kctxp;
+	unsigned char* out;
+	size_t outlen = 0;
+	const char *str = NULL;
+	size_t len;
+	_Bool seed = 0;
+	int mode;
+
+	luaL_checktype(L, 1, LUA_TTABLE);
+
+	{
+		const char* type;
+		if (!loadfield(L, 1, "type", LUA_TSTRING, &type))
+			return luaL_argerror(L, 1, "missing 'type' field");
+		if (!auxS_txt2nid(&nid, type))
+			return luaL_argerror(L, 1, "unknown 'type'");
+	}
+
+	/* ensure EVP_KDF_CTX is collected on error */
+	kctxp = prepudata(L, sizeof(EVP_KDF_CTX*), NULL, &EVP_KDF__gc);
+	if (!(kctx = EVP_KDF_CTX_new_id(nid)))
+		return auxL_error(L, auxL_EOPENSSL, "kdf.derive");
+	*kctxp = kctx;
+
+
+	lua_pushnil(L);
+	while (lua_next(L, 1)) {
+		switch (auxL_testoption(L, -2, 0, (const char *[]){
+			/* special fields */
+			"type",
+			"outlen",
+			/* general options */
+			"pass",
+			"salt",
+			"iter",
+			"md",
+			"key",
+			"maxmem_bytes",
+			/* KDF specific */
+			"secret",
+			"seed",
+			"info",
+			"hkdf_mode",
+			"N",
+			"r",
+			"p",
+		NULL }, 0)) {
+		case 0: /* skip 'type' */
+			break;
+
+		case 1:
+			outlen = auxL_checkunsigned(L, -1, 1, SIZE_MAX-1);
+			break;
+
+		case 2:
+			str = luaL_checklstring(L, -1, &len);
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_PASS, (const unsigned char*)str, len) <= 0)
+				goto error;
+			break;
+
+		case 3:
+			str = luaL_checklstring(L, -1, &len);
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SALT, (const unsigned char*)str, len) <= 0)
+				goto error;
+			break;
+
+		case 4:
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_ITER, auxL_checkunsigned(L, -1, 1, (int)-1)) <= 0)
+				goto error;
+			break;
+
+		case 5:
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_MD, md_checkdigest(L, -1)) <= 0)
+				goto error;
+			break;
+
+		case 6:
+			str = luaL_checklstring(L, -1, &len);
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_KEY, (const unsigned char*)str, len) <= 0)
+				goto error;
+			break;
+
+		case 7:
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_MAXMEM_BYTES, auxL_checkunsigned(L, -1, 0, UINT64_MAX)) <= 0)
+				goto error;
+			break;
+
+		case 8:
+			str = luaL_checklstring(L, -1, &len);
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_TLS_SECRET, (const unsigned char*)str, len) <= 0)
+				goto error;
+			break;
+
+		case 9:
+			seed = 1;
+			break;
+
+		case 10:
+			str = luaL_checklstring(L, -1, &len);
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_ADD_HKDF_INFO, (const unsigned char*)str, len) <= 0)
+				goto error;
+			break;
+
+		case 11:
+			mode = ((int[]){
+#ifdef EVP_KDF_HKDF_MODE_EXTRACT_AND_EXPAND
+				EVP_KDF_HKDF_MODE_EXTRACT_AND_EXPAND,
+#endif
+#ifdef EVP_KDF_HKDF_MODE_EXTRACT_ONLY
+				EVP_KDF_HKDF_MODE_EXTRACT_ONLY,
+#endif
+#ifdef EVP_KDF_HKDF_MODE_EXPAND_ONLY
+				EVP_KDF_HKDF_MODE_EXPAND_ONLY,
+#endif
+			0 })[auxL_checkoption(L, -1, 0, (const char *[]){
+#ifdef EVP_KDF_HKDF_MODE_EXTRACT_AND_EXPAND
+				"extract_and_expand",
+#endif
+#ifdef EVP_KDF_HKDF_MODE_EXTRACT_ONLY
+				"extract_only",
+#endif
+#ifdef EVP_KDF_HKDF_MODE_EXPAND_ONLY
+				"expand_only",
+#endif
+			NULL }, 0)];
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_HKDF_MODE, mode) <= 0)
+				goto error;
+			break;
+
+		case 12:
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SCRYPT_N, auxL_checkunsigned(L, -1, 0, UINT64_MAX)) <= 0)
+				goto error;
+			break;
+
+		case 13:
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SCRYPT_R, auxL_checkunsigned(L, -1, 0, UINT32_MAX)) <= 0)
+				goto error;
+			break;
+
+		case 14:
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SCRYPT_P, auxL_checkunsigned(L, -1, 0, UINT32_MAX)) <= 0)
+				goto error;
+			break;
+
+		default:
+			return luaL_argerror(L, 1, lua_pushfstring(L, "unknown field '%s'", lua_tostring(L, -2)));
+		}
+		lua_pop(L, 1);
+	}
+
+	/* XXX: seed must be set *after* secret
+	 * https://github.com/openssl/openssl/issues/7728 */
+	if (seed) {
+		lua_getfield(L, 1, "seed");
+		str = luaL_checklstring(L, -1, &len);
+		if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_ADD_TLS_SEED, (const unsigned char*)str, len) <= 0)
+			goto error;
+		lua_pop(L, 1);
+	}
+
+	if (outlen == 0) {
+		outlen = EVP_KDF_size(kctx);
+		if (outlen == 0)
+			goto error;
+		if (outlen == SIZE_MAX)
+			return luaL_argerror(L, 1, "missing 'outlen' field");
+	}
+
+	out = (unsigned char *)luaL_buffinitsize(L, &b, outlen);
+
+	if (EVP_KDF_derive(kctx, out, &outlen) <= 0)
+		goto error;
+
+	EVP_KDF_CTX_free(kctx);
+	*kctxp = NULL;
+
+	luaL_pushresultsize(&b, outlen);
+
+	return 1;
+
+error:
+	if (*kctxp) {
+		EVP_KDF_CTX_free(kctx);
+		*kctxp = NULL;
+	}
+	return auxL_error(L, auxL_EOPENSSL, "kdf.derive");
+} /* kdf_derive */
+
+
+static const auxL_Reg kdf_globals[] = {
+	{ "derive",    &kdf_derive },
+	{ NULL,        NULL },
+};
+
+int luaopen__openssl_kdf(lua_State *L) {
+	initall(L);
+
+	auxL_newlib(L, kdf_globals, 0);
+
+	return 1;
+} /* luaopen__openssl_kdf() */
 
 
 /*
