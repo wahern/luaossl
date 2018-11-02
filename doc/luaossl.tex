@@ -872,7 +872,7 @@ name & \href{https://www.openssl.org/docs/ssl/SSL_CTX_set_options.html}{descript
 \small{\texttt{OP\_SSLEAY\_080\_CLIENT\_DH\_BUG}} & $\ldots$ \\
 \small{\texttt{OP\_TLS\_D5\_BUG}} & $\ldots$ \\
 \small{\texttt{OP\_TLS\_BLOCK\_PADDING\_BUG}} & $\ldots$ \\
-\small{\texttt{OP\_ALLOW\_NO\_DHE\_KEX}} & Allow a non-(ec)dhe based kex_mode. \\
+\small{\texttt{OP\_ALLOW\_NO\_DHE\_KEX}} & Allow a non-(ec)dhe based kex\_mode. \\
 \small{\texttt{OP\_DONT\_INSERT\_EMPTY\_FRAGMENTS}} & Disables a countermeasure against a SSL 3.0/TLS 1.0 protocol vulnerability affecting CBC ciphers, which cannot be handled by some broken SSL implementations. This option has no effect for connections using other ciphers. \\
 \small{\texttt{OP\_NO\_QUERY\_MTU}} & $\ldots$ \\
 \small{\texttt{OP\_COOKIE\_EXCHANGE}} & $\ldots$ \\
@@ -920,7 +920,7 @@ Sets if read ahead is enabled for the context, $yes$ should be a boolean.
 
 \subsubsection[\fn{context:getReadAhead}]{\fn{context:getReadAhead()}}
 
-Returns if read ahead is enable for the context instance as a boolean.
+Returns if read ahead is enabled for the context instance as a boolean.
 
 \subsubsection[\fn{context:setStore}]{\fn{context:setStore($store$)}}
 
@@ -1051,13 +1051,13 @@ See \fn{context:setTicketKeys}
 
 If version is $1$ then the extensions in the array must consist of a 2-byte Extension Type, a 2-byte length, and then length bytes of extension data. The type value has the same meaning as for \fn{context:addCustomExtension}.
 
-If version is $2$ then the extensions in the array must consist of a 4-byte context, a 2-byte Extension Type, a 2-byte length, and then length bytes of extension_data. The context and type values have the same meaning as for \fn{context:addCustomExtension}. If serverinfo is being loaded for extensions to be added to a Certificate message, then the extension will only be added for the first certificate in the message (which is always the end-entity certificate).
+If version is $2$ then the extensions in the array must consist of a 4-byte context, a 2-byte Extension Type, a 2-byte length, and then length bytes of extension\_data. The context and type values have the same meaning as for \fn{context:addCustomExtension}. If serverinfo is being loaded for extensions to be added to a Certificate message, then the extension will only be added for the first certificate in the message (which is always the end-entity certificate).
 
 \emph{Only supported since OpenSSL 1.0.2, ServerInfo version 2 is only supported since OpenSSL 1.1.1}
 
 \subsubsection[\fn{context:useServerInfoFile}]{\fn{context:useServerInfoFile($file$)}}
 
-Loads one or more serverinfo extensions from $file$ into $context$. The extensions must be in PEM format. Each extension must be in a format as described above for \fn{context:useServerInfo}. Each PEM extension name must begin with the phrase "BEGIN SERVERINFOV2 FOR " for version 2 data or "BEGIN SERVERINFO FOR " for version 1 data.
+Loads one or more serverinfo extensions from $file$ into $context$. The extensions must be in PEM format. Each extension must be in a format as described above for \fn{context:useServerInfo}. Each PEM extension name must begin with the phrase ``BEGIN SERVERINFOV2 FOR '' for version 2 data or ``BEGIN SERVERINFO FOR '' for version 1 data.
 
 \emph{Only supported since OpenSSL 1.0.2}
 
@@ -1065,7 +1065,7 @@ Loads one or more serverinfo extensions from $file$ into $context$. The extensio
 
 Adds a custom extension with the TLS extension type (see RFC 5246) $ext\_type$ that may be present in the context(s) specifed by $ext\_context$, which should be a bitmask of the flags:
 
-\begin{tabular}{ c | l }
+\begin{ctabular}{ l | p{8cm} }
 name & description \\\hline
 EXT\_TLS\_ONLY & The extension is only allowed in TLS \\
 EXT\_DTLS\_ONLY & The extension is only allowed in DTLS \\
@@ -1082,7 +1082,7 @@ EXT\_TLS1\_3\_HELLO\_RETRY\_REQUEST & The extension may be present in a HelloRet
 EXT\_TLS1\_3\_CERTIFICATE & The extension may be present in a TLSv1.3 compatible Certificate message. \\
 EXT\_TLS1\_3\_NEW\_SESSION\_TICKET & The extension may be present in a TLSv1.3 compatible NewSessionTicket message. \\
 EXT\_TLS1\_3\_CERTIFICATE\_REQUEST & The extension may be present in a TLSv1.3 compatible CertificateRequest message.
-\end{tabular}
+\end{ctabular}
 
 $add\_cb$ should be a function with signature \fn{add\_cb($ssl$, $ext\_type$, $ext\_context$, $x509$, $chainidx$)}; it will be called from the relevant context to allow you to insert extension data.
 It receives the $ssl$ object of the connection, the $ext\_type$ you registered the callback for, the current $context$ and, for only some contexts, the current \module{openssl.x509} certificate and chain index (as an integer). You should return the extension data as a string, $false$ if you don't want to add your extension, or $nil$ and an optional integer specifying the TLS error code to raise an error.
@@ -1132,7 +1132,7 @@ Sets if read ahead is enabled for the SSL connection instance, $yes$ should be a
 
 \subsubsection[\fn{ssl:getReadAhead}]{\fn{ssl:getReadAhead()}}
 
-Returns if read ahead is enable for the SSL connection instance as a boolean.
+Returns if read ahead is enabled for the SSL connection instance as a boolean.
 
 \subsubsection[\fn{ssl:setStore}]{\fn{ssl:setStore($store$)}}
 
