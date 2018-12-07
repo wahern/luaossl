@@ -1,3 +1,10 @@
+liblua-openssl (20181207-0) unstable; urgency=low
+
+  * Add context.pushffi
+  * Add :setCertificateChain() and :getCertificateChain()
+
+-- Daurnimator <quae@daurnimator.com>  Fri, 07 Dec 2018 14:42:26 -0800
+
 liblua-openssl (20181102-0) unstable; urgency=low
 
   * Update SSL options
