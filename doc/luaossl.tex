@@ -967,6 +967,18 @@ Returns the X.509 certificate \module{openssl.x509} object to be sent during SSL
 
 \emph{Only supported since OpenSSL 1.0.2.}
 
+\subsubsection[\fn{context:setCertificateChain}]{\fn{context:setCertificateChain($chain$)}}
+
+Sets the X.509 certificate chain \module{openssl.x509.chain} object $chain$ to send during SSL connection instance handshakes.
+
+\emph{Only supported since OpenSSL 1.0.2.}
+
+\subsubsection[\fn{context:getCertificateChain}]{\fn{context:getCertificateChain()}}
+
+Returns the X.509 certificate chain \module{openssl.x509.chain} object to be sent during SSL connection instance handshakes.
+
+\emph{Only supported since OpenSSL 1.0.2.}
+
 \subsubsection[\fn{context:setPrivateKey}]{\fn{context:setPrivateKey($key$)}}
 
 Sets the private key \module{openssl.pkey} object $key$ for use during SSL connection instance handshakes.
@@ -1170,6 +1182,20 @@ Returns two values: the integer verification result code and the string represen
 
 Sets the X.509 certificate \module{openssl.x509} object $crt$ to send during SSL connection instance handshakes.
 See \fn{openssl.ssl.context:setCertificate}.
+
+\subsubsection[\fn{ssl:setCertificateChain}]{\fn{ssl:setCertificateChain($chain$)}}
+
+Sets the X.509 certificate chain \module{openssl.x509.chain} object $chain$ to send during SSL connection instance handshakes.
+See \fn{openssl.ssl.context:setCertificateChain}.
+
+\emph{Only supported since OpenSSL 1.0.2.}
+
+\subsubsection[\fn{context:getCertificateChain}]{\fn{context:getCertificateChain()}}
+
+Returns the X.509 certificate chain \module{openssl.x509.chain} object to be sent during SSL connection instance handshakes.
+See \fn{openssl.ssl.context:getCertificateChain}.
+
+\emph{Only supported since OpenSSL 1.0.2.}
 
 \subsubsection[\fn{ssl:setPrivateKey}]{\fn{ssl:setPrivateKey($key$)}}
 
