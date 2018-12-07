@@ -8432,6 +8432,23 @@ static void sx_push(lua_State *L, SSL_CTX *ctx) {
 } /* sx_push() */
 
 
+static int sx_pushffi(lua_State *L) {
+	SSL_CTX *ptr;
+
+	lua_pushvalue(L, lua_upvalueindex(1));
+	lua_pushvalue(L, 1);
+	lua_call(L, 1, 1);
+	luaL_argcheck(L, lua_toboolean(L, -1), 1, "SSL_CTX* ffi pointer expected");
+	lua_pop(L, 1);
+	ptr = *(SSL_CTX**)lua_topointer(L, 1);
+	luaL_argcheck(L, ptr, 1, "SSL_CTX* pointer must be non-null");
+
+	sx_push(L, ptr);
+
+	return 1;
+} /* ssl_pushffi() */
+
+
 static int sx_new(lua_State *L) {
 	static const char *const opts[] = {
 		[0] = "SSL",
@@ -9533,6 +9550,7 @@ static const auxL_Reg sx_metatable[] = {
 
 static const auxL_Reg sx_globals[] = {
 	{ "new",       &sx_new },
+	{ "pushffi",   &sx_pushffi, 1 },
 	{ "interpose", &sx_interpose },
 	{ NULL,        NULL },
 };
@@ -9683,6 +9701,26 @@ EXPORT int luaopen__openssl_ssl_context(lua_State *L) {
 	initall(L);
 
 	auxL_newlib(L, sx_globals, 0);
+	/* FFI argument checking */
+	lua_getfield(L, -1, "pushffi");
+	luaL_loadstring(L,
+		"local ffi = require 'ffi'\n"                 \
+		"if not pcall(ffi.typeof, 'SSL_CTX*') then\n"     \
+		"    ffi.cdef 'typedef struct ssl_ctx_st SSL_CTX;'\n" \
+		"end\n"                                       \
+		"local ffi_istype = ffi.istype\n"             \
+		"local SSL_CTXp = ffi.typeof('SSL_CTX*')\n"           \
+		"return function(p) return ffi_istype(SSL_CTXp, p) end\n"
+	);
+	if (lua_pcall(L, 0, 1, 0)) {
+		/* failed (probably no ffi library available) */
+		lua_pop(L, 1);
+		/* use dummy function instead */
+		luaL_loadstring(L, "return false\n");
+	};
+	lua_setupvalue(L, -2, 1);
+	lua_pop(L, 1);
+
 	auxL_setintegers(L, sx_verify);
 	auxL_setintegers(L, sx_option);
 	auxL_setintegers(L, sx_ext);
