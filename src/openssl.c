@@ -279,6 +279,10 @@
 #define HAVE_SSL_CTX_ADD_CUSTOM_EXT OPENSSL_PREREQ(1,1,1)
 #endif
 
+#ifndef HAVE_SSL_CTX_GET0_CHAIN_CERTS
+#define HAVE_SSL_CTX_GET0_CHAIN_CERTS OPENSSL_PREREQ(1,0,2)
+#endif
+
 #ifndef HAVE_SSL_CTX_GET0_PARAM
 #define HAVE_SSL_CTX_GET0_PARAM (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,7,0))
 #endif
@@ -313,6 +317,10 @@
 
 #ifndef HAVE_SSL_CTX_SET1_CERT_STORE
 #define HAVE_SSL_CTX_SET1_CERT_STORE (HAVE_SSL_CTX_set1_cert_store || OPENSSL_PREREQ(1,1,1)) /* backwards compatible with old macro name */
+#endif
+
+#ifndef HAVE_SSL_CTX_SET1_CHAIN
+#define HAVE_SSL_CTX_SET1_CHAIN OPENSSL_PREREQ(1,0,2)
 #endif
 
 #ifndef HAVE_SSL_CTX_SET1_PARAM
@@ -363,6 +371,10 @@
 #define HAVE_SSL_GET0_ALPN_SELECTED HAVE_SSL_CTX_SET_ALPN_PROTOS
 #endif
 
+#ifndef HAVE_SSL_GET0_CHAIN_CERTS
+#define HAVE_SSL_GET0_CHAIN_CERTS OPENSSL_PREREQ(1,0,2)
+#endif
+
 #ifndef HAVE_SSL_GET0_PARAM
 #define HAVE_SSL_GET0_PARAM (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,7,0))
 #endif
@@ -385,6 +397,10 @@
 
 #ifndef HAVE_SSL_SET_CURVES_LIST
 #define HAVE_SSL_SET_CURVES_LIST (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,5,1))
+#endif
+
+#ifndef HAVE_SSL_SET1_CHAIN
+#define HAVE_SSL_SET1_CHAIN OPENSSL_PREREQ(1,0,2)
 #endif
 
 #ifndef HAVE_SSL_SET1_PARAM
@@ -8758,6 +8774,36 @@ static int sx_getCertificate(lua_State *L) {
 #endif
 
 
+#if HAVE_SSL_CTX_SET1_CHAIN
+static int sx_setCertificateChain(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	STACK_OF(X509) *certs = checksimple(L, 2, X509_CHAIN_CLASS);
+
+	if (!SSL_CTX_set1_chain(ctx, certs))
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setCertificateChain");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_setCertificateChain() */
+#endif
+
+
+#if HAVE_SSL_CTX_GET0_CHAIN_CERTS
+static int sx_getCertificateChain(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	STACK_OF(X509) *certs;
+
+	if (!SSL_CTX_get0_chain_certs(ctx, &certs))
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:getCertificateChain");
+
+	xl_dup(L, X509_chain_up_ref(certs), 1);
+
+	return 1;
+} /* sx_getCertificateChain() */
+#endif
+
+
 static int sx_setPrivateKey(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
@@ -9500,6 +9546,12 @@ static const auxL_Reg sx_methods[] = {
 #if HAVE_SSL_CTX_GET0_CERTIFICATE
 	{ "getCertificate",   &sx_getCertificate },
 #endif
+#if HAVE_SSL_CTX_SET1_CHAIN
+	{ "setCertificateChain", &sx_setCertificateChain },
+#endif
+#if HAVE_SSL_CTX_GET0_CHAIN_CERTS
+	{ "getCertificateChain", &sx_getCertificateChain },
+#endif
 	{ "setPrivateKey",    &sx_setPrivateKey },
 	{ "setCipherList",    &sx_setCipherList },
 #if HAVE_SSL_CTX_SET_CURVES_LIST
@@ -9982,6 +10034,36 @@ static int ssl_setCertificate(lua_State *L) {
 } /* ssl_setCertificate() */
 
 
+#if HAVE_SSL_SET1_CHAIN
+static int ssl_setCertificateChain(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	STACK_OF(X509) *certs = checksimple(L, 2, X509_CHAIN_CLASS);
+
+	if (!SSL_set1_chain(ssl, certs))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setCertificateChain");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setCertificateChain() */
+#endif
+
+
+#if HAVE_SSL_GET0_CHAIN_CERTS
+static int ssl_getCertificateChain(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	STACK_OF(X509) *certs;
+
+	if (!SSL_get0_chain_certs(ssl, &certs))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:getCertificateChain");
+
+	xl_dup(L, X509_chain_up_ref(certs), 1);
+
+	return 1;
+} /* ssl_getCertificateChain() */
+#endif
+
+
 static int ssl_setPrivateKey(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	EVP_PKEY *key = checksimple(L, 2, PKEY_CLASS);
@@ -10392,6 +10474,12 @@ static const auxL_Reg ssl_methods[] = {
 	{ "getVerify",        &ssl_getVerify },
 	{ "getVerifyResult",  &ssl_getVerifyResult },
 	{ "setCertificate",   &ssl_setCertificate },
+#if HAVE_SSL_SET1_CHAIN
+	{ "setCertificateChain", &ssl_setCertificateChain },
+#endif
+#if HAVE_SSL_GET0_CHAIN_CERTS
+	{ "getCertificateChain", &ssl_getCertificateChain },
+#endif
 	{ "setPrivateKey",    &ssl_setPrivateKey },
 	{ "getCertificate",   &ssl_getCertificate },
 	{ "getPeerCertificate", &ssl_getPeerCertificate },
