@@ -255,6 +255,10 @@
 #define HAVE_EVP_PKEY_KEYGEN (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
 #endif
 
+#ifndef HAVE_EVP_PKEY_RAW
+#define HAVE_EVP_PKEY_RAW OPENSSL_PREREQ(1,1,1)
+#endif
+
 #ifndef HAVE_HMAC_CTX_FREE
 #define HAVE_HMAC_CTX_FREE (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(2,7,0))
 #endif
@@ -4301,12 +4305,18 @@ enum pk_param  {
 	PK_EC_GROUP,
 	PK_EC_PUB_KEY,
 	PK_EC_PRIV_KEY,
+
+#define PK_RAW_OPTLIST { "pub_key", "priv_key", NULL }
+#define PK_RAW_OPTOFFSET PK_RAW_PUB_KEY
+	PK_RAW_PUB_KEY,
+	PK_RAW_PRIV_KEY,
 }; /* enum pk_param */
 
 static const char *const pk_rsa_optlist[] = PK_RSA_OPTLIST;
 static const char *const pk_dsa_optlist[] = PK_DSA_OPTLIST;
 static const char *const pk_dh_optlist[] = PK_DH_OPTLIST;
 static const char *const pk_ec_optlist[] = PK_EC_OPTLIST;
+static const char *const pk_raw_optlist[] = PK_RAW_OPTLIST;
 
 const char *const *pk_getoptlist(int type, int *_nopts, int *_optoffset) {
 	const char *const *optlist = NULL;
@@ -4337,6 +4347,17 @@ const char *const *pk_getoptlist(int type, int *_nopts, int *_optoffset) {
 		optoffset = PK_EC_OPTOFFSET;
 
 		break;
+#if HAVE_EVP_PKEY_RAW
+	case EVP_PKEY_X25519:
+	case EVP_PKEY_X448:
+	case EVP_PKEY_ED25519:
+	case EVP_PKEY_ED448:
+		optlist = pk_raw_optlist;
+		nopts = countof(pk_raw_optlist) - 1;
+		optoffset = PK_RAW_OPTOFFSET;
+
+		break;
+#endif
 	}
 
 	if (_nopts)
@@ -4353,6 +4374,8 @@ static EC_GROUP *ecg_dup_nil(lua_State *, const EC_GROUP *);
 
 static void pk_pushparam(lua_State *L, EVP_PKEY *pkey, enum pk_param which) {
 	const BIGNUM *i;
+	luaL_Buffer B;
+	size_t len;
 
 	switch (which) {
 	case PK_RSA_N:
@@ -4467,6 +4490,20 @@ static void pk_pushparam(lua_State *L, EVP_PKEY *pkey, enum pk_param which) {
 	}
 	case PK_EC_PRIV_KEY:
 		bn_dup_nil(L, EC_KEY_get0_private_key(EVP_PKEY_get0_EC_KEY(pkey)));
+
+		break;
+#endif
+#if HAVE_EVP_PKEY_RAW
+	case PK_RAW_PUB_KEY:
+		EVP_PKEY_get_raw_public_key(pkey, NULL, &len);
+		EVP_PKEY_get_raw_public_key(pkey, (unsigned char*)luaL_buffinitsize(L, &B, len), &len);
+		luaL_pushresultsize(&B, len);
+
+		break;
+	case PK_RAW_PRIV_KEY:
+		EVP_PKEY_get_raw_private_key(pkey, NULL, &len);
+		EVP_PKEY_get_raw_private_key(pkey, (unsigned char*)luaL_buffinitsize(L, &B, len), &len);
+		luaL_pushresultsize(&B, len);
 
 		break;
 #endif
@@ -4611,6 +4648,13 @@ static void pk_setparam(lua_State *L, EVP_PKEY *pkey, enum pk_param which, int i
 
 		break;
 	}
+#endif
+#if HAVE_EVP_PKEY_RAW
+	case PK_RAW_PUB_KEY:
+	case PK_RAW_PRIV_KEY:
+		luaL_error(L, "%d: EVP_PKEY parameter is immutable", which);
+
+		break;
 #endif
 	default:
 		luaL_error(L, "%d: invalid EVP_PKEY parameter", which);
