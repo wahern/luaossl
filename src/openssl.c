@@ -235,6 +235,10 @@
 #define HAVE_EVP_PKEY_ID (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
 #endif
 
+#ifndef HAVE_EVP_PKEY_KEYGEN
+#define HAVE_EVP_PKEY_KEYGEN (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
+#endif
+
 #ifndef HAVE_HMAC_CTX_FREE
 #define HAVE_HMAC_CTX_FREE (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(2,7,0))
 #endif
@@ -3586,12 +3590,12 @@ static int pk_new(lua_State *L) {
 
 		ud = prepsimple(L, PKEY_CLASS);
 
-		if (!(*ud = EVP_PKEY_new()))
-			return auxL_error(L, auxL_EOPENSSL, "pkey.new");
-
 		switch (type) {
 		case EVP_PKEY_RSA: {
 			RSA *rsa;
+
+			if (!(*ud = EVP_PKEY_new()))
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 			if (!(rsa = RSA_new()))
 				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
@@ -3609,6 +3613,9 @@ static int pk_new(lua_State *L) {
 		}
 		case EVP_PKEY_DSA: {
 			DSA *dsa;
+
+			if (!(*ud = EVP_PKEY_new()))
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 			if (!(dsa = DSA_new()))
 				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
@@ -3631,6 +3638,9 @@ static int pk_new(lua_State *L) {
 		}
 		case EVP_PKEY_DH: {
 			DH *dh;
+
+			if (!(*ud = EVP_PKEY_new()))
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 			/* DH Parameter Generation can take a long time, therefore we look
 			 * at the "dhparam" field, provided by the user.
@@ -3672,6 +3682,9 @@ static int pk_new(lua_State *L) {
 			EC_GROUP *grp;
 			EC_KEY *key;
 
+			if (!(*ud = EVP_PKEY_new()))
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+
 			if (!(grp = EC_GROUP_new_by_curve_name(curve)))
 				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
@@ -3702,7 +3715,27 @@ static int pk_new(lua_State *L) {
 		}
 #endif
 		default:
+#if HAVE_EVP_PKEY_KEYGEN
+		{
+			EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(type, NULL);
+			if (!ctx)
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+
+			if (EVP_PKEY_keygen_init(ctx) <= 0) {
+				EVP_PKEY_CTX_free(ctx);
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+			}
+
+			if (EVP_PKEY_keygen(ctx, ud) != 1) {
+				EVP_PKEY_CTX_free(ctx);
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+			}
+
+			break;
+		}
+#else
 			return luaL_error(L, "%d: unsupported EVP_PKEY base type", EVP_PKEY_type(type));
+#endif
 		} /* switch() */
 	} else if (lua_isstring(L, 1)) {
 		int type = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
