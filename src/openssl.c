@@ -3161,11 +3161,11 @@ EXPORT int luaopen__openssl(lua_State *L) {
 	lua_pushstring(L, OPENSSL_VERSION_TEXT);
 	lua_setfield(L, -2, "VERSION_TEXT");
 
-	lua_pushstring(L, SHLIB_VERSION_HISTORY);
-	lua_setfield(L, -2, "SHLIB_VERSION_HISTORY");
+	lua_pushstring(L, SSL3_VERSION_MINOR);
+	lua_setfield(L, -2, "SSL3_VERSION_MINOR");
 
-	lua_pushstring(L, SHLIB_VERSION_NUMBER);
-	lua_setfield(L, -2, "SHLIB_VERSION_NUMBER");
+	lua_pushstring(L, SSLEAY_VERSION_NUMBER);
+	lua_setfield(L, -2, "SSLEAY_VERSION_NUMBER");
 
 #if defined LIBRESSL_VERSION_NUMBER
 	auxL_pushinteger(L, LIBRESSL_VERSION_NUMBER);
