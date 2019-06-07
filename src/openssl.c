@@ -7160,6 +7160,125 @@ static int xc_sign(lua_State *L) {
 } /* xc_sign() */
 
 
+static int xc_verify(lua_State *L) {
+	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
+	X509_STORE *store = NULL;
+	STACK_OF(X509) *chain = NULL;
+	X509_VERIFY_PARAM *params = NULL;
+	X509_STORE_CTX *ctx = NULL;
+	int ok, why;
+	STACK_OF(X509) **proof;
+
+	if (lua_istable(L, 2)) {
+		if (lua_getfield(L, 2, "store") != LUA_TNIL) {
+			store = checksimple(L, -1, X509_STORE_CLASS);
+		} else if (!(OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,7,5))) {
+			/*
+			Without .store OpenSSL 1.0.1 crashes e.g.
+
+			#0  X509_STORE_get_by_subject (vs=vs@entry=0x6731b0, type=type@entry=1, name=name@entry=0x66a360, ret=ret@entry=0x7fffffffe580) at x509_lu.c:293
+			#1  0x00007ffff69653ca in X509_STORE_CTX_get1_issuer (issuer=0x7fffffffe620, ctx=0x6731b0, x=0x665db0) at x509_lu.c:604
+			#2  0x00007ffff696117c in X509_verify_cert (ctx=ctx@entry=0x6731b0) at x509_vfy.c:256
+
+			Was fixed in LibreSSL somewhere between 2.6.5 and 2.7.5
+			*/
+			luaL_argerror(L, 2, ".store required in OpenSSL <= 1.0.1");
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 2, "chain") != LUA_TNIL) {
+			chain = checksimple(L, -1, X509_CHAIN_CLASS);
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 2, "params") != LUA_TNIL) {
+			params = checksimple(L, -1, X509_VERIFY_PARAM_CLASS);
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 2, "crls") != LUA_TNIL) {
+			luaL_argerror(L, 2, "crls not yet supported");
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 2, "dane") != LUA_TNIL) {
+			luaL_argerror(L, 2, "dane not yet supported");
+		}
+		lua_pop(L, 1);
+	}
+
+	/* pre-allocate space for a successful return */
+	proof = prepsimple(L, X509_CHAIN_CLASS);
+
+	if (chain) {
+		X509 *elm;
+		int i, n;
+
+		if (!(chain = sk_X509_dup(chain)))
+			goto eossl;
+
+		n = sk_X509_num(chain);
+
+		for (i = 0; i < n; i++) {
+			if (!(elm = sk_X509_value(chain, i)))
+				continue;
+			X509_up_ref(elm);
+		}
+	}
+
+	if (!(ctx = X509_STORE_CTX_new()) || !X509_STORE_CTX_init(ctx, store, crt, chain)) {
+		sk_X509_pop_free(chain, X509_free);
+		goto eossl;
+	}
+
+	if (params) {
+		X509_VERIFY_PARAM *params_copy = X509_VERIFY_PARAM_new();
+		if (!params_copy)
+			goto eossl;
+
+		ok = X509_VERIFY_PARAM_inherit(params_copy, params);
+		if (!ok) {
+			X509_VERIFY_PARAM_free(params_copy);
+			goto eossl;
+		}
+
+		X509_STORE_CTX_set0_param(ctx, params_copy);
+	}
+
+	ERR_clear_error();
+
+	ok = X509_verify_cert(ctx);
+
+	switch (ok) {
+	case 1: /* verified */
+		if (!(*proof = X509_STORE_CTX_get1_chain(ctx)))
+			goto eossl;
+		X509_STORE_CTX_free(ctx);
+
+		lua_pushboolean(L, 1);
+		lua_pushvalue(L, -2);
+
+		return 2;
+	case 0: /* not verified */
+		why = X509_STORE_CTX_get_error(ctx);
+		X509_STORE_CTX_free(ctx);
+
+		lua_pushboolean(L, 0);
+		lua_pushstring(L, X509_verify_cert_error_string(why));
+
+		return 2;
+	default:
+		goto eossl;
+	}
+
+eossl:
+	if (ctx)
+		X509_STORE_CTX_free(ctx);
+
+	return auxL_error(L, auxL_EOPENSSL, "x509.cert:verify");
+} /* xc_verify() */
+
+
 static int xc_text(lua_State *L) {
 	static const struct { const char *kw; unsigned int flag; } map[] = {
 		{ "no_header", X509_FLAG_NO_HEADER },
@@ -7311,6 +7430,7 @@ static const auxL_Reg xc_methods[] = {
 	{ "getPublicKeyDigest", &xc_getPublicKeyDigest },
 	{ "getSignatureName", &xc_getSignatureName },
 	{ "sign",          &xc_sign },
+	{ "verify",        &xc_verify },
 	{ "text",          &xc_text },
 	{ "toPEM",         &xc_toPEM },
 	{ "tostring",      &xc__tostring },
