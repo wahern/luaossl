@@ -479,6 +479,10 @@
 #define HAVE_STACK_OPENSSL_STRING_FUNCS (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
 #endif
 
+#ifndef HAVE_X509_CHAIN_UP_REF
+#define HAVE_X509_CHAIN_UP_REF OPENSSL_PREREQ(1,0,2)
+#endif
+
 #ifndef HAVE_X509_CRL_GET0_LASTUPDATE
 #define HAVE_X509_CRL_GET0_LASTUPDATE (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(2,7,0))
 #endif
@@ -2127,6 +2131,24 @@ static int compat_X509_up_ref(X509 *crt) {
 
 	return 1;
 } /* compat_X509_up_ref() */
+#endif
+
+#if !HAVE_X509_CHAIN_UP_REF
+/*
+ * NB: this operation dups the chain (but not the certificates within it)
+ */
+#define X509_chain_up_ref(...) EXPAND( compat_X509_chain_up_ref(__VA_ARGS__) )
+
+STACK_OF(X509) *compat_X509_chain_up_ref(STACK_OF(X509) *chain) {
+    STACK_OF(X509) *ret;
+    int i;
+    ret = sk_X509_dup(chain);
+    for (i = 0; i < sk_X509_num(ret); i++) {
+        X509 *x = sk_X509_value(ret, i);
+        X509_up_ref(x);
+    }
+    return ret;
+} /* compat_X509_chain_up_ref() */
 #endif
 
 #if !HAVE_X509_VERIFY_PARAM_SET1_EMAIL
@@ -7210,21 +7232,8 @@ static int xc_verify(lua_State *L) {
 	/* pre-allocate space for a successful return */
 	proof = prepsimple(L, X509_CHAIN_CLASS);
 
-	if (chain) {
-		X509 *elm;
-		int i, n;
-
-		if (!(chain = sk_X509_dup(chain)))
-			goto eossl;
-
-		n = sk_X509_num(chain);
-
-		for (i = 0; i < n; i++) {
-			if (!(elm = sk_X509_value(chain, i)))
-				continue;
-			X509_up_ref(elm);
-		}
-	}
+	if (chain && !(chain = X509_chain_up_ref(chain)))
+		goto eossl;
 
 	if (!(ctx = X509_STORE_CTX_new()) || !X509_STORE_CTX_init(ctx, store, crt, chain)) {
 		sk_X509_pop_free(chain, X509_free);
@@ -8410,16 +8419,18 @@ EXPORT int luaopen__openssl_x509_crl(lua_State *L) {
 
 static void xl_dup(lua_State *L, STACK_OF(X509) *src, _Bool copy) {
 	STACK_OF(X509) **dst = prepsimple(L, X509_CHAIN_CLASS);
-	X509 *crt;
-	int i, n;
 
 	if (copy) {
+		int i, n;
+
 		if (!(*dst = sk_X509_new_null()))
 			goto error;
 
 		n = sk_X509_num(src);
 
 		for (i = 0; i < n; i++) {
+			X509 *crt;
+
 			if (!(crt = sk_X509_value(src, i)))
 				continue;
 
@@ -8432,21 +8443,13 @@ static void xl_dup(lua_State *L, STACK_OF(X509) *src, _Bool copy) {
 			}
 		}
 	} else {
-		if (!(*dst = sk_X509_dup(src)))
+		if (!(*dst = X509_chain_up_ref(src)))
 			goto error;
-
-		n = sk_X509_num(*dst);
-
-		for (i = 0; i < n; i++) {
-			if (!(crt = sk_X509_value(*dst, i)))
-				continue;
-			X509_up_ref(crt);
-		}
 	}
 
 	return;
 error:
-	auxL_error(L, auxL_EOPENSSL, "sk_X509_dup");
+	auxL_error(L, auxL_EOPENSSL, "xl_dup");
 } /* xl_dup() */
 
 
@@ -8664,19 +8667,8 @@ static int xs_verify(lua_State *L) {
 	proof = prepsimple(L, X509_CHAIN_CLASS);
 
 	if (!lua_isnoneornil(L, 3)) {
-		X509 *elm;
-		int i, n;
-
-		if (!(chain = sk_X509_dup(checksimple(L, 3, X509_CHAIN_CLASS))))
+		if (!(chain = X509_chain_up_ref(checksimple(L, 3, X509_CHAIN_CLASS))))
 			goto eossl;
-
-		n = sk_X509_num(chain);
-
-		for (i = 0; i < n; i++) {
-			if (!(elm = sk_X509_value(chain, i)))
-				continue;
-			X509_up_ref(elm);
-		}
 	}
 
 	if (!(ctx = X509_STORE_CTX_new()) || !X509_STORE_CTX_init(ctx, store, crt, chain)) {
