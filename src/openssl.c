@@ -9972,7 +9972,6 @@ static int sx_custom_ext_add_cb(SSL *s, unsigned int ext_type,
 {
 	SSL_CTX *ctx = SSL_get_SSL_CTX(s);
 	lua_State *L = NULL;
-	int otop, status;
 
 	*al = SSL_AD_INTERNAL_ERROR;
 
@@ -9998,7 +9997,7 @@ static int sx_custom_ext_add_cb(SSL *s, unsigned int ext_type,
 		lua_pushnil(L);
 
 	/* call protected helper */
-	if (LUA_OK != (status = lua_pcall(L, 6, 2, 0)))
+	if (LUA_OK != lua_pcall(L, 6, 2, 0))
 		/* leave error on the stack */
 		return -1;
 
@@ -10088,8 +10087,6 @@ static int sx_custom_ext_parse_cb(SSL *s, unsigned int ext_type,
 {
 	SSL_CTX *ctx = SSL_get_SSL_CTX(s);
 	lua_State *L = NULL;
-	size_t n;
-	int otop, status;
 
 	*al = SSL_AD_INTERNAL_ERROR;
 
@@ -10120,7 +10117,7 @@ static int sx_custom_ext_parse_cb(SSL *s, unsigned int ext_type,
 	lua_pushinteger(L, inlen);
 
 	/* call protected helper */
-	if (LUA_OK != (status = lua_pcall(L, 8, 2, 0))) {
+	if (LUA_OK != lua_pcall(L, 8, 2, 0)) {
 		lua_pop(L, 1);
 		return -1;
 	}
