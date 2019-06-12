@@ -2186,6 +2186,14 @@ STACK_OF(X509) *compat_X509_chain_up_ref(STACK_OF(X509) *chain) {
 #define EVP_F_EVP_KDF_CTX_NEW_ID 0
 #endif
 
+#ifndef EVP_R_UNSUPPORTED_ALGORITHM
+#define EVP_R_UNSUPPORTED_ALGORITHM EVP_R_UNKNOWN_OPTION
+#endif
+
+#ifndef EVP_R_COMMAND_NOT_SUPPORTED
+#define EVP_R_COMMAND_NOT_SUPPORTED EVP_R_UNKNOWN_OPTION
+#endif
+
 typedef struct {
 	int nid;
 	union {
