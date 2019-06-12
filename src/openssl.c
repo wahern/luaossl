@@ -3146,7 +3146,7 @@ static const char opensslconf_no[][20] = {
 	{ "" } /* in case nothing is defined above */
 }; /* opensslconf_no[] */
 
-static const auxL_IntegerReg ssleay_version[] = {
+static const auxL_IntegerReg openssl_integers[] = {
 #ifdef SSLEAY_VERSION_NUMBER
 	{ "SSLEAY_VERSION_NUMBER", SSLEAY_VERSION_NUMBER },
 #endif
@@ -3168,6 +3168,19 @@ static const auxL_IntegerReg ssleay_version[] = {
 #ifdef SSLEAY_DIR
 	{ "SSLEAY_DIR", SSLEAY_DIR },
 #endif
+#ifdef LIBRESSL_VERSION_NUMBER
+	{ "LIBRESSL_VERSION_NUMBER", LIBRESSL_VERSION_NUMBER },
+#endif
+#ifdef OPENSSL_VERSION_NUMBER
+	{ "OPENSSL_VERSION_NUMBER", OPENSSL_VERSION_NUMBER },
+#endif
+#ifdef LIBRESSL_VERSION_NUMBER
+	{ "VERSION_NUMBER", LIBRESSL_VERSION_NUMBER },
+#elif OPENSSL_VERSION_NUMBER
+	{ "VERSION_NUMBER", OPENSSL_VERSION_NUMBER },
+#else
+	{ "VERSION_NUMBER", SSLEAY_VERSION_NUMBER },
+#endif
 	{ NULL, 0 },
 };
 
@@ -3183,10 +3196,7 @@ EXPORT int luaopen__openssl(lua_State *L) {
 		}
 	}
 
-	auxL_setintegers(L, ssleay_version);
-
-	auxL_pushinteger(L, OPENSSL_VERSION_NUMBER);
-	lua_setfield(L, -2, "VERSION_NUMBER");
+	auxL_setintegers(L, openssl_integers);
 
 	lua_pushstring(L, OPENSSL_VERSION_TEXT);
 	lua_setfield(L, -2, "VERSION_TEXT");
@@ -3196,11 +3206,6 @@ EXPORT int luaopen__openssl(lua_State *L) {
 
 	lua_pushstring(L, SHLIB_VERSION_NUMBER);
 	lua_setfield(L, -2, "SHLIB_VERSION_NUMBER");
-
-#if defined LIBRESSL_VERSION_NUMBER
-	auxL_pushinteger(L, LIBRESSL_VERSION_NUMBER);
-	lua_setfield(L, -2, "LIBRESSL_VERSION_NUMBER");
-#endif
 
 	return 1;
 } /* luaopen__openssl() */
