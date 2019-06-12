@@ -19,20 +19,6 @@ local setCipherList; setCipherList = ssl.interpose("setCipherList", function (se
 	return setCipherList(self, ciphers)
 end)
 
--- Allow passing a vararg of curves, or an array
-local setCurvesList = ssl.interpose("setCurvesList", nil)
-if setCurvesList then
-	ssl.interpose("setCurvesList", function (self, curves, ...)
-		if (...) then
-			local curves_t = pack(curves, ...)
-			curves = table.concat(curves_t, ":", 1, curves_t.n)
-		elseif type(curves) == "table" then
-			curves = table.concat(curves, ":")
-		end
-		return setCurvesList(self, curves)
-	end)
-end
-
 -- Allow passing a vararg of ciphersuites, or an array
 local setCipherSuites = ssl.interpose("setCipherSuites", nil)
 if setCipherSuites then
@@ -45,6 +31,22 @@ if setCipherSuites then
 		end
 		return setCipherSuites(self, ciphers)
 	end)
+end
+
+-- Allow passing a vararg of curves, or an array
+local setGroups = ssl.interpose("setGroups", nil)
+if setGroups then
+	local function varargSetGroups(self, group, ...)
+		if (...) then
+			local group_t = pack(group, ...)
+			group = table.concat(group_t, ":", 1, group_t.n)
+		elseif type(group) == "table" then
+			group = table.concat(group, ":")
+		end
+		return setGroups(self, group)
+	end
+	ssl.interpose("setGroups", varargSetGroups)
+	ssl.interpose("setCurvesList", varargSetGroups)
 end
 
 return ssl

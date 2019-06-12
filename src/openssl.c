@@ -355,6 +355,21 @@
 #define HAVE_SSL_CTX_SET_CURVES_LIST (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,5,1))
 #endif
 
+#ifndef HAVE_SSL_CTX_SET_GROUPS_LIST
+#if OPENSSL_PREREQ(1,1,1)
+#define HAVE_SSL_CTX_SET_GROUPS_LIST 1
+#elif HAVE_SSL_CTX_SET_CURVES_LIST
+#define SSL_CTX_set1_groups_list SSL_CTX_set1_curves_list
+#define HAVE_SSL_CTX_SET_GROUPS_LIST 1
+#else
+#define HAVE_SSL_CTX_SET_GROUPS_LIST 0
+#endif
+#endif
+
+#ifndef HAVE_SSL_CTX_SET_GROUPS_LIST
+#define HAVE_SSL_CTX_SET_GROUPS_LIST OPENSSL_PREREQ(1,1,1)
+#endif
+
 #ifndef HAVE_SSL_CTX_SET_ECDH_AUTO
 #define HAVE_SSL_CTX_SET_ECDH_AUTO ((OPENSSL_PREREQ(1,0,2) && !OPENSSL_PREREQ(1,1,0)) || LIBRESSL_PREREQ(2,1,2))
 #endif
@@ -453,6 +468,17 @@
 
 #ifndef HAVE_SSL_SET_CURVES_LIST
 #define HAVE_SSL_SET_CURVES_LIST (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,5,1))
+#endif
+
+#ifndef HAVE_SSL_SET_GROUPS_LIST
+#if OPENSSL_PREREQ(1,1,1)
+#define HAVE_SSL_SET_GROUPS_LIST 1
+#elif HAVE_SSL_SET_CURVES_LIST
+#define SSL_set1_groups_list SSL_set1_curves_list
+#define HAVE_SSL_SET_GROUPS_LIST 1
+#else
+#define HAVE_SSL_SET_GROUPS_LIST 0
+#endif
 #endif
 
 #ifndef HAVE_SSL_SET1_CHAIN
@@ -9521,21 +9547,6 @@ static int sx_setCipherList(lua_State *L) {
 } /* sx_setCipherList() */
 
 
-#if HAVE_SSL_CTX_SET_CURVES_LIST
-static int sx_setCurvesList(lua_State *L) {
-	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
-	const char *curves = luaL_checkstring(L, 2);
-
-	if (!SSL_CTX_set1_curves_list(ctx, curves))
-		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setCurvesList");
-
-	lua_pushboolean(L, 1);
-
-	return 1;
-} /* sx_setCurvesList() */
-#endif
-
-
 #if HAVE_SSL_CTX_SET_CIPHERSUITES
 static int sx_setCipherSuites(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
@@ -9594,6 +9605,21 @@ static int sx_setEphemeralKey(lua_State *L) {
 
 	return 1;
 } /* sx_setEphemeralKey() */
+
+
+#if HAVE_SSL_CTX_SET_GROUPS_LIST
+static int sx_setGroups(lua_State *L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	const char *list = luaL_checkstring(L, 2);
+
+	if (!SSL_CTX_set1_groups_list(ctx, list))
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setGroups");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* sx_setGroups() */
+#endif
 
 
 #if HAVE_SSL_CTX_SET_ALPN_PROTOS
@@ -10262,13 +10288,14 @@ static const auxL_Reg sx_methods[] = {
 #endif
 	{ "setPrivateKey",    &sx_setPrivateKey },
 	{ "setCipherList",    &sx_setCipherList },
-#if HAVE_SSL_CTX_SET_CURVES_LIST
-	{ "setCurvesList",    &sx_setCurvesList },
-#endif
 #if HAVE_SSL_CTX_SET_CIPHERSUITES
 	{ "setCipherSuites",  &sx_setCipherSuites },
 #endif
 	{ "setEphemeralKey",  &sx_setEphemeralKey },
+#if HAVE_SSL_CTX_SET_GROUPS_LIST
+	{ "setCurvesList",    &sx_setGroups }, /* old alias */
+	{ "setGroups",        &sx_setGroups },
+#endif
 #if HAVE_SSL_CTX_SET_ALPN_PROTOS
 	{ "setAlpnProtos",    &sx_setAlpnProtos },
 #endif
@@ -10869,21 +10896,6 @@ static int ssl_setCipherList(lua_State *L) {
 } /* ssl_setCipherList() */
 
 
-#if HAVE_SSL_SET_CURVES_LIST
-static int ssl_setCurvesList(lua_State *L) {
-	SSL *ssl = checksimple(L, 1, SSL_CLASS);
-	const char *curves = luaL_checkstring(L, 2);
-
-	if (!SSL_set1_curves_list(ssl, curves))
-		return auxL_error(L, auxL_EOPENSSL, "ssl:setCurvesList");
-
-	lua_pushboolean(L, 1);
-
-	return 1;
-} /* ssl_setCurvesList() */
-#endif
-
-
 #if HAVE_SSL_SET_CIPHERSUITES
 static int ssl_setCipherSuites(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
@@ -10896,6 +10908,21 @@ static int ssl_setCipherSuites(lua_State *L) {
 
 	return 1;
 } /* ssl_setCipherSuites() */
+#endif
+
+
+#if HAVE_SSL_SET_GROUPS_LIST
+static int ssl_setGroups(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	const char *list = luaL_checkstring(L, 2);
+
+	if (!SSL_set1_groups_list(ssl, list))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setGroups");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setGroups() */
 #endif
 
 
@@ -11194,11 +11221,12 @@ static const auxL_Reg ssl_methods[] = {
 	{ "getPeerChain",     &ssl_getPeerChain },
 	{ "getCipherInfo",    &ssl_getCipherInfo },
 	{ "setCipherList",    &ssl_setCipherList },
-#if HAVE_SSL_SET_CURVES_LIST
-	{ "setCurvesList",    &ssl_setCurvesList },
-#endif
 #if HAVE_SSL_SET_CIPHERSUITES
 	{ "setCipherSuites",  &ssl_setCipherSuites },
+#endif
+#if HAVE_SSL_SET_GROUPS_LIST
+	{ "setCurvesList",    &ssl_setGroups }, /* old alias */
+	{ "setGroups",        &ssl_setGroups },
 #endif
 	{ "getHostName",      &ssl_getHostName },
 	{ "setHostName",      &ssl_setHostName },
