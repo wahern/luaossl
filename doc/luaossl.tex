@@ -597,6 +597,19 @@ Returns the type of signature used to sign the certificate as a string. e.g. ``R
 
 Signs and updates the instance certificate using the \module{openssl.pkey} $key$. $type$ is an optional string describing the digest type. See \module{pkey:sign}, regarding which types of digests are valid. If $type$ is omitted than a default type is used---``sha1'' for RSA keys, ``dss1'' for DSA keys, and ``ecdsa-with-SHA1'' for EC keys.
 
+\subsubsection[\fn{x509:verify}]{\fn{x509:verify\{ $\ldots$ \}}}
+
+Verifies the certificate against to the specified parameters.
+
+\begin{ctabular}{ c | c | p{9cm}}
+field & type & description\\\hline
+.store & \module{openssl.x509.store} & The certificate store to verify against, any custom settings from the store will be used. \\
+.chain & \module{openssl.x509.chain} & A collection of additional certificates to consider \\
+.params & \module{openssl.x509.verify\_param} & The verification parameters to use; overrides any parameters in $.store$
+\end{ctabular}
+
+Returns two values. The first is a boolean value for whether the specified certificate $crt$ was verified. If true, the second value is a \module{openssl.x509.chain} object validation chain. If false, the second value is a string describing why verification failed.
+
 \subsubsection[\fn{x509:text}]{\fn{x509:text()}}
 
 Returns a human-readable textual representation of the X.509 certificate.

@@ -479,6 +479,10 @@
 #define HAVE_STACK_OPENSSL_STRING_FUNCS (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
 #endif
 
+#ifndef HAVE_X509_CHAIN_UP_REF
+#define HAVE_X509_CHAIN_UP_REF OPENSSL_PREREQ(1,0,2)
+#endif
+
 #ifndef HAVE_X509_CRL_GET0_LASTUPDATE
 #define HAVE_X509_CRL_GET0_LASTUPDATE (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(2,7,0))
 #endif
@@ -2127,6 +2131,24 @@ static int compat_X509_up_ref(X509 *crt) {
 
 	return 1;
 } /* compat_X509_up_ref() */
+#endif
+
+#if !HAVE_X509_CHAIN_UP_REF
+/*
+ * NB: this operation dups the chain (but not the certificates within it)
+ */
+#define X509_chain_up_ref(...) EXPAND( compat_X509_chain_up_ref(__VA_ARGS__) )
+
+STACK_OF(X509) *compat_X509_chain_up_ref(STACK_OF(X509) *chain) {
+    STACK_OF(X509) *ret;
+    int i;
+    ret = sk_X509_dup(chain);
+    for (i = 0; i < sk_X509_num(ret); i++) {
+        X509 *x = sk_X509_value(ret, i);
+        X509_up_ref(x);
+    }
+    return ret;
+} /* compat_X509_chain_up_ref() */
 #endif
 
 #if !HAVE_X509_VERIFY_PARAM_SET1_EMAIL
@@ -7160,6 +7182,112 @@ static int xc_sign(lua_State *L) {
 } /* xc_sign() */
 
 
+static int xc_verify(lua_State *L) {
+	X509 *crt = checksimple(L, 1, X509_CERT_CLASS);
+	X509_STORE *store = NULL;
+	STACK_OF(X509) *chain = NULL;
+	X509_VERIFY_PARAM *params = NULL;
+	X509_STORE_CTX *ctx = NULL;
+	int ok, why;
+	STACK_OF(X509) **proof;
+
+	if (lua_istable(L, 2)) {
+		if (lua_getfield(L, 2, "store") != LUA_TNIL) {
+			store = checksimple(L, -1, X509_STORE_CLASS);
+		} else if (!(OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,7,5))) {
+			/*
+			Without .store OpenSSL 1.0.1 crashes e.g.
+
+			#0  X509_STORE_get_by_subject (vs=vs@entry=0x6731b0, type=type@entry=1, name=name@entry=0x66a360, ret=ret@entry=0x7fffffffe580) at x509_lu.c:293
+			#1  0x00007ffff69653ca in X509_STORE_CTX_get1_issuer (issuer=0x7fffffffe620, ctx=0x6731b0, x=0x665db0) at x509_lu.c:604
+			#2  0x00007ffff696117c in X509_verify_cert (ctx=ctx@entry=0x6731b0) at x509_vfy.c:256
+
+			Was fixed in LibreSSL somewhere between 2.6.5 and 2.7.5
+			*/
+			luaL_argerror(L, 2, ".store required in OpenSSL <= 1.0.1");
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 2, "chain") != LUA_TNIL) {
+			chain = checksimple(L, -1, X509_CHAIN_CLASS);
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 2, "params") != LUA_TNIL) {
+			params = checksimple(L, -1, X509_VERIFY_PARAM_CLASS);
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 2, "crls") != LUA_TNIL) {
+			luaL_argerror(L, 2, "crls not yet supported");
+		}
+		lua_pop(L, 1);
+
+		if (lua_getfield(L, 2, "dane") != LUA_TNIL) {
+			luaL_argerror(L, 2, "dane not yet supported");
+		}
+		lua_pop(L, 1);
+	}
+
+	/* pre-allocate space for a successful return */
+	proof = prepsimple(L, X509_CHAIN_CLASS);
+
+	if (chain && !(chain = X509_chain_up_ref(chain)))
+		goto eossl;
+
+	if (!(ctx = X509_STORE_CTX_new()) || !X509_STORE_CTX_init(ctx, store, crt, chain)) {
+		sk_X509_pop_free(chain, X509_free);
+		goto eossl;
+	}
+
+	if (params) {
+		X509_VERIFY_PARAM *params_copy = X509_VERIFY_PARAM_new();
+		if (!params_copy)
+			goto eossl;
+
+		ok = X509_VERIFY_PARAM_inherit(params_copy, params);
+		if (!ok) {
+			X509_VERIFY_PARAM_free(params_copy);
+			goto eossl;
+		}
+
+		X509_STORE_CTX_set0_param(ctx, params_copy);
+	}
+
+	ERR_clear_error();
+
+	ok = X509_verify_cert(ctx);
+
+	switch (ok) {
+	case 1: /* verified */
+		if (!(*proof = X509_STORE_CTX_get1_chain(ctx)))
+			goto eossl;
+		X509_STORE_CTX_free(ctx);
+
+		lua_pushboolean(L, 1);
+		lua_pushvalue(L, -2);
+
+		return 2;
+	case 0: /* not verified */
+		why = X509_STORE_CTX_get_error(ctx);
+		X509_STORE_CTX_free(ctx);
+
+		lua_pushboolean(L, 0);
+		lua_pushstring(L, X509_verify_cert_error_string(why));
+
+		return 2;
+	default:
+		goto eossl;
+	}
+
+eossl:
+	if (ctx)
+		X509_STORE_CTX_free(ctx);
+
+	return auxL_error(L, auxL_EOPENSSL, "x509.cert:verify");
+} /* xc_verify() */
+
+
 static int xc_text(lua_State *L) {
 	static const struct { const char *kw; unsigned int flag; } map[] = {
 		{ "no_header", X509_FLAG_NO_HEADER },
@@ -7311,6 +7439,7 @@ static const auxL_Reg xc_methods[] = {
 	{ "getPublicKeyDigest", &xc_getPublicKeyDigest },
 	{ "getSignatureName", &xc_getSignatureName },
 	{ "sign",          &xc_sign },
+	{ "verify",        &xc_verify },
 	{ "text",          &xc_text },
 	{ "toPEM",         &xc_toPEM },
 	{ "tostring",      &xc__tostring },
@@ -8290,16 +8419,18 @@ EXPORT int luaopen__openssl_x509_crl(lua_State *L) {
 
 static void xl_dup(lua_State *L, STACK_OF(X509) *src, _Bool copy) {
 	STACK_OF(X509) **dst = prepsimple(L, X509_CHAIN_CLASS);
-	X509 *crt;
-	int i, n;
 
 	if (copy) {
+		int i, n;
+
 		if (!(*dst = sk_X509_new_null()))
 			goto error;
 
 		n = sk_X509_num(src);
 
 		for (i = 0; i < n; i++) {
+			X509 *crt;
+
 			if (!(crt = sk_X509_value(src, i)))
 				continue;
 
@@ -8312,21 +8443,13 @@ static void xl_dup(lua_State *L, STACK_OF(X509) *src, _Bool copy) {
 			}
 		}
 	} else {
-		if (!(*dst = sk_X509_dup(src)))
+		if (!(*dst = X509_chain_up_ref(src)))
 			goto error;
-
-		n = sk_X509_num(*dst);
-
-		for (i = 0; i < n; i++) {
-			if (!(crt = sk_X509_value(*dst, i)))
-				continue;
-			X509_up_ref(crt);
-		}
 	}
 
 	return;
 error:
-	auxL_error(L, auxL_EOPENSSL, "sk_X509_dup");
+	auxL_error(L, auxL_EOPENSSL, "xl_dup");
 } /* xl_dup() */
 
 
@@ -8544,19 +8667,8 @@ static int xs_verify(lua_State *L) {
 	proof = prepsimple(L, X509_CHAIN_CLASS);
 
 	if (!lua_isnoneornil(L, 3)) {
-		X509 *elm;
-		int i, n;
-
-		if (!(chain = sk_X509_dup(checksimple(L, 3, X509_CHAIN_CLASS))))
+		if (!(chain = X509_chain_up_ref(checksimple(L, 3, X509_CHAIN_CLASS))))
 			goto eossl;
-
-		n = sk_X509_num(chain);
-
-		for (i = 0; i < n; i++) {
-			if (!(elm = sk_X509_value(chain, i)))
-				continue;
-			X509_up_ref(elm);
-		}
 	}
 
 	if (!(ctx = X509_STORE_CTX_new()) || !X509_STORE_CTX_init(ctx, store, crt, chain)) {
