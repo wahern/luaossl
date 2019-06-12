@@ -793,22 +793,22 @@ Binds the ``X509\_VERIFY\_PARAM'' OpenSSL object, principally used for setting p
 
 \subsubsection[\fn{verify\_param.new}]{\fn{verify\_param.new()}}
 
-Returns a new verify param object.
+Returns a new verify\_param object.
 
 \subsubsection[\fn{verify\_param.interpose}]{\fn{verify\_param.interpose($name$, $function$)}}
 
-Add or interpose a verify param class method. Returns the previous method, if any.
+Add or interpose a verify\_param class method. Returns the previous method, if any.
 
 \subsubsection[\fn{verify\_param:inherit}]{\fn{verify\_param:inherit($src$)}}
 
-Inherit flags from $src$. $src$ can be either another ``X509\_VERIFY\_PARAM'' object to inherit from, or a string referring to one of the OpenSSL predefined parameters:
+Inherit flags from $src$. $src$ can be either another \fn{verify\_param} object to inherit from, or a string referring to one of the OpenSSL predefined parameters:
 
-\begin{ctabular}{ c | p{12cm} }
-name & description\\\hline
-default & X509 default parameters\\
-smime\_sign & S/MIME sign parameters\\
-pkcs7 & Identical to $smime\_sign$\\
-ssl\_client & SSL/TLS client parameters\\
+\begin{ctabular}{ l | p{5cm} }
+name & description \\\hline
+default & X509 default parameters \\
+smime\_sign & S/MIME sign parameters \\
+pkcs7 & Identical to $smime\_sign$ \\
+ssl\_client & SSL/TLS client parameters \\
 ssl\_server & SSL/TLS server parameters
 \end{ctabular}
 
@@ -816,24 +816,24 @@ ssl\_server & SSL/TLS server parameters
 
 Sets the verification purpose of the $verify\_param$. Valid argument can be either an integer which corresponds to OpenSSL's internal purpose ID, or string indicating predefined purposes:
 
-\begin{ctabular}{ c | p{12cm} }
-name & description\\\hline
-sslclient & SSL/TLS client\\
-sslserver & SSL/TLS server\\
-nssslserver & Netscape SSL server\\
-smimeencrypt & S/MIME encryption\\
-any & Any Purpose\\
-ocsphelper & OCSP helper\\
+\begin{ctabular}{ l | p{4cm} }
+name & description \\\hline
+sslclient & SSL/TLS client \\
+sslserver & SSL/TLS server \\
+nssslserver & Netscape SSL server \\
+smimeencrypt & S/MIME encryption \\
+any & Any Purpose \\
+ocsphelper & OCSP helper \\
 timestampsign & Time Stamp signing
 \end{ctabular}
 
-\subsubsection[\fn{verify\_param:setTime}]{\fn{verify\_param:setTime($unix\_timestamp$)}}
+\subsubsection[\fn{verify\_param:setTime}]{\fn{verify\_param:setTime([$timestamp$])}}
 
 Sets the verification time in $verify\_param$ to the provided Unix timestamp. By default the current system time is used.
 
 \subsubsection[\fn{verify\_param:setDepth}]{\fn{verify\_param:setDepth($depth$)}}
 
-Sets the maximum verification depth to $depth$. That is the maximum number of untrusted CA certificates that can appear in a chain.
+Sets the maximum verification depth to $depth$. That is the maximum number of untrusted CA certificates that can appear in a chain.\footnote{OpenSSL's behaviour in regards to depth changed between OpenSSL 1.0.1 and OpenSSL 1.0.2; similarly for LibreSSL}
 
 \subsubsection[\fn{verify\_param:getDepth}]{\fn{verify\_param:getDepth()}}
 
@@ -853,19 +853,19 @@ Returns the current authentication security level.
 
 \subsubsection[\fn{verify\_param:setHost}]{\fn{verify\_param:setHost($name$)}}
 
-Sets the expected DNS hostname to $name$ and overriding any previously specified host name or names. If $name$ is absent then name checks will not be performed on the peer certificate.
+Sets the expected DNS hostname to the string $name$, overriding any previously specified host name or names. If $name$ is $nil$ then name checks will not be performed on the peer certificate.
 
 \emph{Only supported since OpenSSL 1.1.0.}
 
 \subsubsection[\fn{verify\_param:addHost}]{\fn{verify\_param:addHost($name$)}}
 
-Adds $name$ as an additional reference identifier that can match the peer's certificate. Any previous names set via $verify\_param:setHost$ or $verify\_param:addHost$ are retained. When multiple names are configured, the peer is considered verified when any name matches.
+Adds $name$ as an additional reference identifier that can match the peer's certificate. Any previous names set via \fn{verify\_param:setHost} or \fn{verify\_param:addHost} are retained. When multiple names are configured, the peer is considered verified when any name matches.
 
 \emph{Only supported since OpenSSL 1.1.0.}
 
 \subsubsection[\fn{verify\_param:setEmail}]{\fn{verify\_param:setEmail($email$)}}
 
-Sets the expected RFC822 email address to $email$ and overriding previously specified email address (if any).
+Sets the expected RFC822 email address to the string $email$, overriding any previously specified email address.
 
 \emph{Only supported since OpenSSL 1.1.0.}
 
