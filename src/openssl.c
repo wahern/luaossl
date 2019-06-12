@@ -263,8 +263,32 @@
 #define HAVE_EVP_PKEY_GET0 (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
 #endif
 
+#ifndef HAVE_EVP_PKEY_GET0_RSA
+#define HAVE_EVP_PKEY_GET0_RSA (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(2,7,5))
+#endif
+
+#ifndef HAVE_EVP_PKEY_GET0_DSA
+#define HAVE_EVP_PKEY_GET0_DSA (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(2,7,5))
+#endif
+
+#ifndef HAVE_EVP_PKEY_GET0_DH
+#define HAVE_EVP_PKEY_GET0_DH (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(2,7,5))
+#endif
+
+#ifndef HAVE_EVP_PKEY_GET0_EC_KEY
+#define HAVE_EVP_PKEY_GET0_EC_KEY (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(2,7,5))
+#endif
+
 #ifndef HAVE_EVP_PKEY_ID
 #define HAVE_EVP_PKEY_ID (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
+#endif
+
+#ifndef HAVE_EVP_PKEY_KEYGEN
+#define HAVE_EVP_PKEY_KEYGEN (OPENSSL_PREREQ(1,0,0) || LIBRESSL_PREREQ(2,0,0))
+#endif
+
+#ifndef HAVE_EVP_PKEY_RAW
+#define HAVE_EVP_PKEY_RAW OPENSSL_PREREQ(1,1,1)
 #endif
 
 #ifndef HAVE_HMAC_CTX_FREE
@@ -1746,6 +1770,46 @@ static int compat_EVP_PKEY_get_default_digest_nid(EVP_PKEY *key, int *nid) {
 } /* compat_EVP_PKEY_get_default_digest_nid() */
 #endif
 
+#if !HAVE_EVP_PKEY_GET0_RSA
+#define EVP_PKEY_get0_RSA(key) compat_EVP_PKEY_get0_RSA((key))
+
+static RSA *compat_EVP_PKEY_get0_RSA(EVP_PKEY *key) {
+	RSA *ptr = EVP_PKEY_get1_RSA(key);
+	RSA_free(ptr);
+	return ptr;
+} /* compat_EVP_PKEY_get0_RSA() */
+#endif
+
+#if !HAVE_EVP_PKEY_GET0_DSA
+#define EVP_PKEY_get0_DSA(key) compat_EVP_PKEY_get0_DSA((key))
+
+static DSA *compat_EVP_PKEY_get0_DSA(EVP_PKEY *key) {
+	DSA *ptr = EVP_PKEY_get1_DSA(key);
+	DSA_free(ptr);
+	return ptr;
+} /* compat_EVP_PKEY_get0_DSA() */
+#endif
+
+#if !HAVE_EVP_PKEY_GET0_DH
+#define EVP_PKEY_get0_DH(key) compat_EVP_PKEY_get0_DH((key))
+
+static DH *compat_EVP_PKEY_get0_DH(EVP_PKEY *key) {
+	DH *ptr = EVP_PKEY_get1_DH(key);
+	DH_free(ptr);
+	return ptr;
+} /* compat_EVP_PKEY_get0_DH() */
+#endif
+
+#if !HAVE_EVP_PKEY_GET0_EC_KEY && !defined(OPENSSL_NO_EC)
+#define EVP_PKEY_get0_EC_KEY(key) compat_EVP_PKEY_get0_EC_KEY((key))
+
+static EC_KEY *compat_EVP_PKEY_get0_EC_KEY(EVP_PKEY *key) {
+	EC_KEY *ptr = EVP_PKEY_get1_EC_KEY(key);
+	EC_KEY_free(ptr);
+	return ptr;
+} /* compat_EVP_PKEY_get0_EC_KEY() */
+#endif
+
 #if !HAVE_EVP_PKEY_GET0
 #define EVP_PKEY_get0(key) compat_EVP_PKEY_get0((key))
 
@@ -1754,22 +1818,14 @@ static void *compat_EVP_PKEY_get0(EVP_PKEY *key) {
 
 	switch (EVP_PKEY_base_id(key)) {
 	case EVP_PKEY_RSA:
-		if ((ptr = EVP_PKEY_get1_RSA(key)))
-			RSA_free(ptr);
-		break;
+		return EVP_PKEY_get0_RSA(key);
 	case EVP_PKEY_DSA:
-		if ((ptr = EVP_PKEY_get1_DSA(key)))
-			DSA_free(ptr);
-		break;
+		return EVP_PKEY_get0_DSA(key);
 	case EVP_PKEY_DH:
-		if ((ptr = EVP_PKEY_get1_DH(key)))
-			DH_free(ptr);
-		break;
+		return EVP_PKEY_get0_DH(key);
 #ifndef OPENSSL_NO_EC
 	case EVP_PKEY_EC:
-		if ((ptr = EVP_PKEY_get1_EC_KEY(key)))
-			EC_KEY_free(ptr);
-		break;
+		return EVP_PKEY_get0_EC_KEY(key);
 #endif
 	default:
 		/* TODO: Use ERR_put_error */
@@ -4087,12 +4143,12 @@ static int pk_new(lua_State *L) {
 
 		ud = prepsimple(L, PKEY_CLASS);
 
-		if (!(*ud = EVP_PKEY_new()))
-			return auxL_error(L, auxL_EOPENSSL, "pkey.new");
-
 		switch (type) {
 		case EVP_PKEY_RSA: {
 			RSA *rsa;
+
+			if (!(*ud = EVP_PKEY_new()))
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 			if (!(rsa = RSA_new()))
 				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
@@ -4110,6 +4166,9 @@ static int pk_new(lua_State *L) {
 		}
 		case EVP_PKEY_DSA: {
 			DSA *dsa;
+
+			if (!(*ud = EVP_PKEY_new()))
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 			if (!(dsa = DSA_new()))
 				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
@@ -4132,6 +4191,9 @@ static int pk_new(lua_State *L) {
 		}
 		case EVP_PKEY_DH: {
 			DH *dh;
+
+			if (!(*ud = EVP_PKEY_new()))
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
 			/* DH Parameter Generation can take a long time, therefore we look
 			 * at the "dhparam" field, provided by the user.
@@ -4173,6 +4235,9 @@ static int pk_new(lua_State *L) {
 			EC_GROUP *grp;
 			EC_KEY *key;
 
+			if (!(*ud = EVP_PKEY_new()))
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+
 			if (!(grp = EC_GROUP_new_by_curve_name(curve)))
 				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
@@ -4203,7 +4268,27 @@ static int pk_new(lua_State *L) {
 		}
 #endif
 		default:
+#if HAVE_EVP_PKEY_KEYGEN
+		{
+			EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(type, NULL);
+			if (!ctx)
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+
+			if (EVP_PKEY_keygen_init(ctx) <= 0) {
+				EVP_PKEY_CTX_free(ctx);
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+			}
+
+			if (EVP_PKEY_keygen(ctx, ud) != 1) {
+				EVP_PKEY_CTX_free(ctx);
+				return auxL_error(L, auxL_EOPENSSL, "pkey.new");
+			}
+
+			break;
+		}
+#else
 			return luaL_error(L, "%d: unsupported EVP_PKEY base type", EVP_PKEY_type(type));
+#endif
 		} /* switch() */
 	} else if (lua_isstring(L, 1)) {
 		int type = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
@@ -4724,12 +4809,18 @@ enum pk_param  {
 	PK_EC_GROUP,
 	PK_EC_PUB_KEY,
 	PK_EC_PRIV_KEY,
+
+#define PK_RAW_OPTLIST { "pub_key", "priv_key", NULL }
+#define PK_RAW_OPTOFFSET PK_RAW_PUB_KEY
+	PK_RAW_PUB_KEY,
+	PK_RAW_PRIV_KEY,
 }; /* enum pk_param */
 
 static const char *const pk_rsa_optlist[] = PK_RSA_OPTLIST;
 static const char *const pk_dsa_optlist[] = PK_DSA_OPTLIST;
 static const char *const pk_dh_optlist[] = PK_DH_OPTLIST;
 static const char *const pk_ec_optlist[] = PK_EC_OPTLIST;
+static const char *const pk_raw_optlist[] = PK_RAW_OPTLIST;
 
 const char *const *pk_getoptlist(int type, int *_nopts, int *_optoffset) {
 	const char *const *optlist = NULL;
@@ -4760,6 +4851,17 @@ const char *const *pk_getoptlist(int type, int *_nopts, int *_optoffset) {
 		optoffset = PK_EC_OPTOFFSET;
 
 		break;
+#if HAVE_EVP_PKEY_RAW
+	case EVP_PKEY_X25519:
+	case EVP_PKEY_X448:
+	case EVP_PKEY_ED25519:
+	case EVP_PKEY_ED448:
+		optlist = pk_raw_optlist;
+		nopts = countof(pk_raw_optlist) - 1;
+		optoffset = PK_RAW_OPTOFFSET;
+
+		break;
+#endif
 	}
 
 	if (_nopts)
@@ -4774,122 +4876,116 @@ const char *const *pk_getoptlist(int type, int *_nopts, int *_optoffset) {
 static EC_GROUP *ecg_dup_nil(lua_State *, const EC_GROUP *);
 #endif
 
-static void pk_pushparam(lua_State *L, void *base_key, enum pk_param which) {
-	union {
-		RSA *rsa;
-		DH *dh;
-		DSA *dsa;
-#ifndef OPENSSL_NO_EC
-		EC_KEY *ec;
-#endif
-	} key = { base_key };
+static void pk_pushparam(lua_State *L, EVP_PKEY *pkey, enum pk_param which) {
 	const BIGNUM *i;
+	luaL_Buffer B;
+	size_t len;
 
 	switch (which) {
 	case PK_RSA_N:
 		/* RSA public modulus n */
-		RSA_get0_key(key.rsa, &i, NULL, NULL);
+		RSA_get0_key(EVP_PKEY_get0_RSA(pkey), &i, NULL, NULL);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_RSA_E:
 		/* RSA public exponent e */
-		RSA_get0_key(key.rsa, NULL, &i, NULL);
+		RSA_get0_key(EVP_PKEY_get0_RSA(pkey), NULL, &i, NULL);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_RSA_D:
 		/* RSA secret exponent d */
-		RSA_get0_key(key.rsa, NULL, NULL, &i);
+		RSA_get0_key(EVP_PKEY_get0_RSA(pkey), NULL, NULL, &i);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_RSA_P:
 		/* RSA secret prime p */
-		RSA_get0_factors(key.rsa, &i, NULL);
+		RSA_get0_factors(EVP_PKEY_get0_RSA(pkey), &i, NULL);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_RSA_Q:
 		/* RSA secret prime q with p < q */
-		RSA_get0_factors(key.rsa, NULL, &i);
+		RSA_get0_factors(EVP_PKEY_get0_RSA(pkey), NULL, &i);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_RSA_DMP1:
 		/* exponent1 */
-		RSA_get0_crt_params(key.rsa, &i, NULL, NULL);
+		RSA_get0_crt_params(EVP_PKEY_get0_RSA(pkey), &i, NULL, NULL);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_RSA_DMQ1:
 		/* exponent2 */
-		RSA_get0_crt_params(key.rsa, NULL, &i, NULL);
+		RSA_get0_crt_params(EVP_PKEY_get0_RSA(pkey), NULL, &i, NULL);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_RSA_IQMP:
 		/* coefficient */
-		RSA_get0_crt_params(key.rsa, NULL, NULL, &i);
+		RSA_get0_crt_params(EVP_PKEY_get0_RSA(pkey), NULL, NULL, &i);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_DSA_P:
-		DSA_get0_pqg(key.dsa, &i, NULL, NULL);
+		DSA_get0_pqg(EVP_PKEY_get0_DSA(pkey), &i, NULL, NULL);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_DSA_Q:
-		DSA_get0_pqg(key.dsa, NULL, &i, NULL);
+		DSA_get0_pqg(EVP_PKEY_get0_DSA(pkey), NULL, &i, NULL);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_DSA_G:
-		DSA_get0_pqg(key.dsa, NULL, NULL, &i);
+		DSA_get0_pqg(EVP_PKEY_get0_DSA(pkey), NULL, NULL, &i);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_DSA_PUB_KEY:
-		DSA_get0_key(key.dsa, &i, NULL);
+		DSA_get0_key(EVP_PKEY_get0_DSA(pkey), &i, NULL);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_DSA_PRIV_KEY:
-		DSA_get0_key(key.dsa, NULL, &i);
+		DSA_get0_key(EVP_PKEY_get0_DSA(pkey), NULL, &i);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_DH_P:
-		DH_get0_pqg(key.dh, &i, NULL, NULL);
+		DH_get0_pqg(EVP_PKEY_get0_DH(pkey), &i, NULL, NULL);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_DH_G:
-		DH_get0_pqg(key.dh, NULL, NULL, &i);
+		DH_get0_pqg(EVP_PKEY_get0_DH(pkey), NULL, NULL, &i);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_DH_PUB_KEY:
-		DH_get0_key(key.dh, &i, NULL);
+		DH_get0_key(EVP_PKEY_get0_DH(pkey), &i, NULL);
 		bn_dup_nil(L, i);
 
 		break;
 	case PK_DH_PRIV_KEY:
-		DH_get0_key(key.dh, NULL, &i);
+		DH_get0_key(EVP_PKEY_get0_DH(pkey), NULL, &i);
 		bn_dup_nil(L, i);
 
 		break;
 #ifndef OPENSSL_NO_EC
 	case PK_EC_GROUP:
-		ecg_dup_nil(L, EC_KEY_get0_group(key.ec));
+		ecg_dup_nil(L, EC_KEY_get0_group(EVP_PKEY_get0_EC_KEY(pkey)));
 
 		break;
 	case PK_EC_PUB_KEY: {
 		const EC_GROUP *group;
 		const EC_POINT *pub_key;
 
-		if ((group = EC_KEY_get0_group(key.ec)) && (pub_key = EC_KEY_get0_public_key(key.ec))) {
-			bn_dup_nil(L, EC_POINT_point2bn(group, pub_key, EC_KEY_get_conv_form(key.ec), NULL, getctx(L)));
+		if ((group = EC_KEY_get0_group(EVP_PKEY_get0_EC_KEY(pkey))) && (pub_key = EC_KEY_get0_public_key(EVP_PKEY_get0_EC_KEY(pkey)))) {
+			bn_dup_nil(L, EC_POINT_point2bn(group, pub_key, EC_KEY_get_conv_form(EVP_PKEY_get0_EC_KEY(pkey)), NULL, getctx(L)));
 		} else {
 			lua_pushnil(L);
 		}
@@ -4897,7 +4993,21 @@ static void pk_pushparam(lua_State *L, void *base_key, enum pk_param which) {
 		break;
 	}
 	case PK_EC_PRIV_KEY:
-		bn_dup_nil(L, EC_KEY_get0_private_key(key.ec));
+		bn_dup_nil(L, EC_KEY_get0_private_key(EVP_PKEY_get0_EC_KEY(pkey)));
+
+		break;
+#endif
+#if HAVE_EVP_PKEY_RAW
+	case PK_RAW_PUB_KEY:
+		EVP_PKEY_get_raw_public_key(pkey, NULL, &len);
+		EVP_PKEY_get_raw_public_key(pkey, (unsigned char*)luaL_buffinitsize(L, &B, len), &len);
+		luaL_pushresultsize(&B, len);
+
+		break;
+	case PK_RAW_PRIV_KEY:
+		EVP_PKEY_get_raw_private_key(pkey, NULL, &len);
+		EVP_PKEY_get_raw_private_key(pkey, (unsigned char*)luaL_buffinitsize(L, &B, len), &len);
+		luaL_pushresultsize(&B, len);
 
 		break;
 #endif
@@ -4915,108 +5025,100 @@ static void pk_pushparam(lua_State *L, void *base_key, enum pk_param which) {
 		goto sslerr; \
 } while (0)
 
-static void pk_setparam(lua_State *L, void *base_key, enum pk_param which, int index) {
-	union {
-		RSA *rsa;
-		DH *dh;
-		DSA *dsa;
-#ifndef OPENSSL_NO_EC
-		EC_KEY *ec;
-#endif
-	} key = { base_key };
+static void pk_setparam(lua_State *L, EVP_PKEY *pkey, enum pk_param which, int index) {
 	BIGNUM *i;
 
 	switch (which) {
 	case PK_RSA_N:
 		pk_setparam_bn_dup(L, index, &i);
-		RSA_set0_key(key.rsa, i, NULL, NULL);
+		RSA_set0_key(EVP_PKEY_get0_RSA(pkey), i, NULL, NULL);
 
 		break;
 	case PK_RSA_E:
 		pk_setparam_bn_dup(L, index, &i);
-		RSA_set0_key(key.rsa, NULL, i, NULL);
+		RSA_set0_key(EVP_PKEY_get0_RSA(pkey), NULL, i, NULL);
 
 		break;
 	case PK_RSA_D:
 		pk_setparam_bn_dup(L, index, &i);
-		RSA_set0_key(key.rsa, NULL, NULL, i);
+		RSA_set0_key(EVP_PKEY_get0_RSA(pkey), NULL, NULL, i);
 
 		break;
 	case PK_RSA_P:
 		pk_setparam_bn_dup(L, index, &i);
-		RSA_set0_factors(key.rsa, i, NULL);
+		RSA_set0_factors(EVP_PKEY_get0_RSA(pkey), i, NULL);
 
 		break;
 	case PK_RSA_Q:
 		pk_setparam_bn_dup(L, index, &i);
-		RSA_set0_factors(key.rsa, NULL, i);
+		RSA_set0_factors(EVP_PKEY_get0_RSA(pkey), NULL, i);
 
 		break;
 	case PK_RSA_DMP1:
 		pk_setparam_bn_dup(L, index, &i);
-		RSA_set0_crt_params(key.rsa, i, NULL, NULL);
+		RSA_set0_crt_params(EVP_PKEY_get0_RSA(pkey), i, NULL, NULL);
 
 		break;
 	case PK_RSA_DMQ1:
 		pk_setparam_bn_dup(L, index, &i);
-		RSA_set0_crt_params(key.rsa, NULL, i, NULL);
+		RSA_set0_crt_params(EVP_PKEY_get0_RSA(pkey), NULL, i, NULL);
 
 		break;
 	case PK_RSA_IQMP:
 		pk_setparam_bn_dup(L, index, &i);
-		RSA_set0_crt_params(key.rsa, NULL, NULL, i);
+		RSA_set0_crt_params(EVP_PKEY_get0_RSA(pkey), NULL, NULL, i);
 
 		break;
 	case PK_DSA_P:
 		pk_setparam_bn_dup(L, index, &i);
-		DSA_set0_pqg(key.dsa, i, NULL, NULL);
+		DSA_set0_pqg(EVP_PKEY_get0_DSA(pkey), i, NULL, NULL);
 
 		break;
 	case PK_DSA_Q:
 		pk_setparam_bn_dup(L, index, &i);
-		DSA_set0_pqg(key.dsa, NULL, i, NULL);
+		DSA_set0_pqg(EVP_PKEY_get0_DSA(pkey), NULL, i, NULL);
 
 		break;
 	case PK_DSA_G:
 		pk_setparam_bn_dup(L, index, &i);
-		DSA_set0_pqg(key.dsa, NULL, NULL, i);
+		DSA_set0_pqg(EVP_PKEY_get0_DSA(pkey), NULL, NULL, i);
 
 		break;
 	case PK_DSA_PUB_KEY:
 		pk_setparam_bn_dup(L, index, &i);
-		DSA_set0_key(key.dsa, i, NULL);
+		DSA_set0_key(EVP_PKEY_get0_DSA(pkey), i, NULL);
 
 		break;
 	case PK_DSA_PRIV_KEY:
 		pk_setparam_bn_dup(L, index, &i);
-		DSA_set0_key(key.dsa, NULL, i);
+		DSA_set0_key(EVP_PKEY_get0_DSA(pkey), NULL, i);
 
 		break;
 	case PK_DH_P:
 		pk_setparam_bn_dup(L, index, &i);
-		DH_set0_pqg(key.dh, i, NULL, NULL);
+		DH_set0_pqg(EVP_PKEY_get0_DH(pkey), i, NULL, NULL);
 
 		break;
 	case PK_DH_G:
 		pk_setparam_bn_dup(L, index, &i);
-		DH_set0_pqg(key.dh, NULL, NULL, i);
+		DH_set0_pqg(EVP_PKEY_get0_DH(pkey), NULL, NULL, i);
 
 		break;
 	case PK_DH_PUB_KEY:
 		pk_setparam_bn_dup(L, index, &i);
-		DH_set0_key(key.dh, i, NULL);
+		DH_set0_key(EVP_PKEY_get0_DH(pkey), i, NULL);
 
 		break;
 	case PK_DH_PRIV_KEY:
 		pk_setparam_bn_dup(L, index, &i);
-		DH_set0_key(key.dh, NULL, i);
+		DH_set0_key(EVP_PKEY_get0_DH(pkey), NULL, i);
 
 		break;
 #ifndef OPENSSL_NO_EC
 	case PK_EC_GROUP: {
 		const EC_GROUP *group = checksimple(L, index, EC_GROUP_CLASS);
 
-		if (!EC_KEY_set_group(key.ec, group))
+		if (!EC_KEY_set_group(EVP_PKEY_get0_EC_KEY(pkey), group))
 			goto sslerr;
 
 		break;
@@ -5027,14 +5129,14 @@ static void pk_setparam(lua_State *L, void *base_key, enum pk_param which, int i
 		EC_POINT *pub_key;
 		_Bool okay;
 
-		if (!(group = EC_KEY_get0_group(key.ec)))
+		if (!(group = EC_KEY_get0_group(EVP_PKEY_get0_EC_KEY(pkey))))
 			luaL_error(L, "unable to set EC pub_key (no group defined)");
 
 		if (!(pub_key = EC_POINT_bn2point(group, n, NULL, getctx(L))))
 			goto sslerr;
 
 		/* NB: copies key, doesn't share or take ownership */
-		okay = EC_KEY_set_public_key(key.ec, pub_key);
+		okay = EC_KEY_set_public_key(EVP_PKEY_get0_EC_KEY(pkey), pub_key);
 		EC_POINT_free(pub_key);
 		if (!okay)
 			goto sslerr;
@@ -5045,11 +5147,18 @@ static void pk_setparam(lua_State *L, void *base_key, enum pk_param which, int i
 		const BIGNUM *n = checkbig(L, index);
 
 		/* NB: copies key, doesn't share or take ownership */
-		if (!EC_KEY_set_private_key(key.ec, n))
+		if (!EC_KEY_set_private_key(EVP_PKEY_get0_EC_KEY(pkey), n))
 			goto sslerr;
 
 		break;
 	}
+#endif
+#if HAVE_EVP_PKEY_RAW
+	case PK_RAW_PUB_KEY:
+	case PK_RAW_PRIV_KEY:
+		luaL_error(L, "%d: EVP_PKEY parameter is immutable", which);
+
+		break;
 #endif
 	default:
 		luaL_error(L, "%d: invalid EVP_PKEY parameter", which);
@@ -5066,12 +5175,8 @@ sslerr:
 static int pk_getParameters(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
 	int base_type = EVP_PKEY_base_id(key);
-	void *base_key;
 	const char *const *optlist;
 	int nopts, optoffset, otop, index, tindex;
-
-	if (!(base_key = EVP_PKEY_get0(key)))
-		goto sslerr;
 
 	if (!(optlist = pk_getoptlist(base_type, &nopts, &optoffset)))
 		return luaL_error(L, "%d: unsupported EVP_PKEY base type", base_type);
@@ -5107,7 +5212,7 @@ static int pk_getParameters(lua_State *L) {
 			tindex = lua_gettop(L);
 		} else {
 			optid = luaL_checkoption(L, index, NULL, optlist) + optoffset;
-			pk_pushparam(L, base_key, optid);
+			pk_pushparam(L, key, optid);
 
 			if (tindex) {
 				lua_setfield(L, tindex, optname);
@@ -5116,36 +5221,28 @@ static int pk_getParameters(lua_State *L) {
 	}
 
 	return lua_gettop(L) - otop;
-sslerr:
-	return auxL_error(L, auxL_EOPENSSL, "pkey:getParameters");
 } /* pk_getParameters() */
 
 
 static int pk_setParameters(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
 	int base_type = EVP_PKEY_base_id(key);
-	void *base_key;
 	const char *const *optlist;
 	int optindex, optoffset;
 
 	luaL_checktype(L, 2, LUA_TTABLE);
-
-	if (!(base_key = EVP_PKEY_get0(key)))
-		goto sslerr;
 
 	if (!(optlist = pk_getoptlist(base_type, NULL, &optoffset)))
 		return luaL_error(L, "%d: unsupported EVP_PKEY base type", base_type);
 
 	for (optindex = 0; optlist[optindex]; optindex++) {
 		if (getfield(L, 2, optlist[optindex])) {
-			pk_setparam(L, base_key, optindex + optoffset, -1);
+			pk_setparam(L, key, optindex + optoffset, -1);
 			lua_pop(L, 1);
 		}
 	}
 
 	return 0;
-sslerr:
-	return auxL_error(L, auxL_EOPENSSL, "pkey:setParameters");
 } /* pk_setParameters() */
 
 
@@ -5177,7 +5274,6 @@ static int pk__tostring(lua_State *L) {
 
 static int pk__index(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
-	void *base_key;
 	const char *const *optlist;
 	int optoffset, listoffset;
 
@@ -5190,14 +5286,12 @@ static int pk__index(lua_State *L) {
 
 	if (!lua_isstring(L, 2))
 		return 0;
-	if (!(base_key = EVP_PKEY_get0(key)))
-		return 0;
 	if (!(optlist = pk_getoptlist(EVP_PKEY_base_id(key), NULL, &optoffset)))
 		return 0;
 	if (-1 == (listoffset = auxL_testoption(L, 2, NULL, optlist, 0)))
 		return 0;
 
-	pk_pushparam(L, base_key, listoffset + optoffset);
+	pk_pushparam(L, key, listoffset + optoffset);
 
 	return 1;
 } /* pk__index() */
@@ -5205,20 +5299,17 @@ static int pk__index(lua_State *L) {
 
 static int pk__newindex(lua_State *L) {
 	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
-	void *base_key;
 	const char *const *optlist;
 	int optoffset, listoffset;
 
 	if (!lua_isstring(L, 2))
-		return 0;
-	if (!(base_key = EVP_PKEY_get0(key)))
 		return 0;
 	if (!(optlist = pk_getoptlist(EVP_PKEY_base_id(key), NULL, &optoffset)))
 		return 0;
 	if (-1 == (listoffset = auxL_testoption(L, 2, NULL, optlist, 0)))
 		return 0;
 
-	pk_setparam(L, base_key, listoffset + optoffset, 3);
+	pk_setparam(L, key, listoffset + optoffset, 3);
 
 	return 0;
 } /* pk__newindex() */
