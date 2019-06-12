@@ -1,3 +1,13 @@
+liblua-openssl (20190612-0) unstable; urgency=low
+
+  * Add kdf module for key derivation (#154)
+  * Add cert:verify() to verify certificates without a store (#167)
+  * Add support for arbitrary pkey types (#161)
+  * Rename :setCurvesList() to :setGroups() (old alias kept for now)
+  * Note: This is the last release to support OpenSSL 0.9.8 (#169)
+
+-- Daurnimator <quae@daurnimator.com>  Wed, 12 Jun 2019 17:24:48 +1000
+
 liblua-openssl (20181207-0) unstable; urgency=low
 
   * Add context.pushffi
