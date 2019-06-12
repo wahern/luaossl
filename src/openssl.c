@@ -9626,34 +9626,58 @@ static int sx_setAlpnProtos(lua_State *L) {
 
 
 #if HAVE_SSL_CTX_SET_ALPN_SELECT_CB
+static int sx_setAlpnSelect_cb_helper(lua_State *L) {
+	SSL *s = lua_touserdata(L, 2);
+	const unsigned char *in = lua_touserdata(L, 3);
+	unsigned int inlen = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+
+	/* swap out pointer for SSL object */
+	ssl_push(L, s);
+	lua_replace(L, 2);
+
+	/* swap out pointer for actual protos */
+	pushprotos(L, in, inlen);
+	lua_replace(L, 3);
+
+	lua_call(L, lua_gettop(L)-1, 1);
+
+	return 1;
+} /* sx_setAlpnSelect_cb_helper() */
+
+
 static int sx_setAlpnSelect_cb(SSL *ssl, const unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *_ctx) {
 	SSL_CTX *ctx = _ctx;
 	lua_State *L = NULL;
-	size_t n, protolen, tmpsiz;
-	int otop, status;
+	size_t n, protolen;
+	int otop;
 	const void *proto;
 	void *tmpbuf;
 
 	*out = NULL;
 	*outlen = 0;
 
-	/* expect at least two values: return buffer and closure */
-	if ((n = ex_getdata(&L, EX_SSL_CTX_ALPN_SELECT_CB, ctx)) < 2)
+	/* expect at least five values: return buffer, helper, closure, empty space, empty space */
+	if ((n = ex_getdata(&L, EX_SSL_CTX_ALPN_SELECT_CB, ctx)) < 5)
 		return SSL_TLSEXT_ERR_ALERT_FATAL;
 
 	otop = lua_gettop(L) - n;
 
-	/* pass SSL object as 1st argument */
-	if (ssl_pushsafe(L, ssl))
-		goto fatal;
-	lua_insert(L, otop + 3);
+	tmpbuf = lua_touserdata(L, -n);
 
-	/* TODO: Install temporary panic handler to catch OOM errors */
-	/* pass table of protocol names as 2nd argument */
-	pushprotos(L, in, inlen);
-	lua_insert(L, otop + 4);
+	/* pass SSL placeholder argument */
+	lua_pushlightuserdata(L, (void*)ssl);
+	lua_replace(L, otop + 4);
 
-	if (LUA_OK != (status = lua_pcall(L, 2 + (n - 2), 1, 0)))
+	/* pass protos placeholder argument */
+	lua_pushlightuserdata(L, (void*)in);
+	lua_replace(L, otop + 5);
+
+	/* pass inlen after all other args (we pop it off in helper) */
+	lua_pushinteger(L, inlen);
+
+	/* call protected helper */
+	if (LUA_OK != lua_pcall(L, (n - 2) + 1, 1, 0))
 		goto fatal;
 
 	/* did we get a string result? */
@@ -9661,12 +9685,7 @@ static int sx_setAlpnSelect_cb(SSL *ssl, const unsigned char **out, unsigned cha
 		goto noack;
 
 	/* will it fit in our return buffer? */
-	if (!(tmpbuf = lua_touserdata(L, otop + 1)))
-		goto fatal;
-
-	tmpsiz = lua_rawlen(L, otop + 1);
-
-	if (protolen > tmpsiz)
+	if (protolen > UCHAR_MAX)
 		goto fatal;
 
 	memcpy(tmpbuf, proto, protolen);
@@ -9691,6 +9710,7 @@ noack:
 	return SSL_TLSEXT_ERR_NOACK;
 } /* sx_setAlpnSelect_cb() */
 
+
 static int sx_setAlpnSelect(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	int error;
@@ -9699,7 +9719,16 @@ static int sx_setAlpnSelect(lua_State *L) {
 
 	/* allocate space to store the selected protocol in our callback */
 	lua_newuserdata(L, UCHAR_MAX);
-	lua_insert(L, 2);
+	/* need to do actual call in protected function. push helper */
+	lua_pushcfunction(L, sx_setAlpnSelect_cb_helper);
+	/* move space and helper to bottom of stack */
+	lua_rotate(L, 2, 2);
+
+	/* room for SSL parameter and protos */
+	lua_pushnil(L);
+	lua_pushnil(L);
+	lua_rotate(L, 5, 2);
+	/* stack: self, space, helper, userfunc, nil, nil, ... */
 
 	if ((error = ex_setdata(L, EX_SSL_CTX_ALPN_SELECT_CB, ctx, lua_gettop(L) - 1))) {
 		if (error > 0) {
