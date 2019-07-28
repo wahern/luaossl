@@ -10065,8 +10065,8 @@ static int sx_custom_ext_add_cb(SSL *s, unsigned int ext_type,
 } /* sx_custom_ext_add_cb() */
 
 
-static void sx_custom_ext_free_cb(SSL *s, unsigned int ext_type,
-	unsigned int context, const unsigned char *out, void *add_arg)
+static void sx_custom_ext_free_cb(SSL *s, unsigned int ext_type NOTUSED,
+	unsigned int context NOTUSED, const unsigned char *out NOTUSED, void *add_arg NOTUSED)
 {
 	SSL_CTX *ctx = SSL_get_SSL_CTX(s);
 	lua_State *L = NULL;
@@ -10120,7 +10120,7 @@ static int sx_custom_ext_parse_cb_helper(lua_State *L) {
 
 static int sx_custom_ext_parse_cb(SSL *s, unsigned int ext_type,
 	unsigned int context, const unsigned char *in, size_t inlen,
-	X509 *x, size_t chainidx, int *al, void *parse_arg)
+	X509 *x, size_t chainidx, int *al, void *parse_arg NOTUSED)
 {
 	SSL_CTX *ctx = SSL_get_SSL_CTX(s);
 	lua_State *L = NULL;
