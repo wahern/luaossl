@@ -9668,21 +9668,30 @@ static int sx_setAlpnProtos(lua_State *L) {
 
 
 #if HAVE_SSL_CTX_SET_ALPN_SELECT_CB
+
+typedef struct {
+	/* input arguments */
+	SSL *ssl;
+	const unsigned char *in;
+	unsigned int inlen;
+
+	/* space to store the selected protocol in our callback */
+	unsigned char selected[UCHAR_MAX];
+} sx_setAlpnSelect_cb_struct;
+
+
 static int sx_setAlpnSelect_cb_helper(lua_State *L) {
-	SSL *s = lua_touserdata(L, 2);
-	const unsigned char *in = lua_touserdata(L, 3);
-	unsigned int inlen = lua_tointeger(L, -1);
-	lua_pop(L, 1);
+	sx_setAlpnSelect_cb_struct *tmpbuf = lua_touserdata(L, 1);
 
-	/* swap out pointer for SSL object */
-	ssl_push(L, s);
-	lua_replace(L, 2);
-
-	/* swap out pointer for actual protos */
-	pushprotos(L, in, inlen);
+	/* swap out nil for SSL object */
+	ssl_push(L, tmpbuf->ssl);
 	lua_replace(L, 3);
 
-	lua_call(L, lua_gettop(L)-1, 1);
+	/* swap out nil for actual protos */
+	pushprotos(L, tmpbuf->in, tmpbuf->inlen);
+	lua_replace(L, 4);
+
+	lua_call(L, lua_gettop(L)-2, 1);
 
 	return 1;
 } /* sx_setAlpnSelect_cb_helper() */
@@ -9694,32 +9703,24 @@ static int sx_setAlpnSelect_cb(SSL *ssl, const unsigned char **out, unsigned cha
 	size_t n, protolen;
 	int otop;
 	const void *proto;
-	void *tmpbuf;
+	sx_setAlpnSelect_cb_struct *tmpbuf;
 
 	*out = NULL;
 	*outlen = 0;
 
-	/* expect at least five values: return buffer, helper, closure, empty space, empty space */
+	/* expect at least five values: helper, space, userfunc, nil, nil */
 	if ((n = ex_getdata(&L, EX_SSL_CTX_ALPN_SELECT_CB, ctx)) < 5)
 		return SSL_TLSEXT_ERR_ALERT_FATAL;
 
 	otop = lua_gettop(L) - n;
 
-	tmpbuf = lua_touserdata(L, -n);
-
-	/* pass SSL placeholder argument */
-	lua_pushlightuserdata(L, (void*)ssl);
-	lua_replace(L, otop + 4);
-
-	/* pass protos placeholder argument */
-	lua_pushlightuserdata(L, (void*)in);
-	lua_replace(L, otop + 5);
-
-	/* pass inlen after all other args (we pop it off in helper) */
-	lua_pushinteger(L, inlen);
+	tmpbuf = lua_touserdata(L, -n+1);
+	tmpbuf->ssl = ssl;
+	tmpbuf->in = in;
+	tmpbuf->inlen = inlen;
 
 	/* call protected helper */
-	if (LUA_OK != lua_pcall(L, (n - 2) + 1, 1, 0))
+	if (LUA_OK != lua_pcall(L, n - 1, 1, 0))
 		goto fatal;
 
 	/* did we get a string result? */
@@ -9730,13 +9731,13 @@ static int sx_setAlpnSelect_cb(SSL *ssl, const unsigned char **out, unsigned cha
 	if (protolen > UCHAR_MAX)
 		goto fatal;
 
-	memcpy(tmpbuf, proto, protolen);
+	memcpy(tmpbuf->selected, proto, protolen);
 
 	/*
 	 * NB: Our return buffer is anchored using the luaL_ref API, so even
 	 * once we pop the stack it will remain valid.
 	 */
-	*out = tmpbuf;
+	*out = tmpbuf->selected;
 	*outlen = protolen;
 
 	lua_settop(L, otop);
@@ -9759,10 +9760,9 @@ static int sx_setAlpnSelect(lua_State *L) {
 
 	luaL_checktype(L, 2, LUA_TFUNCTION);
 
-	/* allocate space to store the selected protocol in our callback */
-	lua_newuserdata(L, UCHAR_MAX);
 	/* need to do actual call in protected function. push helper */
 	lua_pushcfunction(L, sx_setAlpnSelect_cb_helper);
+	lua_newuserdata(L, sizeof(sx_setAlpnSelect_cb_struct));
 	/* move space and helper to bottom of stack */
 	lua_rotate(L, 2, 2);
 
@@ -9770,7 +9770,7 @@ static int sx_setAlpnSelect(lua_State *L) {
 	lua_pushnil(L);
 	lua_pushnil(L);
 	lua_rotate(L, 5, 2);
-	/* stack: self, space, helper, userfunc, nil, nil, ... */
+	/* stack: self, helper, space, userfunc, nil, nil, ... */
 
 	if ((error = ex_setdata(L, EX_SSL_CTX_ALPN_SELECT_CB, ctx, lua_gettop(L) - 1))) {
 		if (error > 0) {
@@ -9984,23 +9984,30 @@ static int sx_useServerInfo(lua_State *L) {
 
 
 #if HAVE_SSL_CTX_ADD_CUSTOM_EXT
+
+typedef struct {
+	/* input arguments */
+	SSL *ssl;
+	unsigned int ext_type;
+	unsigned int context;
+	X509 *x;
+	size_t chainidx;
+} sx_custom_ext_add_cb_struct;
+
+
 static int sx_custom_ext_add_cb_helper(lua_State *L) {
-	SSL *s = lua_touserdata(L, 2);
-	/* 3rd is ext_type */
-	/* 4th is context */
-	X509 *x = lua_touserdata(L, 5);
-	/* 6th parameter is chain index */
+	sx_custom_ext_add_cb_struct *tmpbuf = lua_touserdata(L, 1);
 
-	/* swap out pointer for SSL object */
-	ssl_push(L, s);
-	lua_replace(L, 2);
-
-	/* swap out pointer for actual cert */
-	if (x)
-		xc_dup(L, x);
-	else
+	ssl_push(L, tmpbuf->ssl);
+	lua_pushinteger(L, tmpbuf->ext_type);
+	lua_pushinteger(L, tmpbuf->context);
+	if (tmpbuf->x) {
+		xc_dup(L, tmpbuf->x);
+		lua_pushinteger(L, tmpbuf->chainidx);
+	} else {
 		lua_pushnil(L);
-	lua_replace(L, 5);
+		lua_pushnil(L);
+	}
 
 	lua_call(L, 5, 2);
 
@@ -10017,29 +10024,23 @@ static int sx_custom_ext_add_cb(SSL *s, unsigned int ext_type,
 
 	*al = SSL_AD_INTERNAL_ERROR;
 
-	/* expect two values: helper_function, table of callbacks indexed by ext_type */
-	if (ex_getdata(&L, EX_SSL_CTX_CUSTOM_EXTENSION_ADD_CB, ctx) != 2)
+	/* expect three values: helper_function, space, table of callbacks indexed by ext_type */
+	if (ex_getdata(&L, EX_SSL_CTX_CUSTOM_EXTENSION_ADD_CB, ctx) != 3)
 		return -1;
+
+	sx_custom_ext_add_cb_struct *tmpbuf = lua_touserdata(L, -2);
+	tmpbuf->ssl = s;
+	tmpbuf->ext_type = ext_type;
+	tmpbuf->context = context;
+	tmpbuf->x = x;
+	tmpbuf->chainidx = chainidx;
 
 	/* replace table with callback of interest */
 	lua_rawgeti(L, -1, ext_type);
 	lua_remove(L, -2);
-	/* pass SSL placeholder argument */
-	lua_pushlightuserdata(L, (void*)s);
-	/* pass ext_type */
-	lua_pushinteger(L, ext_type);
-	/* pass context */
-	lua_pushinteger(L, context);
-	/* push cert placeholder argument */
-	lua_pushlightuserdata(L, (void*)x);
-	/* push chainidx */
-	if (x)
-		lua_pushinteger(L, chainidx);
-	else
-		lua_pushnil(L);
 
 	/* call protected helper */
-	if (LUA_OK != lua_pcall(L, 6, 2, 0))
+	if (LUA_OK != lua_pcall(L, 2, 2, 0))
 		/* leave error on the stack */
 		return -1;
 
@@ -10092,30 +10093,32 @@ static void sx_custom_ext_free_cb(SSL *s, unsigned int ext_type,
 } /* sx_custom_ext_free_cb() */
 
 
+typedef struct {
+	/* input arguments */
+	SSL *ssl;
+	unsigned int ext_type;
+	unsigned int context;
+	const unsigned char *in;
+	size_t inlen;
+	X509 *x;
+	size_t chainidx;
+} sx_custom_ext_parse_cb_struct;
+
+
 static int sx_custom_ext_parse_cb_helper(lua_State *L) {
-	SSL *s = lua_touserdata(L, 2);
-	/* 3rd is ext_type */
-	/* 4th is context */
-	const char *in = lua_touserdata(L, 5);
-	X509 *x = lua_touserdata(L, 6);
-	/* 7th parameter is chain index */
-	size_t inlen = lua_tointeger(L, -1);
-	lua_pop(L, 1);
+	sx_custom_ext_parse_cb_struct *tmpbuf = lua_touserdata(L, 1);
 
-	/* swap out pointer for SSL object */
-	ssl_push(L, s);
-	lua_replace(L, 2);
-
-	/* swap out pointer for actual string */
-	lua_pushlstring(L, in, inlen);
-	lua_replace(L, 5);
-
-	/* swap out pointer for actual cert */
-	if (x)
-		xc_dup(L, x);
-	else
+	ssl_push(L, tmpbuf->ssl);
+	lua_pushinteger(L, tmpbuf->ext_type);
+	lua_pushinteger(L, tmpbuf->context);
+	lua_pushlstring(L, (const char*)tmpbuf->in, tmpbuf->inlen);
+	if (tmpbuf->x) {
+		xc_dup(L, tmpbuf->x);
+		lua_pushinteger(L, tmpbuf->chainidx);
+	} else {
 		lua_pushnil(L);
-	lua_replace(L, 6);
+		lua_pushnil(L);
+	}
 
 	lua_call(L, 6, 2);
 
@@ -10132,34 +10135,25 @@ static int sx_custom_ext_parse_cb(SSL *s, unsigned int ext_type,
 
 	*al = SSL_AD_INTERNAL_ERROR;
 
-	/* expect two values: helper_function, table of callbacks indexed by ext_type */
-	if (ex_getdata(&L, EX_SSL_CTX_CUSTOM_EXTENSION_PARSE_CB, ctx) != 2)
+	/* expect three values: helper_function, space, table of callbacks indexed by ext_type */
+	if (ex_getdata(&L, EX_SSL_CTX_CUSTOM_EXTENSION_PARSE_CB, ctx) != 3)
 		return -1;
+
+	sx_custom_ext_parse_cb_struct *tmpbuf = lua_touserdata(L, -2);
+	tmpbuf->ssl = s;
+	tmpbuf->ext_type = ext_type;
+	tmpbuf->context = context;
+	tmpbuf->in = in;
+	tmpbuf->inlen = inlen;
+	tmpbuf->x = x;
+	tmpbuf->chainidx = chainidx;
 
 	/* replace table with callback of interest */
 	lua_rawgeti(L, -1, ext_type);
 	lua_remove(L, -2);
-	/* pass SSL placeholder argument */
-	lua_pushlightuserdata(L, (void*)s);
-	/* pass ext_type */
-	lua_pushinteger(L, ext_type);
-	/* pass context */
-	lua_pushinteger(L, context);
-	/* push string placeholder argument */
-	lua_pushlightuserdata(L, (void*)in);
-	/* push cert placeholder argument */
-	lua_pushlightuserdata(L, (void*)x);
-	/* push chainidx */
-	if (x)
-		lua_pushinteger(L, chainidx);
-	else
-		lua_pushnil(L);
-
-	/* push other argument only used in helper */
-	lua_pushinteger(L, inlen);
 
 	/* call protected helper */
-	if (LUA_OK != lua_pcall(L, 8, 2, 0)) {
+	if (LUA_OK != lua_pcall(L, 2, 2, 0)) {
 		lua_pop(L, 1);
 		return -1;
 	}
@@ -10198,8 +10192,9 @@ static int sx_addCustomExtension(lua_State *L) {
 			lua_createtable(L, 0, 1);
 			/* need to do actual call in protected function. push helper */
 			lua_pushcfunction(L, sx_custom_ext_add_cb_helper);
-			lua_pushvalue(L, -2);
-			if ((error = ex_setdata(L, EX_SSL_CTX_CUSTOM_EXTENSION_ADD_CB, ctx, 2))) {
+			lua_newuserdata(L, sizeof(sx_custom_ext_add_cb_struct));
+			lua_pushvalue(L, -3);
+			if ((error = ex_setdata(L, EX_SSL_CTX_CUSTOM_EXTENSION_ADD_CB, ctx, 3))) {
 				if (error > 0) {
 					return luaL_error(L, "unable to add custom extension add callback: %s", aux_strerror(error));
 				} else if (error == auxL_EOPENSSL && !ERR_peek_error()) {
@@ -10232,8 +10227,9 @@ static int sx_addCustomExtension(lua_State *L) {
 			lua_createtable(L, 0, 1);
 			/* need to do actual call in protected function. push helper */
 			lua_pushcfunction(L, sx_custom_ext_parse_cb_helper);
-			lua_pushvalue(L, -2);
-			if ((error = ex_setdata(L, EX_SSL_CTX_CUSTOM_EXTENSION_PARSE_CB, ctx, 2))) {
+			lua_newuserdata(L, sizeof(sx_custom_ext_parse_cb_struct));
+			lua_pushvalue(L, -3);
+			if ((error = ex_setdata(L, EX_SSL_CTX_CUSTOM_EXTENSION_PARSE_CB, ctx, 3))) {
 				if (error > 0) {
 					return luaL_error(L, "unable to add custom extension parse callback: %s", aux_strerror(error));
 				} else if (error == auxL_EOPENSSL && !ERR_peek_error()) {
