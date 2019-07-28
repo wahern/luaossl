@@ -90,6 +90,22 @@
 #include "../vendor/compat53/c-api/compat-5.3.h"
 #endif
 
+#ifndef LUAOSSL_USE_47BIT_LIGHTUSERDATA_HACK
+/* LuaJIT only supports pointers with the low 47 bits set */
+#if defined(LUA_JITLIBNAME) && (defined(_LP64) || defined(_LLP64) || defined(__arch64__) || defined (__arm64__) || defined (__aarch64__) || defined(_WIN64))
+#define LUAOSSL_USE_47BIT_LIGHTUSERDATA_HACK 1
+#else
+#define LUAOSSL_USE_47BIT_LIGHTUSERDATA_HACK 0
+#endif
+#endif
+
+#if LUAOSSL_USE_47BIT_LIGHTUSERDATA_HACK
+#define LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(p) ((void *)((intptr_t)(p) & ((1UL<<47)-1)))
+#else
+#define LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(p) ((void *)(p))
+#endif
+
+
 #define GNUC_2VER(M, m, p) (((M) * 10000) + ((m) * 100) + (p))
 #define GNUC_PREREQ(M, m, p) (__GNUC__ > 0 && GNUC_2VER(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__) >= GNUC_2VER((M), (m), (p)))
 
@@ -2913,7 +2929,7 @@ static int ex__gc(lua_State *L) {
 static _Bool ex_hasstate(lua_State *L) {
 	_Bool has;
 
-	lua_pushlightuserdata(L, (void *)&ex__gc);
+	lua_pushlightuserdata(L, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(&ex__gc));
 	lua_gettable(L, LUA_REGISTRYINDEX);
 	has = !lua_isnil(L, -1);
 	lua_pop(L, 1);
@@ -2948,7 +2964,7 @@ static void ex_newstate(lua_State *L) {
 	state->L = thr;
 #endif
 
-	lua_pushlightuserdata(L, (void *)&ex__gc);
+	lua_pushlightuserdata(L, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(&ex__gc));
 	lua_pushvalue(L, -2);
 	lua_settable(L, LUA_REGISTRYINDEX);
 
@@ -2958,7 +2974,7 @@ static void ex_newstate(lua_State *L) {
 static struct ex_state *ex_getstate(lua_State *L) {
 	struct ex_state *state;
 
-	lua_pushlightuserdata(L, (void *)&ex__gc);
+	lua_pushlightuserdata(L, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(&ex__gc));
 	lua_gettable(L, LUA_REGISTRYINDEX);
 
 	luaL_checktype(L, -1, LUA_TUSERDATA);
@@ -3574,7 +3590,7 @@ static int ctx__gc(lua_State *L) {
 static BN_CTX *getctx(lua_State *L) {
 	BN_CTX **ctx;
 
-	lua_pushlightuserdata(L, (void *)&ctx__gc);
+	lua_pushlightuserdata(L, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(&ctx__gc));
 	lua_gettable(L, LUA_REGISTRYINDEX);
 
 	if (lua_isnil(L, -1)) {
@@ -3585,7 +3601,7 @@ static BN_CTX *getctx(lua_State *L) {
 		if (!(*ctx = BN_CTX_new()))
 			auxL_error(L, auxL_EOPENSSL, "bignum");
 
-		lua_pushlightuserdata(L, (void *)&ctx__gc);
+		lua_pushlightuserdata(L, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(&ctx__gc));
 		lua_pushvalue(L, -2);
 		lua_settable(L, LUA_REGISTRYINDEX);
 	}
@@ -4055,7 +4071,7 @@ static int bio__gc(lua_State *L) {
 static BIO *getbio(lua_State *L) {
 	BIO **bio;
 
-	lua_pushlightuserdata(L, (void *)&bio__gc);
+	lua_pushlightuserdata(L, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(&bio__gc));
 	lua_gettable(L, LUA_REGISTRYINDEX);
 
 	if (lua_isnil(L, -1)) {
@@ -4066,7 +4082,7 @@ static BIO *getbio(lua_State *L) {
 		if (!(*bio = BIO_new(BIO_s_mem())))
 			auxL_error(L, auxL_EOPENSSL, "BIO_new");
 
-		lua_pushlightuserdata(L, (void *)&bio__gc);
+		lua_pushlightuserdata(L, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(&bio__gc));
 		lua_pushvalue(L, -2);
 		lua_settable(L, LUA_REGISTRYINDEX);
 	}
@@ -9137,8 +9153,8 @@ EXPORT int luaopen__openssl_pkcs12(lua_State *L) {
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 static void sx_push(lua_State *L, SSL_CTX *ctx) {
-	lua_rawgetp(L, LUA_REGISTRYINDEX, (void *)&initall);
-	if (LUA_TNIL == lua_rawgetp(L, -1, ctx)) {
+	lua_rawgetp(L, LUA_REGISTRYINDEX, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(&initall));
+	if (LUA_TNIL == lua_rawgetp(L, -1, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(ctx))) {
 		SSL_CTX **ud;
 
 		lua_pop(L, 1); /* pop nil */
@@ -9150,7 +9166,7 @@ static void sx_push(lua_State *L, SSL_CTX *ctx) {
 
 		/* Add to cache */
 		lua_pushvalue(L, -1);
-		lua_rawsetp(L, -3, ctx);
+		lua_rawsetp(L, -3, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(ctx));
 	}
 	lua_remove(L, -2);
 } /* sx_push() */
@@ -9301,9 +9317,9 @@ static int sx_new(lua_State *L) {
 #endif
 
 	/* Add to cache */
-	lua_rawgetp(L, LUA_REGISTRYINDEX, (void *)&initall);
+	lua_rawgetp(L, LUA_REGISTRYINDEX, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(&initall));
 	lua_pushvalue(L, -2);
-	lua_rawsetp(L, -2, *ud);
+	lua_rawsetp(L, -2, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(*ud));
 	lua_pop(L, 1);
 
 	return 1;
@@ -10522,8 +10538,8 @@ EXPORT int luaopen__openssl_ssl_context(lua_State *L) {
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 static void ssl_push(lua_State *L, SSL *ssl) {
-	lua_rawgetp(L, LUA_REGISTRYINDEX, (void *)&initall);
-	if (LUA_TNIL == lua_rawgetp(L, -1, ssl)) {
+	lua_rawgetp(L, LUA_REGISTRYINDEX, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(&initall));
+	if (LUA_TNIL == lua_rawgetp(L, -1, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(ssl))) {
 		SSL **ud;
 
 		lua_pop(L, 1); /* pop nil */
@@ -10535,7 +10551,7 @@ static void ssl_push(lua_State *L, SSL *ssl) {
 
 		/* Add to SSL* cache */
 		lua_pushvalue(L, -1);
-		lua_rawsetp(L, -3, ssl);
+		lua_rawsetp(L, -3, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(ssl));
 	}
 	lua_remove(L, -2);
 } /* ssl_push() */
@@ -10568,9 +10584,9 @@ static int ssl_new(lua_State *L) {
 		return auxL_error(L, auxL_EOPENSSL, "ssl.new");
 
 	/* Add to SSL* cache */
-	lua_rawgetp(L, LUA_REGISTRYINDEX, (void *)&initall);
+	lua_rawgetp(L, LUA_REGISTRYINDEX, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(&initall));
 	lua_pushvalue(L, -2);
-	lua_rawsetp(L, -2, *ud);
+	lua_rawsetp(L, -2, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(*ud));
 	lua_pop(L, 1);
 
 	return 1;
@@ -13032,7 +13048,7 @@ static void initall(lua_State *L) {
 	auxL_addclass(L, OCSP_RESPONSE_CLASS, or_methods, or_metatable, 0);
 	auxL_addclass(L, OCSP_BASICRESP_CLASS, ob_methods, ob_metatable, 0);
 
-	if (LUA_TNIL == lua_rawgetp(L, LUA_REGISTRYINDEX, (void *)&initall)) {
+	if (LUA_TNIL == lua_rawgetp(L, LUA_REGISTRYINDEX, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(&initall))) {
 		/* Create cache for pointers */
 		lua_newtable(L);
 		lua_createtable(L, 0, 2);
@@ -13041,7 +13057,7 @@ static void initall(lua_State *L) {
 		lua_pushliteral(L, "luaossl cache");
 		lua_setfield(L, -2, "__name");
 		lua_setmetatable(L, -2);
-		lua_rawsetp(L, LUA_REGISTRYINDEX, (void *)&initall);
+		lua_rawsetp(L, LUA_REGISTRYINDEX, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(&initall));
 	}
 	lua_pop(L, 1);
 } /* initall() */
