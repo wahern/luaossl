@@ -962,40 +962,6 @@ static void *loadfield_udata(lua_State *L, int index, const char *k, const char 
 /* Forward declaration */
 static void ssl_push(lua_State *, SSL *);
 
-/* push an ssl object into lua in a way that is safe from OOM
- * Lua 5.1 does not support normally returning values from lua_cpcall
- * to return a value, we instead return it via an error object
- */
-static int ssl_pushsafe_helper(lua_State *L) {
-	ssl_push(L, lua_touserdata(L, 1));
-#if LUA_VERSION_NUM <= 501
-	return lua_error(L);
-#else
-	return 1;
-#endif
-}
-
-static int ssl_pushsafe(lua_State *L, SSL *ssl) {
-	int status;
-#if LUA_VERSION_NUM <= 501
-	status = lua_cpcall(L, ssl_pushsafe_helper, ssl);
-	if (status == LUA_ERRRUN)
-		status = LUA_OK;
-	else if (status == LUA_OK)
-		/* this should be impossible */
-		status = LUA_ERRRUN;
-	else
-		lua_pop(L, 1);
-#else
-	lua_pushcfunction(L, ssl_pushsafe_helper);
-	lua_pushlightuserdata(L, ssl);
-	status = lua_pcall(L, 1, 1, 0);
-	if (status != LUA_OK)
-		lua_pop(L, 1);
-#endif
-	return status;
-}
-
 
 /*
  * Auxiliary C routines
@@ -9792,27 +9758,43 @@ static int sx_setAlpnSelect(lua_State *L) {
 
 
 #if HAVE_SSL_CTX_SET_TLSEXT_SERVERNAME_CALLBACK
+
+typedef struct {
+	SSL *ssl;
+} sx_setHostNameCallback_struct;
+
+
+static int sx_setHostNameCallback_helper(lua_State *L) {
+	sx_setHostNameCallback_struct *tmpbuf = lua_touserdata(L, 1);
+
+	ssl_push(L, tmpbuf->ssl);
+	lua_replace(L, 3);
+
+	lua_call(L, lua_gettop(L)-2, 2);
+
+	return 2;
+}
+
+
 static int sx_setHostNameCallback_cb(SSL *ssl, int *ad, void *_ctx) {
 	SSL_CTX *ctx = _ctx;
 	lua_State *L = NULL;
 	size_t n;
 	int otop, status, ret = SSL_TLSEXT_ERR_ALERT_FATAL;
+	sx_setHostNameCallback_struct *tmpbuf;
 
 	*ad = SSL_AD_INTERNAL_ERROR;
 
-	/* expect at least one value: closure */
-	if ((n = ex_getdata(&L, EX_SSL_CTX_TLSEXT_SERVERNAME_CB, ctx)) < 1)
+	/* expect at least four values: helper, space, userfunc, nil */
+	if ((n = ex_getdata(&L, EX_SSL_CTX_TLSEXT_SERVERNAME_CB, ctx)) < 4)
 		return SSL_TLSEXT_ERR_ALERT_FATAL;
 
 	otop = lua_gettop(L) - n;
 
-	/* pass SSL object as 1st argument */
-	if (ssl_pushsafe(L, ssl))
-		goto done;
+	tmpbuf = lua_touserdata(L, -n+1);
+	tmpbuf->ssl = ssl;
 
-	lua_insert(L, otop + 2);
-
-	if (LUA_OK != (status = lua_pcall(L, 1 + (n - 1), 2, 0)))
+	if (LUA_OK != (status = lua_pcall(L, n - 1, 2, 0)))
 		goto done;
 
 	/* callback should return a boolean for OK/NOACK
@@ -9839,6 +9821,16 @@ static int sx_setHostNameCallback(lua_State *L) {
 	int error;
 
 	luaL_checktype(L, 2, LUA_TFUNCTION);
+
+	/* need to do actual call in protected function. push helper */
+	lua_pushcfunction(L, sx_setHostNameCallback_helper);
+	lua_newuserdata(L, sizeof(sx_setHostNameCallback_struct));
+	/* move space and helper to bottom of stack */
+	lua_rotate(L, 2, 2);
+
+	/* room for SSL parameter */
+	lua_pushnil(L);
+	lua_rotate(L, 5, 1);
 
 	if ((error = ex_setdata(L, EX_SSL_CTX_TLSEXT_SERVERNAME_CB, ctx, lua_gettop(L) - 1))) {
 		if (error > 0) {
