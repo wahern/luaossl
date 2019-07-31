@@ -1,3 +1,9 @@
+liblua-openssl (20190731-0) unstable; urgency=low
+
+  * introduce workarounds for LuaJIT 47bit userdata (#173)
+
+-- Daurnimator <quae@daurnimator.com>  Wed, 31 Jul 2019 23:14:21 +1000
+
 liblua-openssl (20190612-0) unstable; urgency=low
 
   * Add kdf module for key derivation (#154)
