@@ -998,7 +998,7 @@ static const char *aux_strerror_r(int error, char *dst, size_t lim) {
 	char *rv = strerror_r(error, dst, lim);
 
 	if (rv != NULL)
-		return dst;
+		return rv;
 #else
 	int rv = strerror_r(error, dst, lim);
 
