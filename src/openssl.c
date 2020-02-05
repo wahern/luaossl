@@ -6412,6 +6412,7 @@ static int xc_new(lua_State *L) {
 		}
 
 		if (!ok && (type == X509_DER || type == X509_ANY)) {
+			BIO_reset(tmp);
 			ok = !!(*ud = d2i_X509_bio(tmp, NULL));
 		}
 
@@ -7611,6 +7612,7 @@ static int xr_new(lua_State *L) {
 		}
 
 		if (!ok && (type == X509_DER || type == X509_ANY)) {
+			BIO_reset(tmp);
 			ok = !!(*ud = d2i_X509_REQ_bio(tmp, NULL));
 		}
 
@@ -8037,6 +8039,7 @@ static int xx_new(lua_State *L) {
 		}
 
 		if (!ok && (type == X509_DER || type == X509_ANY)) {
+			BIO_reset(tmp);
 			ok = !!(*ud = d2i_X509_CRL_bio(tmp, NULL));
 		}
 
