@@ -6634,7 +6634,7 @@ static double timeutc(const ASN1_TIME *time) {
 	} else {
 		if (!scan(&year, &cp, 2, 0))
 			goto badfmt;
-		year += (year < 50)? 2000 : 1999;
+		year += (year < 50)? 2000 : 1900;
 	}
 
 	tm.tm_year = year - 1900;
