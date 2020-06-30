@@ -40,6 +40,7 @@ $$(d)/$(1)/%.o: $$(d)/%.c $$(d)/config.h
 	$$(CC) $$(CFLAGS_$$(<D)) $$(ALL_LUA$(subst .,,$(1))_CPPFLAGS) $$(CPPFLAGS_$$(<D)) -c -o $$@ $$<
 
 ifneq ($(1), 5.3)
+ifneq ($(1), 5.4)
 $$(d)/$(1)/compat53.o: $$(d)/../vendor/compat53/c-api/compat-5.3.c $$(d)/../vendor/compat53/c-api/compat-5.3.h $$(d)/config.h
 	$$(MKDIR) -p $$(@D)
 	$$(CC) $$(CFLAGS_$(d)) $$(ALL_LUA$(subst .,,$(1))_CPPFLAGS) $$(CPPFLAGS_$(d)) -c -o $$@ $$<
@@ -47,6 +48,7 @@ $$(d)/$(1)/compat53.o: $$(d)/../vendor/compat53/c-api/compat-5.3.c $$(d)/../vend
 $$(d)/$(1)/%.o: $$(d)/../vendor/compat53/c-api/compat-5.3.h
 
 $$(d)/$(1)/openssl.so: $$(d)/$(1)/compat53.o
+endif
 endif
 
 .SECONDARY: liblua$(1)-openssl openssl$(1) openssl
@@ -58,13 +60,15 @@ endef # BUILD_$(d)
 $(eval $(call BUILD_$(d),5.1))
 $(eval $(call BUILD_$(d),5.2))
 $(eval $(call BUILD_$(d),5.3))
+$(eval $(call BUILD_$(d),5.4))
 
 ifneq "$(filter $(abspath $(d)/..)/%, $(abspath $(firstword $(MAKEFILE_LIST))))" ""
-.SECONDARY: all all5.1 all5.2 all5.3
+.SECONDARY: all all5.1 all5.2 all5.3 all5.4
 
 all5.1: liblua5.1-openssl
 all5.2: liblua5.2-openssl
 all5.3: liblua5.3-openssl
+all5.4: liblua5.4-openssl
 all: $(foreach API,$(strip $(LUA_APIS)),all$(API))
 
 endif
@@ -152,21 +156,24 @@ endef # INSTALL_$(d)
 $(eval $(call INSTALL_$(d),5.1,$$(lua51cpath),$$(lua51path)))
 $(eval $(call INSTALL_$(d),5.2,$$(lua52cpath),$$(lua52path)))
 $(eval $(call INSTALL_$(d),5.3,$$(lua53cpath),$$(lua53path)))
+$(eval $(call INSTALL_$(d),5.4,$$(lua54cpath),$$(lua54path)))
 
 ifneq "$(filter $(abspath $(d)/..)/%, $(abspath $(firstword $(MAKEFILE_LIST))))" ""
 
-.SECONDARY: install5.1 install5.2 install5.3 install
+.SECONDARY: install5.1 install5.2 install5.3 install5.4 install
 
 install5.1: liblua5.1-openssl-install
 install5.2: liblua5.2-openssl-install
 install5.3: liblua5.3-openssl-install
+install5.4: liblua5.4-openssl-install
 install: $(foreach API,$(strip $(LUA_APIS)),install$(API))
 
-.PHONY: uninstall5.1 uninstall5.2 uninstall5.3 uninstall
+.PHONY: uninstall5.1 uninstall5.2 uninstall5.3 uninstall5.4 uninstall
 
 uninstall5.1: liblua5.1-openssl-uninstall
 uninstall5.2: liblua5.2-openssl-uninstall
 uninstall5.3: liblua5.3-openssl-uninstall
+uninstall5.4: liblua5.4-openssl-uninstall
 uninstall: $(foreach API,$(strip $(LUA_APIS)),uninstall$(API))
 
 endif
@@ -201,14 +208,17 @@ $(d)/help:
 	@echo "      all5.1 - build 5.1/openssl.so"
 	@echo "      all5.2 - build 5.2/openssl.so"
 	@echo "      all5.3 - build 5.3/openssl.so"
+	@echo "      all5.4 - build 5.4/openssl.so"
 	@echo "     install - install all API targets"
 	@echo "  install5.1 - install openssl Lua 5.1 modules"
 	@echo "  install5.2 - install openssl Lua 5.2 modules"
 	@echo "  install5.3 - install openssl Lua 5.3 modules"
+	@echo "  install5.4 - install openssl Lua 5.4 modules"
 	@echo "   uninstall - uninstall all API targets"
 	@echo "uninstall5.1 - uninstall openssl Lua 5.1 modules"
 	@echo "uninstall5.2 - uninstall openssl Lua 5.2 modules"
 	@echo "uninstall5.3 - uninstall openssl Lua 5.3 modules"
+	@echo "uninstall5.4 - uninstall openssl Lua 5.4 modules"
 	@echo "       clean - rm binary targets, object files, debugging symbols, etc"
 	@echo "      clean~ - clean + rm *~"
 	@echo "        help - echo this help message"
@@ -223,10 +233,13 @@ $(d)/help:
 	@echo 'lua52cpath - install path for Lua 5.2 C modules ($(value lua52cpath))'
 	@echo ' lua53path - install path for Lua 5.3 modules ($(value lua53path))'
 	@echo 'lua53cpath - install path for Lua 5.3 C modules ($(value lua53cpath))'
+	@echo ' lua54path - install path for Lua 5.4 modules ($(value lua54path))'
+	@echo 'lua54cpath - install path for Lua 5.4 C modules ($(value lua54cpath))'
 	@echo ""
 	@echo 'LUA51_CPPFLAGS - cpp flags for Lua 5.1 headers ($(LUA51_CPPFLAGS))'
 	@echo 'LUA52_CPPFLAGS - cpp flags for Lua 5.2 headers ($(LUA52_CPPFLAGS))'
 	@echo 'LUA53_CPPFLAGS - cpp flags for Lua 5.3 headers ($(LUA53_CPPFLAGS))'
+	@echo 'LUA54_CPPFLAGS - cpp flags for Lua 5.3 headers ($(LUA54_CPPFLAGS))'
 	@echo ""
 	@echo "(NOTE: all the common GNU-style paths are supported, including"
 	@echo "prefix, bindir, libdir, datadir, includedir, and DESTDIR.)"
