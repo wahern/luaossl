@@ -239,7 +239,7 @@ $(d)/help:
 	@echo 'LUA51_CPPFLAGS - cpp flags for Lua 5.1 headers ($(LUA51_CPPFLAGS))'
 	@echo 'LUA52_CPPFLAGS - cpp flags for Lua 5.2 headers ($(LUA52_CPPFLAGS))'
 	@echo 'LUA53_CPPFLAGS - cpp flags for Lua 5.3 headers ($(LUA53_CPPFLAGS))'
-	@echo 'LUA54_CPPFLAGS - cpp flags for Lua 5.3 headers ($(LUA54_CPPFLAGS))'
+	@echo 'LUA54_CPPFLAGS - cpp flags for Lua 5.4 headers ($(LUA54_CPPFLAGS))'
 	@echo ""
 	@echo "(NOTE: all the common GNU-style paths are supported, including"
 	@echo "prefix, bindir, libdir, datadir, includedir, and DESTDIR.)"
