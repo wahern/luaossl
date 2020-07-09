@@ -28,8 +28,9 @@
 #endif /* VC++ _fsopen for share-allowed file read */
 
 #ifndef COMPAT53_HAVE_STRERROR_R
-#  if defined(__GLIBC__) || defined(_POSIX_VERSION) || defined(__APPLE__) || \
-      (!defined (__MINGW32__) && defined(__GNUC__) && (__GNUC__ < 6))
+#  if (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L) || \
+      (defined(_XOPEN_SOURCE) && _XOPEN_SOURCE >= 600) || \
+      defined(__APPLE__)
 #    define COMPAT53_HAVE_STRERROR_R 1
 #  else /* none of the defines matched: define to 0 */
 #    define COMPAT53_HAVE_STRERROR_R 0
@@ -448,7 +449,9 @@ static const char *compat53_reader (lua_State *L, void *ud, size_t *size) {
 
 COMPAT53_API int lua_load (lua_State *L, lua_Reader reader, void *data, const char *source, const char *mode) {
   int status = LUA_OK;
-  compat53_reader_data compat53_data = { reader, data, 1, 0, 0 };
+  compat53_reader_data compat53_data = { 0, NULL, 1, 0, 0 };
+  compat53_data.reader = reader;
+  compat53_data.ud = data;
   compat53_data.peeked_data = reader(L, data, &(compat53_data.peeked_data_size));
   if (compat53_data.peeked_data && compat53_data.peeked_data_size &&
       compat53_data.peeked_data[0] == LUA_SIGNATURE[0]) /* binary file? */
@@ -717,6 +720,63 @@ COMPAT53_API int lua_geti (lua_State *L, int index, lua_Integer i) {
   lua_pushinteger(L, i);
   lua_gettable(L, index);
   return lua_type(L, -1);
+}
+
+
+#ifndef LUA_EXTRASPACE
+#define LUA_EXTRASPACE (sizeof(void*))
+#endif
+
+COMPAT53_API void *lua_getextraspace (lua_State *L) {
+  int is_main = 0;
+  void *ptr = NULL;
+  luaL_checkstack(L, 4, "not enough stack slots available");
+  lua_pushliteral(L, "__compat53_extraspace");
+  lua_pushvalue(L, -1);
+  lua_rawget(L, LUA_REGISTRYINDEX);
+  if (!lua_istable(L, -1)) {
+    lua_pop(L, 1);
+    lua_createtable(L, 0, 2);
+    lua_createtable(L, 0, 1);
+    lua_pushliteral(L, "k");
+    lua_setfield(L, -2, "__mode");
+    lua_setmetatable(L, -2);
+    lua_pushvalue(L, -2);
+    lua_pushvalue(L, -2);
+    lua_rawset(L, LUA_REGISTRYINDEX);
+  }
+  lua_replace(L, -2);
+  is_main = lua_pushthread(L);
+  lua_rawget(L, -2);
+  ptr = lua_touserdata(L, -1);
+  if (!ptr) {
+    lua_pop(L, 1);
+    ptr = lua_newuserdata(L, LUA_EXTRASPACE);
+    if (is_main) {
+      memset(ptr, '\0', LUA_EXTRASPACE);
+      lua_pushthread(L);
+      lua_pushvalue(L, -2);
+      lua_rawset(L, -4);
+      lua_pushboolean(L, 1);
+      lua_pushvalue(L, -2);
+      lua_rawset(L, -4);
+    } else {
+      void* mptr = NULL;
+      lua_pushboolean(L, 1);
+      lua_rawget(L, -3);
+      mptr = lua_touserdata(L, -1);
+      if (mptr)
+        memcpy(ptr, mptr, LUA_EXTRASPACE);
+      else
+        memset(ptr, '\0', LUA_EXTRASPACE);
+      lua_pop(L, 1);
+      lua_pushthread(L);
+      lua_pushvalue(L, -2);
+      lua_rawset(L, -4);
+    }
+  }
+  lua_pop(L, 2);
+  return ptr;
 }
 
 
