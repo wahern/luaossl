@@ -1,3 +1,10 @@
+liblua-openssl (20200709-0) unstable; urgency=low
+
+  * fix loading from DER files when type set to any (#177)
+  * fix lifetime of certificates from <2000 (#178)
+
+-- Daurnimator <quae@daurnimator.com>  Thu, 09 Jul 2020 23:09:31 +1000
+
 liblua-openssl (20190731-0) unstable; urgency=low
 
   * introduce workarounds for LuaJIT 47bit userdata (#173)
