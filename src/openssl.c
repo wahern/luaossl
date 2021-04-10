@@ -11929,10 +11929,11 @@ static _Bool cipher_update_(lua_State *L, EVP_CIPHER_CTX *ctx, luaL_Buffer *B, i
 static int cipher_update(lua_State *L) {
 	EVP_CIPHER_CTX *ctx = checksimple(L, 1, CIPHER_CLASS);
 	luaL_Buffer B;
+	int top = lua_gettop(L);
 
 	luaL_buffinit(L, &B);
 
-	if (!cipher_update_(L, ctx, &B, 2, lua_gettop(L)))
+	if (!cipher_update_(L, ctx, &B, 2, top))
 		goto sslerr;
 
 	luaL_pushresult(&B);
@@ -11951,10 +11952,11 @@ static int cipher_final(lua_State *L) {
 	luaL_Buffer B;
 	size_t block;
 	int out;
+	int top = lua_gettop(L);
 
 	luaL_buffinit(L, &B);
 
-	if (!cipher_update_(L, ctx, &B, 2, lua_gettop(L)))
+	if (!cipher_update_(L, ctx, &B, 2, top))
 		goto sslerr;
 
 	block = EVP_CIPHER_CTX_block_size(ctx);
