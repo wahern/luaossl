@@ -613,6 +613,10 @@
 #define HMAC_INIT_EX_INT OPENSSL_PREREQ(1,0,0)
 #endif
 
+#ifndef HAVE_USE_CERTIFICATE_CHAIN_FILE
+#define HAVE_USE_CERTIFICATE_CHAIN_FILE (OPENSSL_PREREQ(0,9,4) || LIBRESSL_PREREQ(2,0,0))
+#endif
+
 #if HAVE_EVP_PKEY_CTX_KDF || HAVE_EVP_KDF_CTX
 #include <openssl/kdf.h>
 #endif
@@ -3248,6 +3252,12 @@ static const auxL_IntegerReg openssl_integers[] = {
 	{ NULL, 0 },
 };
 
+static const auxL_IntegerReg openssl_filetypes[] = {
+	{"PEM", SSL_FILETYPE_PEM},
+	{"ASN1", SSL_FILETYPE_ASN1},
+	{NULL, 0}
+};
+
 EXPORT int luaopen__openssl(lua_State *L) {
 	size_t i;
 
@@ -3270,6 +3280,12 @@ EXPORT int luaopen__openssl(lua_State *L) {
 
 	lua_pushstring(L, SHLIB_VERSION_NUMBER);
 	lua_setfield(L, -2, "SHLIB_VERSION_NUMBER");
+
+
+	lua_newtable(L);
+	auxL_setintegers(L, openssl_filetypes);
+
+	lua_setfield(L, -2, "filetypes");
 
 	return 1;
 } /* luaopen__openssl() */
@@ -9481,6 +9497,18 @@ static int sx_setCertificateChain(lua_State *L) {
 } /* sx_setCertificateChain() */
 #endif
 
+#if HAVE_USE_CERTIFICATE_CHAIN_FILE
+static int sx_useCertificateChainFile(lua_State* L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	const char *filepath = luaL_checkstring(L, 2);
+
+	if (!SSL_CTX_use_certificate_chain_file(ctx, filepath))
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setCertificateChainFromFile");
+
+	lua_pushboolean(L, 1);
+	return 1;
+}
+#endif
 
 #if HAVE_SSL_CTX_GET0_CHAIN_CERTS
 static int sx_getCertificateChain(lua_State *L) {
@@ -9495,7 +9523,6 @@ static int sx_getCertificateChain(lua_State *L) {
 	return 1;
 } /* sx_getCertificateChain() */
 #endif
-
 
 static int sx_setPrivateKey(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
@@ -9518,6 +9545,19 @@ static int sx_setPrivateKey(lua_State *L) {
 	return 1;
 } /* sx_setPrivateKey() */
 
+
+static int sx_usePrivateKeyFile(lua_State* L) {
+	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+	const char* filepath = luaL_checkstring(L, 2);
+	int typ = luaL_optinteger(L, 3, SSL_FILETYPE_PEM);
+
+	if (!SSL_CTX_use_PrivateKey_file(ctx, filepath, typ))
+		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setPrivateKeyFromFile");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+}
 
 static int sx_setCipherList(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
@@ -10270,7 +10310,6 @@ static int sx__gc(lua_State *L) {
 	return 0;
 } /* sx__gc() */
 
-
 static const auxL_Reg sx_methods[] = {
 	{ "setOptions",       &sx_setOptions },
 	{ "getOptions",       &sx_getOptions },
@@ -10293,7 +10332,11 @@ static const auxL_Reg sx_methods[] = {
 #if HAVE_SSL_CTX_GET0_CHAIN_CERTS
 	{ "getCertificateChain", &sx_getCertificateChain },
 #endif
+#if HAVE_USE_CERTIFICATE_CHAIN_FILE
+	{"setCertificateChainFromFile", &sx_useCertificateChainFile},
+#endif
 	{ "setPrivateKey",    &sx_setPrivateKey },
+	{ "setPrivateKeyFromFile", &sx_usePrivateKeyFile},
 	{ "setCipherList",    &sx_setCipherList },
 #if HAVE_SSL_CTX_SET_CIPHERSUITES
 	{ "setCipherSuites",  &sx_setCipherSuites },
