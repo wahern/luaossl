@@ -501,6 +501,10 @@
 #define HAVE_SSL_SET1_CHAIN OPENSSL_PREREQ(1,0,2)
 #endif
 
+#ifndef HAVE_SSL_USE_CHAIN_FILE
+#define HAVE_SSL_USE_CHAIN_FILE (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(3,3,3))
+#endif
+
 #ifndef HAVE_SSL_SET1_PARAM
 #define HAVE_SSL_SET1_PARAM (OPENSSL_PREREQ(1,0,2) || LIBRESSL_PREREQ(2,5,1))
 #endif
@@ -9497,8 +9501,9 @@ static int sx_setCertificateChain(lua_State *L) {
 } /* sx_setCertificateChain() */
 #endif
 
+
 #if HAVE_USE_CERTIFICATE_CHAIN_FILE
-static int sx_useCertificateChainFile(lua_State* L) {
+static int sx_setCertificateChainFromFile(lua_State* L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	const char *filepath = luaL_checkstring(L, 2);
 
@@ -9507,8 +9512,9 @@ static int sx_useCertificateChainFile(lua_State* L) {
 
 	lua_pushboolean(L, 1);
 	return 1;
-}
+} /* sx_setCertificateChainFromFile() */
 #endif
+
 
 #if HAVE_SSL_CTX_GET0_CHAIN_CERTS
 static int sx_getCertificateChain(lua_State *L) {
@@ -9523,6 +9529,7 @@ static int sx_getCertificateChain(lua_State *L) {
 	return 1;
 } /* sx_getCertificateChain() */
 #endif
+
 
 static int sx_setPrivateKey(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
@@ -9546,7 +9553,7 @@ static int sx_setPrivateKey(lua_State *L) {
 } /* sx_setPrivateKey() */
 
 
-static int sx_usePrivateKeyFile(lua_State* L) {
+static int sx_setPrivateKeyFromFile(lua_State* L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	const char* filepath = luaL_checkstring(L, 2);
 	int typ = luaL_optinteger(L, 3, SSL_FILETYPE_PEM);
@@ -9557,7 +9564,8 @@ static int sx_usePrivateKeyFile(lua_State* L) {
 	lua_pushboolean(L, 1);
 
 	return 1;
-}
+} /* sx_setPrivateKeyFromFile() */
+
 
 static int sx_setCipherList(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
@@ -10333,11 +10341,11 @@ static const auxL_Reg sx_methods[] = {
 	{ "getCertificateChain", &sx_getCertificateChain },
 #endif
 #if HAVE_USE_CERTIFICATE_CHAIN_FILE
-	{"setCertificateChainFromFile", &sx_useCertificateChainFile},
+	{ "setCertificateChainFromFile", &sx_setCertificateChainFromFile },
 #endif
-	{ "setPrivateKey",    &sx_setPrivateKey },
-	{ "setPrivateKeyFromFile", &sx_usePrivateKeyFile},
-	{ "setCipherList",    &sx_setCipherList },
+	{ "setPrivateKey",          &sx_setPrivateKey },
+	{ "setPrivateKeyFromFile",  &sx_setPrivateKeyFromFile },
+	{ "setCipherList",          &sx_setCipherList },
 #if HAVE_SSL_CTX_SET_CIPHERSUITES
 	{ "setCipherSuites",  &sx_setCipherSuites },
 #endif
@@ -10834,6 +10842,21 @@ static int ssl_setCertificateChain(lua_State *L) {
 #endif
 
 
+#if HAVE_SSL_USE_CHAIN_FILE
+static int ssl_setCertificateChainFromFile(lua_State *L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	const char *filepath = luaL_checkstring(L, 2);
+
+	if (!SSL_use_certificate_chain_file(ssl, filepath))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setCertificateChainFromFile");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setCertificateChainFromFile() */
+#endif
+
+
 #if HAVE_SSL_GET0_CHAIN_CERTS
 static int ssl_getCertificateChain(lua_State *L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
@@ -10868,6 +10891,21 @@ static int ssl_setPrivateKey(lua_State *L) {
 
 	return 1;
 } /* ssl_setPrivateKey() */
+
+
+static int ssl_setPrivateKeyFromFile(lua_State* L) {
+	SSL *ssl = checksimple(L, 1, SSL_CLASS);
+	const char* filepath = luaL_checkstring(L, 2);
+	int typ = luaL_optinteger(L, 3, SSL_FILETYPE_PEM);
+
+	if (!SSL_use_PrivateKey_file(ssl, filepath, typ))
+		return auxL_error(L, auxL_EOPENSSL, "ssl:setPrivateKeyFromFile");
+
+	lua_pushboolean(L, 1);
+
+	return 1;
+} /* ssl_setPrivateKeyFromFile() */
+
 
 
 static int ssl_getCertificate(lua_State *L) {
@@ -11262,15 +11300,19 @@ static const auxL_Reg ssl_methods[] = {
 #if HAVE_SSL_SET1_CHAIN
 	{ "setCertificateChain", &ssl_setCertificateChain },
 #endif
+#if HAVE_SSL_USE_CHAIN_FILE
+	{ "setCertificateChainFromFile", &ssl_setCertificateChainFromFile},
+#endif
 #if HAVE_SSL_GET0_CHAIN_CERTS
 	{ "getCertificateChain", &ssl_getCertificateChain },
 #endif
-	{ "setPrivateKey",    &ssl_setPrivateKey },
-	{ "getCertificate",   &ssl_getCertificate },
-	{ "getPeerCertificate", &ssl_getPeerCertificate },
-	{ "getPeerChain",     &ssl_getPeerChain },
-	{ "getCipherInfo",    &ssl_getCipherInfo },
-	{ "setCipherList",    &ssl_setCipherList },
+	{ "setPrivateKey",          &ssl_setPrivateKey },
+	{ "setPrivateKeyFromFile",  &ssl_setPrivateKeyFromFile },
+	{ "getCertificate",         &ssl_getCertificate },
+	{ "getPeerCertificate",     &ssl_getPeerCertificate },
+	{ "getPeerChain",           &ssl_getPeerChain },
+	{ "getCipherInfo",          &ssl_getCipherInfo },
+	{ "setCipherList",          &ssl_setCipherList },
 #if HAVE_SSL_SET_CIPHERSUITES
 	{ "setCipherSuites",  &ssl_setCipherSuites },
 #endif
