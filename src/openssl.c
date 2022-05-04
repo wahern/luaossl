@@ -236,7 +236,11 @@
 #endif
 
 #ifndef HAVE_EVP_KDF_CTX
-#define HAVE_EVP_KDF_CTX OPENSSL_PREREQ(1,2,0)
+#define HAVE_EVP_KDF_CTX OPENSSL_PREREQ(3,0,0)
+#endif
+
+#ifndef HAVE_OSSL_PARAM
+#define HAVE_OSSL_PARAM OPENSSL_PREREQ(3,0,0)
 #endif
 
 #ifndef HAVE_PKCS5_PBKDF2_HMAC
@@ -615,6 +619,10 @@
 
 #if HAVE_EVP_PKEY_CTX_KDF || HAVE_EVP_KDF_CTX
 #include <openssl/kdf.h>
+#endif
+
+#if HAVE_EVP_KDF_CTX
+#include <openssl/core_names.h>
 #endif
 
 #ifndef STRERROR_R_CHAR_P
@@ -2231,7 +2239,7 @@ STACK_OF(X509) *compat_X509_chain_up_ref(STACK_OF(X509) *chain) {
 
 #if !HAVE_EVP_KDF_CTX
 /*
- * Emulate EVP_KDF_CTX API (introduced in OpenSSL 1.2.0)
+ * Emulate EVP_KDF_CTX API (introduced in OpenSSL 3.0.0)
  */
 
 #ifndef ERR_LIB_KDF
@@ -2257,6 +2265,10 @@ STACK_OF(X509) *compat_X509_chain_up_ref(STACK_OF(X509) *chain) {
 #ifndef EVP_R_COMMAND_NOT_SUPPORTED
 #define EVP_R_COMMAND_NOT_SUPPORTED EVP_R_UNKNOWN_OPTION
 #endif
+
+typedef struct {
+    int nid;
+} EVP_KDF;
 
 typedef struct {
 	int nid;
@@ -2321,7 +2333,21 @@ static void EVP_KDF_CTX_free(EVP_KDF_CTX *kctx) {
 	OPENSSL_free(kctx);
 } /* EVP_KDF_CTX_free() */
 
-static EVP_KDF_CTX *EVP_KDF_CTX_new_id(int id) {
+typedef int LUAOSSL_EVP_KDF_PTR;
+#define LUAOSSL_EVP_KDF_UNDEF NID_undef
+
+static LUAOSSL_EVP_KDF_PTR EVP_KDF_fetch(void *libctx, const char *algorithm, const char *properties) {
+    LUAOSSL_EVP_KDF_PTR kdf;
+    (void)libctx;
+    (void)properties;
+
+    if(!auxS_txt2nid(&kdf,algorithm)) {
+        return LUAOSSL_EVP_KDF_UNDEF;
+    }
+    return kdf;
+}
+
+static EVP_KDF_CTX *EVP_KDF_CTX_new(LUAOSSL_EVP_KDF_PTR kdf) {
 	EVP_KDF_CTX *ret;
 
 	ret = OPENSSL_zalloc(sizeof(*ret));
@@ -2330,9 +2356,9 @@ static EVP_KDF_CTX *EVP_KDF_CTX_new_id(int id) {
 		return NULL;
 	}
 
-	ret->nid = id;
+	ret->nid = kdf;
 
-	switch(id) {
+	switch(kdf) {
 #if HAVE_PKCS5_PBKDF2_HMAC
 	case NID_id_pbkdf2:
 		break;
@@ -2344,7 +2370,7 @@ static EVP_KDF_CTX *EVP_KDF_CTX_new_id(int id) {
 #if HAVE_EVP_PKEY_CTX_KDF
 	case NID_tls1_prf:
 	case NID_hkdf: {
-			ret->pctx = EVP_PKEY_CTX_new_id(id, NULL);
+			ret->pctx = EVP_PKEY_CTX_new_id(kdf, NULL);
 			if (!ret->pctx) {
 				OPENSSL_free(ret);
 				return NULL;
@@ -2364,7 +2390,7 @@ static EVP_KDF_CTX *EVP_KDF_CTX_new_id(int id) {
 	}
 
 	return ret;
-} /* EVP_KDF_CTX_new_id() */
+} /* EVP_KDF_CTX_new() */
 
 static int set_membuf(unsigned char **buffer, size_t *buflen, const unsigned char *new_buffer, size_t new_buflen) {
 	if (new_buffer == NULL)
@@ -2589,7 +2615,7 @@ static int EVP_KDF_ctrl(EVP_KDF_CTX *kctx, int cmd, ...) {
 	return ret;
 } /* EVP_KDF_ctrl() */
 
-static size_t EVP_KDF_size(EVP_KDF_CTX *kctx) {
+static size_t EVP_KDF_CTX_get_kdf_size(EVP_KDF_CTX *kctx) {
 	if (kctx == NULL)
 		return 0;
 
@@ -2605,9 +2631,9 @@ static size_t EVP_KDF_size(EVP_KDF_CTX *kctx) {
 	default:
 		return SIZE_MAX;
 	}
-} /* EVP_KDF_size() */
+} /* EVP_KDF_CTX_get_kdf_size() */
 
-static int EVP_KDF_derive(EVP_KDF_CTX *kctx, unsigned char *out, size_t *outlen) {
+static int EVP_KDF_derive(EVP_KDF_CTX *kctx, unsigned char *out, size_t outlen, void *params) {
 	switch(kctx->nid) {
 #if HAVE_PKCS5_PBKDF2_HMAC
 	case NID_id_pbkdf2:
@@ -2615,7 +2641,7 @@ static int EVP_KDF_derive(EVP_KDF_CTX *kctx, unsigned char *out, size_t *outlen)
 			kctx->pbkdf2.salt, kctx->pbkdf2.saltlen,
 			kctx->pbkdf2.iter,
 			kctx->pbkdf2.md,
-			*outlen, out);
+			outlen, out);
 #endif
 #if HAVE_SCRYPT
 	case NID_id_scrypt:
@@ -2623,20 +2649,24 @@ static int EVP_KDF_derive(EVP_KDF_CTX *kctx, unsigned char *out, size_t *outlen)
 			kctx->scrypt.salt, kctx->scrypt.saltlen,
 			kctx->scrypt.N, kctx->scrypt.r, kctx->scrypt.p,
 			kctx->scrypt.maxmem_bytes,
-			out, *outlen);
+			out, outlen);
 #endif
 #if HAVE_EVP_PKEY_CTX_KDF
 	case NID_tls1_prf:
 	case NID_hkdf:
-		return EVP_PKEY_derive(kctx->pctx, out, outlen);
+		return EVP_PKEY_derive(kctx->pctx, out, &outlen);
 #endif
 	default:
 		(void)out;
 		(void)outlen;
+		(void)params;
 		return 0;
 	}
 } /* EVP_KDF_derive() */
 
+#else
+typedef EVP_KDF *LUAOSSL_EVP_KDF_PTR;
+#define LUAOSSL_EVP_KDF_UNDEF NULL
 #endif
 
 
@@ -3265,11 +3295,15 @@ EXPORT int luaopen__openssl(lua_State *L) {
 	lua_pushstring(L, OPENSSL_VERSION_TEXT);
 	lua_setfield(L, -2, "VERSION_TEXT");
 
+#ifdef SHLIB_VERSION_HISTORY
 	lua_pushstring(L, SHLIB_VERSION_HISTORY);
 	lua_setfield(L, -2, "SHLIB_VERSION_HISTORY");
+#endif
 
+#ifdef SHLIB_VERSION_NUMBER
 	lua_pushstring(L, SHLIB_VERSION_NUMBER);
 	lua_setfield(L, -2, "SHLIB_VERSION_NUMBER");
+#endif
 
 	return 1;
 } /* luaopen__openssl() */
@@ -5384,7 +5418,9 @@ static void pk_luainit(lua_State *L, _Bool reset) {
 
 static const auxL_IntegerReg pk_rsa_pad_opts[] = {
 	{ "RSA_PKCS1_PADDING", RSA_PKCS1_PADDING }, // PKCS#1 padding
+#if RSA_SSLV23_PADDING
 	{ "RSA_SSLV23_PADDING", RSA_SSLV23_PADDING }, // SSLv23 padding
+#endif
 	{ "RSA_NO_PADDING", RSA_NO_PADDING }, // no padding
 	{ "RSA_PKCS1_OAEP_PADDING", RSA_PKCS1_OAEP_PADDING }, // OAEP padding (encrypt and decrypt only)
 	{ "RSA_X931_PADDING", RSA_X931_PADDING }, // (signature operations only)
@@ -12031,15 +12067,21 @@ static int EVP_KDF__gc(lua_State *L) {
 
 
 static int kdf_derive(lua_State *L) {
-	int nid;
+	LUAOSSL_EVP_KDF_PTR kdf;
 	luaL_Buffer b;
 	EVP_KDF_CTX *kctx, **kctxp;
+#if HAVE_OSSL_PARAM
+	OSSL_PARAM params[15], *param = params;
+#endif
 	unsigned char* out;
 	size_t outlen = 0;
 	const char *str = NULL;
 	size_t len;
 	_Bool seed = 0;
 	int mode;
+	unsigned int iter;
+	uint64_t maxmem_bytes, scrypt_n;
+	uint32_t scrypt_r, scrypt_p;
 
 	luaL_checktype(L, 1, LUA_TTABLE);
 
@@ -12047,13 +12089,13 @@ static int kdf_derive(lua_State *L) {
 		const char* type;
 		if (!loadfield(L, 1, "type", LUA_TSTRING, &type))
 			return luaL_argerror(L, 1, "missing 'type' field");
-		if (!auxS_txt2nid(&nid, type))
+		if ((kdf = EVP_KDF_fetch(NULL, type, NULL)) == LUAOSSL_EVP_KDF_UNDEF)
 			return luaL_argerror(L, 1, "unknown 'type'");
 	}
 
 	/* ensure EVP_KDF_CTX is collected on error */
 	kctxp = prepudata(L, sizeof(EVP_KDF_CTX*), NULL, &EVP_KDF__gc);
-	if (!(kctx = EVP_KDF_CTX_new_id(nid)))
+	if (!(kctx = EVP_KDF_CTX_new(kdf)))
 		return auxL_error(L, auxL_EOPENSSL, "kdf.derive");
 	*kctxp = kctx;
 
@@ -12089,51 +12131,91 @@ static int kdf_derive(lua_State *L) {
 
 		case 2:
 			str = luaL_checklstring(L, -1, &len);
+#if HAVE_OSSL_PARAM
+			*param++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, (void *)str, len);
+#else
 			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_PASS, (const unsigned char*)str, len) <= 0)
 				goto error;
+#endif
 			break;
 
 		case 3:
 			str = luaL_checklstring(L, -1, &len);
+#if HAVE_OSSL_PARAM
+			*param++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, (void *)str, len);
+#else
 			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SALT, (const unsigned char*)str, len) <= 0)
 				goto error;
+#endif
 			break;
 
 		case 4:
-			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_ITER, auxL_checkunsigned(L, -1, 1, (int)-1)) <= 0)
+			iter = auxL_checkunsigned(L, -1, 1, (int)-1);
+#if HAVE_OSSL_PARAM
+			*param++ = OSSL_PARAM_construct_uint(OSSL_KDF_PARAM_ITER, &iter);
+#else
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_ITER, iter) <= 0)
 				goto error;
+#endif
 			break;
 
 		case 5:
+#if HAVE_OSSL_PARAM
+			str = luaL_checklstring(L, -1, &len);
+			*param++ = OSSL_PARAM_construct_utf8_string(OSSL_KDF_PARAM_DIGEST, (void *)str, len);
+#else
 			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_MD, md_checkdigest(L, -1)) <= 0)
 				goto error;
+#endif
 			break;
 
 		case 6:
 			str = luaL_checklstring(L, -1, &len);
+#if HAVE_OSSL_PARAM
+			*param++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_KEY, (void *)str, len);
+#else
 			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_KEY, (const unsigned char*)str, len) <= 0)
 				goto error;
+#endif
 			break;
 
 		case 7:
-			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_MAXMEM_BYTES, auxL_checkunsigned(L, -1, 0, UINT64_MAX)) <= 0)
+			maxmem_bytes = auxL_checkunsigned(L, -1, 0, UINT64_MAX);
+#if HAVE_OSSL_PARAM
+			*param++ = OSSL_PARAM_construct_uint64(OSSL_KDF_PARAM_SCRYPT_MAXMEM, &maxmem_bytes);
+#else
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_MAXMEM_BYTES, maxmem_bytes) <= 0)
 				goto error;
+#endif
 			break;
 
 		case 8:
 			str = luaL_checklstring(L, -1, &len);
+#if HAVE_OSSL_PARAM
+			*param++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SECRET, (void *)str, len);
+#else
 			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_TLS_SECRET, (const unsigned char*)str, len) <= 0)
 				goto error;
+#endif
 			break;
 
 		case 9:
-			seed = 1;
+			str = luaL_checklstring(L, -1, &len);
+#if HAVE_OSSL_PARAM
+			*param++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SEED, (void *)str, len);
+#else
+            seed = 1;
+#endif
 			break;
 
 		case 10:
 			str = luaL_checklstring(L, -1, &len);
+#if HAVE_OSSL_PARAM
+			*param++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_INFO, (void *)str, len);
+#else
 			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_ADD_HKDF_INFO, (const unsigned char*)str, len) <= 0)
 				goto error;
+#endif
 			break;
 
 		case 11:
@@ -12158,23 +12240,42 @@ static int kdf_derive(lua_State *L) {
 				"expand_only",
 #endif
 			NULL }, 0)];
+#if HAVE_OSSL_PARAM
+			*param++ = OSSL_PARAM_construct_int(OSSL_KDF_PARAM_MODE, &mode);
+#else
 			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_HKDF_MODE, mode) <= 0)
 				goto error;
+#endif
 			break;
 
 		case 12:
-			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SCRYPT_N, auxL_checkunsigned(L, -1, 0, UINT64_MAX)) <= 0)
+			scrypt_n = auxL_checkunsigned(L, -1, 0, UINT64_MAX);
+#if HAVE_OSSL_PARAM
+			*param++ = OSSL_PARAM_construct_uint64(OSSL_KDF_PARAM_SCRYPT_N, &scrypt_n);
+#else
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SCRYPT_N, scrypt_n) <= 0)
 				goto error;
+#endif
 			break;
 
 		case 13:
-			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SCRYPT_R, auxL_checkunsigned(L, -1, 0, UINT32_MAX)) <= 0)
+			scrypt_r = auxL_checkunsigned(L, -1, 0, UINT32_MAX);
+#if HAVE_OSSL_PARAM
+			*param++ = OSSL_PARAM_construct_uint32(OSSL_KDF_PARAM_SCRYPT_R, &scrypt_r);
+#else
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SCRYPT_R, scrypt_r) <= 0)
 				goto error;
+#endif
 			break;
 
 		case 14:
-			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SCRYPT_P, auxL_checkunsigned(L, -1, 0, UINT32_MAX)) <= 0)
+			scrypt_p = auxL_checkunsigned(L, -1, 0, UINT32_MAX);
+#if HAVE_OSSL_PARAM
+			*param++ = OSSL_PARAM_construct_uint32(OSSL_KDF_PARAM_SCRYPT_P, &scrypt_p);
+#else
+			if (EVP_KDF_ctrl(kctx, EVP_KDF_CTRL_SET_SCRYPT_P, scrypt_p) <= 0)
 				goto error;
+#endif
 			break;
 
 		default:
@@ -12183,6 +12284,13 @@ static int kdf_derive(lua_State *L) {
 		lua_pop(L, 1);
 	}
 
+#if HAVE_OSSL_PARAM
+	*param = OSSL_PARAM_construct_end();
+
+	if(EVP_KDF_CTX_set_params(kctx,params) <= 0) {
+		goto error;
+	}
+#else
 	/* XXX: seed must be set *after* secret
 	 * https://github.com/openssl/openssl/issues/7728 */
 	if (seed) {
@@ -12192,9 +12300,10 @@ static int kdf_derive(lua_State *L) {
 			goto error;
 		lua_pop(L, 1);
 	}
+#endif
 
 	if (outlen == 0) {
-		outlen = EVP_KDF_size(kctx);
+		outlen = EVP_KDF_CTX_get_kdf_size(kctx);
 		if (outlen == 0)
 			goto error;
 		if (outlen == SIZE_MAX)
@@ -12203,7 +12312,7 @@ static int kdf_derive(lua_State *L) {
 
 	out = (unsigned char *)luaL_buffinitsize(L, &b, outlen);
 
-	if (EVP_KDF_derive(kctx, out, &outlen) <= 0)
+	if (EVP_KDF_derive(kctx, out, outlen, NULL) <= 0)
 		goto error;
 
 	EVP_KDF_CTX_free(kctx);
