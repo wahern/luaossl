@@ -2267,10 +2267,6 @@ STACK_OF(X509) *compat_X509_chain_up_ref(STACK_OF(X509) *chain) {
 #endif
 
 typedef struct {
-    int nid;
-} EVP_KDF;
-
-typedef struct {
 	int nid;
 	union {
 #if HAVE_PKCS5_PBKDF2_HMAC
