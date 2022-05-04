@@ -1475,7 +1475,11 @@ static const char *auxL_pusherror(lua_State *L, int error, const char *fun) {
 		if (!ERR_peek_error())
 			return lua_pushliteral(L, "oops: no OpenSSL errors set");
 
+#if OPENSSL_PREREQ(3,0,0)
+		code = ERR_get_error_all(&path, &line, NULL, NULL, NULL);
+#else
 		code = ERR_get_error_line(&path, &line);
+#endif
 
 		if ((file = strrchr(path, '/'))) {
 			++file;
