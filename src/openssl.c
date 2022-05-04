@@ -2846,8 +2846,13 @@ typedef const CRYPTO_EX_DATA const_CRYPTO_EX_DATA;
 typedef CRYPTO_EX_DATA const_CRYPTO_EX_DATA;
 #endif
 
+#if OPENSSL_PREREQ(3,0,0)
+/* the function signature was fixed in version 3.0.0 */
+static int ex_ondup(CRYPTO_EX_DATA *to NOTUSED, const_CRYPTO_EX_DATA *from NOTUSED, void **from_d, int idx NOTUSED, long argl NOTUSED, void *argp NOTUSED) {
+#else
 static int ex_ondup(CRYPTO_EX_DATA *to NOTUSED, const_CRYPTO_EX_DATA *from NOTUSED, void *from_d, int idx NOTUSED, long argl NOTUSED, void *argp NOTUSED) {
-	struct ex_data **data = from_d;
+#endif
+	struct ex_data **data = (struct ex_data **)from_d;
 
 	if (*data)
 		(*data)->refs++;
