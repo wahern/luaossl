@@ -3920,10 +3920,10 @@ static int bn_generatePrime(lua_State *L) {
 
 static int bn_isPrime(lua_State *L) {
 	BIGNUM *bn = checksimple(L, 1, BIGNUM_CLASS);
+	int nchecks = luaL_optinteger(L, 2, BN_prime_checks);
 #if OPENSSL_PREREQ(3,0,0)
 	int res = BN_check_prime(bn, getctx(L), NULL);
 #else
-	int nchecks = luaL_optinteger(L, 2, BN_prime_checks);
 	int res = BN_is_prime_ex(bn, nchecks, getctx(L), NULL);
 #endif
 
