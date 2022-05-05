@@ -185,7 +185,7 @@ endif
 .PHONY: $(d)/clean $(d)/clean~ clean clean~
 
 $(d)/clean:
-	$(RM) -fr $(@D)/config.h $(@D)/*.dSYM $(@D)/5.1 $(@D)/5.2 $(@D)/5.3
+	$(RM) -fr $(@D)/config.h $(@D)/*.dSYM $(@D)/5.1 $(@D)/5.2 $(@D)/5.3 $(@D)/5.4
 
 $(d)/clean~: $(d)/clean
 	$(RM) -f $(@D)/*~
