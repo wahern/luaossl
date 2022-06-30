@@ -1485,11 +1485,11 @@ Update the cipher instance with the specified string(s). Returns a string on suc
 
 Update the cipher with the specified string(s). Returns the final output string on success, or nil and an error message on failure. The returned string may be empty if all blocks have already been flushed in prior \fn{:update} calls.
 
-\subsubsection[\fn{cipher:get\_tag}]{\fn{cipher:get\_tag($len$)}}
+\subsubsection[\fn{cipher:getTag}]{\fn{cipher:getTag($len$)}}
 
 Returns the authentication tag for the ciphertext (GCM ciphers only) as a binary string. This method can only be called when encrypting data, and must be called after all data has been processed (i.e. after calling \fn{:final()}).
 
-\subsubsection[\fn{cipher:set\_tag}]{\fn{cipher:set\_tag($tag$)}}
+\subsubsection[\fn{cipher:setTag}]{\fn{cipher:setTag($tag$)}}
 
 Sets the provided binary string as the expected authentication tag for the forthcoming ciphertext (GCM ciphers only). This method can only be called when decrypting data, and must be called before \fn{:final()} to ensure the ciphertext integrity can be verified successfully.
 

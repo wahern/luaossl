@@ -12033,8 +12033,8 @@ static const auxL_Reg cipher_methods[] = {
 	{ "decrypt", &cipher_decrypt },
 	{ "update",  &cipher_update },
 	{ "final",   &cipher_final },
-	{ "get_tag", &cipher_get_tag },
-	{ "set_tag", &cipher_set_tag },
+	{ "getTag", &cipher_get_tag },
+	{ "setTag", &cipher_set_tag },
 	{ NULL,      NULL },
 };
 
