@@ -11997,6 +11997,7 @@ sslerr:
 	return 2;
 } /* cipher_get_tag() */
 
+
 static int cipher_set_tag(lua_State *L) {
 	EVP_CIPHER_CTX *ctx = checksimple(L, 1, CIPHER_CLASS);
 	size_t tag_size;
@@ -12015,6 +12016,7 @@ sslerr:
 
 	return 2;
 } /* cipher_get_tag() */
+
 
 static int cipher__gc(lua_State *L) {
 	EVP_CIPHER_CTX **ctx = luaL_checkudata(L, 1, CIPHER_CLASS);
