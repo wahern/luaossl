@@ -126,7 +126,7 @@ function regress.genkey(type, ca_key, ca_crt)
 	if type == "EC" then
 		key = regress.check(pkey.new{ type = "EC",  curve = "prime192v1" })
 	else
-		key = regress.check(pkey.new{ type = type, bits = 1024 })
+		key = regress.check(pkey.new{ type = type, bits = 2048 })
 	end
 
 	local dn = name.new()
