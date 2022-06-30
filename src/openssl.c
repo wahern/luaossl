@@ -11982,6 +11982,10 @@ static int cipher_get_tag(lua_State *L) {
 
 	luaL_buffinit(L, &tag);
 
+	/* EVP_CTRL_GCM_GET_TAG is works for both GCM and CCM and across all
+	 * supported OpenSSL versions. We can switch to the unified identifier
+	 * 'EVP_CTRL_AEAD_GET_TAG' in OpenSSL 1.1+.
+	 */
 	if(1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, tag_size, (void*)luaL_prepbuffsize(&tag, tag_size))) {
 		goto sslerr;
 	}
