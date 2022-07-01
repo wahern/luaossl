@@ -12019,7 +12019,7 @@ sslerr:
 	auxL_pusherror(L, auxL_EOPENSSL, NULL);
 
 	return 2;
-} /* cipher_get_tag() */
+} /* cipher_set_tag() */
 
 
 static int cipher__gc(lua_State *L) {
@@ -12037,8 +12037,8 @@ static const auxL_Reg cipher_methods[] = {
 	{ "decrypt", &cipher_decrypt },
 	{ "update",  &cipher_update },
 	{ "final",   &cipher_final },
-	{ "getTag", &cipher_get_tag },
-	{ "setTag", &cipher_set_tag },
+	{ "getTag",  &cipher_get_tag },
+	{ "setTag",  &cipher_set_tag },
 	{ NULL,      NULL },
 };
 
