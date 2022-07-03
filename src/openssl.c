@@ -12020,6 +12020,53 @@ sslerr:
 } /* cipher_final() */
 
 
+static int cipher_get_tag(lua_State *L) {
+	EVP_CIPHER_CTX *ctx = checksimple(L, 1, CIPHER_CLASS);
+	luaL_Buffer tag;
+	size_t tag_size = luaL_checkinteger(L, 2);
+
+	luaL_buffinit(L, &tag);
+
+	/* EVP_CTRL_GCM_GET_TAG is works for both GCM and CCM and across all
+	 * supported OpenSSL versions. We can switch to the unified identifier
+	 * 'EVP_CTRL_AEAD_GET_TAG' in OpenSSL 1.1+.
+	 */
+	if(1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, tag_size, (void*)luaL_prepbuffsize(&tag, tag_size))) {
+		goto sslerr;
+	}
+
+	luaL_pushresultsize(&tag, tag_size);
+
+	return 1;
+
+sslerr:
+	lua_pushnil(L);
+	auxL_pusherror(L, auxL_EOPENSSL, NULL);
+
+	return 2;
+} /* cipher_get_tag() */
+
+
+static int cipher_set_tag(lua_State *L) {
+	EVP_CIPHER_CTX *ctx = checksimple(L, 1, CIPHER_CLASS);
+	size_t tag_size;
+	const char* tag = luaL_checklstring(L, 2, &tag_size);
+	if(1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, tag_size, (void*)tag)) {
+		goto sslerr;
+	}
+
+	lua_pushlstring(L, tag, tag_size);
+
+	return 1;
+
+sslerr:
+	lua_pushnil(L);
+	auxL_pusherror(L, auxL_EOPENSSL, NULL);
+
+	return 2;
+} /* cipher_set_tag() */
+
+
 static int cipher__gc(lua_State *L) {
 	EVP_CIPHER_CTX **ctx = luaL_checkudata(L, 1, CIPHER_CLASS);
 
@@ -12035,6 +12082,8 @@ static const auxL_Reg cipher_methods[] = {
 	{ "decrypt", &cipher_decrypt },
 	{ "update",  &cipher_update },
 	{ "final",   &cipher_final },
+	{ "getTag",  &cipher_get_tag },
+	{ "setTag",  &cipher_set_tag },
 	{ NULL,      NULL },
 };
 
