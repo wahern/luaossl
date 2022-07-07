@@ -11922,8 +11922,12 @@ static int cipher_init(lua_State *L, _Bool encrypt) {
 	luaL_argcheck(L, n == m, 2, lua_pushfstring(L, "%d: invalid key length (should be %d)", (int)n, (int)m));
 
 	iv = luaL_optlstring(L, 3, NULL, &n);
-	m = (size_t)EVP_CIPHER_CTX_iv_length(ctx);
-	luaL_argcheck(L, n == m, 3, lua_pushfstring(L, "%d: invalid IV length (should be %d)", (int)n, (int)m));
+	/* Set the IV length before init */
+	if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_IVLEN, n, NULL) <= 0) {
+		/* wasn't able to set IV len; check if it's already correct */
+		m = (size_t)EVP_CIPHER_CTX_iv_length(ctx);
+		luaL_argcheck(L, n == m, 3, lua_pushfstring(L, "%d: invalid IV length (should be %d)", (int)n, (int)m));
+	}
 
 	if (!EVP_CipherInit_ex(ctx, NULL, NULL, key, iv, encrypt))
 		goto sslerr;
