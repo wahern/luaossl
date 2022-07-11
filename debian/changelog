@@ -1,3 +1,11 @@
+liblua-openssl (20220711-0) unstable; urgency=low
+
+  * fix luaL_Buffer usage (#189)
+  * fix OpenSSL 3 compatibility (#199)
+  * add cipher:getTag() / cipher:setTag() for AEAD (#201)
+
+-- Daurnimator <quae@daurnimator.com>  Mon, 11 Jul 2022 15:39:13 +1000
+
 liblua-openssl (20200709-0) unstable; urgency=low
 
   * fix loading from DER files when type set to any (#177)
