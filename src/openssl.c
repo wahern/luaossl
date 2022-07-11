@@ -11923,7 +11923,14 @@ static int cipher_init(lua_State *L, _Bool encrypt) {
 
 	iv = luaL_optlstring(L, 3, NULL, &n);
 	/* Set the IV length before init */
+#if defined EVP_CTRL_AEAD_SET_IVLEN
 	if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_IVLEN, n, NULL) <= 0) {
+#elif defined EVP_CTRL_GCM_SET_IVLEN
+	/* https://github.com/openssl/openssl/issues/8330#issuecomment-516838331 */
+	if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, n, NULL) <= 0) {
+#else
+	{
+#endif
 		/* wasn't able to set IV len; check if it's already correct */
 		m = (size_t)EVP_CIPHER_CTX_iv_length(ctx);
 		luaL_argcheck(L, n == m, 3, lua_pushfstring(L, "%d: invalid IV length (should be %d)", (int)n, (int)m));
