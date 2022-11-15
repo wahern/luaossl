@@ -170,11 +170,13 @@ ifeq ($(origin ALL_CFLAGS), undefined)
 ifeq ($(VENDOR_CC_$(d)), gcc)
 ALL_CFLAGS += -O2 -std=gnu99 -fPIC
 ALL_CFLAGS += -g -Wall -Wextra $(call cc-option, -Wno-missing-field-initializers) $(call cc-option, -Wno-override-init) -Wno-unused
+ALL_CFLAGS += -ffile-prefix-map=$(dir $<)=
 endif
 
 ifeq ($(VENDOR_CC_$(d)), clang)
 ALL_CFLAGS += -O2 -std=gnu99 -fPIC
 ALL_CFLAGS += -g -Wall -Wextra -Wno-missing-field-initializers -Wno-initializer-overrides -Wno-unused -Wno-dollar-in-identifier-extension
+ALL_CFLAGS += -ffile-prefix-map=$(dir $<)=
 endif
 
 ifeq ($(VENDOR_CC_$(d)), sunpro)
