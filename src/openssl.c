@@ -4108,8 +4108,8 @@ static BIO *getbio(lua_State *L) {
 static int pk_new(lua_State *L) {
 	EVP_PKEY **ud;
 
-	/* #1 table or key; if key, #2 format and #3 type */
-	lua_settop(L, 3);
+	/* #1 table or key; if key, #2 format, #3 type and #4 passphrase */
+	lua_settop(L, 4);
 
 	if (lua_istable(L, 1) || lua_isnil(L, 1)) {
 		int type = EVP_PKEY_RSA;
@@ -4344,7 +4344,7 @@ static int pk_new(lua_State *L) {
 	} else if (lua_isstring(L, 1)) {
 		int type = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
 		int pubonly = 0, prvtonly = 0;
-		const char *opt, *data;
+		const char *opt, *data, *passphrase;
 		size_t len;
 		BIO *bio;
 		EVP_PKEY *pub = NULL, *prvt = NULL;
@@ -4368,6 +4368,8 @@ static int pk_new(lua_State *L) {
 		if (!(bio = BIO_new_mem_buf((void *)data, len)))
 			return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
+		passphrase = luaL_optstring(L, 4, "");
+
 		if (type == X509_PEM || type == X509_ANY) {
 			if (!prvtonly && !pub) {
 				/*
@@ -4377,14 +4379,14 @@ static int pk_new(lua_State *L) {
 				 */
 				BIO_reset(bio);
 
-				if (!(pub = PEM_read_bio_PUBKEY(bio, NULL, 0, "")))
+				if (!(pub = PEM_read_bio_PUBKEY(bio, NULL, 0, (void*)passphrase)))
 					goterr = 1;
 			}
 
 			if (!pubonly && !prvt) {
 				BIO_reset(bio);
 
-				if (!(prvt = PEM_read_bio_PrivateKey(bio, NULL, 0, "")))
+				if (!(prvt = PEM_read_bio_PrivateKey(bio, NULL, 0, (void*)passphrase)))
 					goterr = 1;
 			}
 		}
