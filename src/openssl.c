@@ -320,7 +320,7 @@
 #endif
 
 #ifndef HAVE_I2D_RE_X509_REQ_TBS
-#define HAVE_I2D_RE_X509_REQ_TBS OPENSSL_PREREQ(1,1,0)
+#define HAVE_I2D_RE_X509_REQ_TBS (OPENSSL_PREREQ(1,1,0) || LIBRESSL_PREREQ(3,5,1))
 #endif
 
 #ifndef HAVE_RSA_GET0_CRT_PARAMS
@@ -376,7 +376,7 @@
 #endif
 
 #ifndef HAVE_SSL_CTX_SET_GROUPS_LIST
-#if OPENSSL_PREREQ(1,1,1)
+#if (OPENSSL_PREREQ(1,1,1) || LIBRESSL_PREREQ(2,7,1))
 #define HAVE_SSL_CTX_SET_GROUPS_LIST 1
 #elif HAVE_SSL_CTX_SET_CURVES_LIST
 #define SSL_CTX_set1_groups_list SSL_CTX_set1_curves_list
@@ -387,7 +387,7 @@
 #endif
 
 #ifndef HAVE_SSL_CTX_SET_GROUPS_LIST
-#define HAVE_SSL_CTX_SET_GROUPS_LIST OPENSSL_PREREQ(1,1,1)
+#define HAVE_SSL_CTX_SET_GROUPS_LIST (OPENSSL_PREREQ(1,1,1) || LIBRESSL_PREREQ(2,7,1))
 #endif
 
 #ifndef HAVE_SSL_CTX_SET_ECDH_AUTO
@@ -423,7 +423,7 @@
 #endif
 
 #ifndef HAVE_SSL_CTX_CERT_STORE
-#define HAVE_SSL_CTX_CERT_STORE (!OPENSSL_PREREQ(1,1,0))
+#define HAVE_SSL_CTX_CERT_STORE (!OPENSSL_PREREQ(1,1,0) && !LIBRESSL_PREREQ(2,0,0))
 #endif
 
 #ifndef HAVE_SSL_CTX_SET_TLSEXT_STATUS_TYPE
@@ -491,7 +491,7 @@
 #endif
 
 #ifndef HAVE_SSL_SET_GROUPS_LIST
-#if OPENSSL_PREREQ(1,1,1)
+#if (OPENSSL_PREREQ(1,1,1) || LIBRESSL_PREREQ(2,7,1))
 #define HAVE_SSL_SET_GROUPS_LIST 1
 #elif HAVE_SSL_SET_CURVES_LIST
 #define SSL_set1_groups_list SSL_set1_curves_list
@@ -582,7 +582,7 @@
 #endif
 
 #ifndef HAVE_X509_STORE_REFERENCES
-#define HAVE_X509_STORE_REFERENCES (!OPENSSL_PREREQ(1,1,0))
+#define HAVE_X509_STORE_REFERENCES (!OPENSSL_PREREQ(1,1,0) && !LIBRESSL_PREREQ(2,0,0))
 #endif
 
 #ifndef HAVE_X509_STORE_UP_REF
@@ -1986,7 +1986,11 @@ static size_t compat_SSL_SESSION_get_master_key(const SSL_SESSION *session, unsi
 #define SSL_client_version(...) EXPAND( compat_SSL_client_version(__VA_ARGS__) )
 
 static int compat_SSL_client_version(const SSL *ssl) {
+#if LIBRESSL_PREREQ(2,5,2)
+	return SSL_version(ssl);
+#else
 	return ssl->client_version;
+#endif
 } /* compat_SSL_client_version() */
 #endif
 
