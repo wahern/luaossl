@@ -9472,7 +9472,7 @@ static int sx_setVerify_cb(int preverify_ok, X509_STORE_CTX *x509_ctx){
 
 	ctx = SSL_get_SSL_CTX(ssl);
 	
-    /* expect one value: LUA callback */
+	/* expect one value: LUA callback */
 	if (ex_getdata(&L, EX_SSL_CTX_VERIFY_CB, ctx) != 1)		
 		return 0;
 
@@ -9481,7 +9481,7 @@ static int sx_setVerify_cb(int preverify_ok, X509_STORE_CTX *x509_ctx){
 	x509_ctx_lua = prepsimple(L, X509_STCTX_CLASS);
 	*x509_ctx_lua = x509_ctx;
 	
-	/* passed LUA callback, preferify_ok, x509_ctx */
+	/* passed LUA callback, preverify_ok, x509_ctx */
 	if (LUA_OK != lua_pcall(L, 2, 1, 0)){
 		fprintf(stderr, "luaossl: verify callback error: %s\n", lua_tostring(L, -1));
 		return 0;
@@ -9500,31 +9500,31 @@ static int sx_setVerify(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	int mode = luaL_optinteger(L, 2, -1);
 	int depth = luaL_optinteger(L, 3, -1);
-    int error = 1;
-    _Bool cb_passed = 0;
+	int error = 1;
+	_Bool cb_passed = 0;
 
-    if (lua_isnoneornil(L, 4) == 0) {
-        luaL_checktype(L, 4, LUA_TFUNCTION);
-        cb_passed = 1;
-    }
+	if (lua_isnoneornil(L, 4) == 0) {
+		luaL_checktype(L, 4, LUA_TFUNCTION);
+		cb_passed = 1;
+	}
 
-    if (mode != -1){
-        if (cb_passed){
-            /* Passes lua callback*/
-            if ((error = ex_setdata(L, EX_SSL_CTX_VERIFY_CB, ctx, 1))) {
-                if (error > 0) {
-                    return luaL_error(L, "unable to set verify callback: %s", aux_strerror(error));
-                } else if (error == auxL_EOPENSSL && !ERR_peek_error()) {
-                    return luaL_error(L, "unable to set verify callback: Unknown internal error");
-                } else {
-                    return auxL_error(L, error, "ssl.context:setVerify");
-                }
-            }
-            SSL_CTX_set_verify(ctx, mode, sx_setVerify_cb);
-        }
-        else
-            SSL_CTX_set_verify(ctx, mode, 0);
-    }
+	if (mode != -1){
+		if (cb_passed){
+			/* Passes lua callback*/
+			if ((error = ex_setdata(L, EX_SSL_CTX_VERIFY_CB, ctx, 1))) {
+				if (error > 0) {
+					return luaL_error(L, "unable to set verify callback: %s", aux_strerror(error));
+				} else if (error == auxL_EOPENSSL && !ERR_peek_error()) {
+					return luaL_error(L, "unable to set verify callback: Unknown internal error");
+				} else {
+					return auxL_error(L, error, "ssl.context:setVerify");
+				}
+			}
+			SSL_CTX_set_verify(ctx, mode, sx_setVerify_cb);
+		}
+		else
+			SSL_CTX_set_verify(ctx, mode, 0);
+	}
 
 	if (depth != -1)
 		SSL_CTX_set_verify_depth(ctx, depth);
