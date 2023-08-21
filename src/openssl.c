@@ -2826,6 +2826,7 @@ enum {
 	EX_SSL_CTX_TLSEXT_SERVERNAME_CB,
 	EX_SSL_CTX_CUSTOM_EXTENSION_ADD_CB,
 	EX_SSL_CTX_CUSTOM_EXTENSION_PARSE_CB,
+	EX_SSL_CTX_VERIFY_CB,
 };
 
 static struct ex_type {
@@ -2838,6 +2839,7 @@ static struct ex_type {
 	[EX_SSL_CTX_TLSEXT_SERVERNAME_CB] = { CRYPTO_EX_INDEX_SSL_CTX, -1, &SSL_CTX_get_ex_data, &SSL_CTX_set_ex_data },
 	[EX_SSL_CTX_CUSTOM_EXTENSION_ADD_CB] = { CRYPTO_EX_INDEX_SSL_CTX, -1, &SSL_CTX_get_ex_data, &SSL_CTX_set_ex_data },
 	[EX_SSL_CTX_CUSTOM_EXTENSION_PARSE_CB] = { CRYPTO_EX_INDEX_SSL_CTX, -1, &SSL_CTX_get_ex_data, &SSL_CTX_set_ex_data },
+	[EX_SSL_CTX_VERIFY_CB] = { CRYPTO_EX_INDEX_SSL_CTX, -1, &SSL_CTX_get_ex_data, &SSL_CTX_set_ex_data },
 };
 
 #if OPENSSL_PREREQ(1,1,0)
@@ -8927,44 +8929,60 @@ EXPORT int luaopen__openssl_x509_store(lua_State *L) {
  * held externally for the life of the X509_STORE_CTX object.
  *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-#if 0
-static int stx_new(lua_State *L) {
-	X509_STORE_CTX **ud = prepsimple(L, X509_STCTX_CLASS);
-	STACK_OF(X509) *chain;
-
-	if (!(*ud = X509_STORE_CTX_new()))
-		return auxL_error(L, auxL_EOPENSSL, "x509.store.context");
-
-	return 1;
-} /* stx_new() */
-
 
 static int stx_interpose(lua_State *L) {
 	return interpose(L, X509_STCTX_CLASS);
 } /* stx_interpose() */
 
-
-static int stx_add(lua_State *L) {
+static int stx_getCurrentCert(lua_State *L) {
 	X509_STORE_CTX *ctx = checksimple(L, 1, X509_STCTX_CLASS);
+	X509 *cert = X509_STORE_CTX_get_current_cert(ctx);
+	
+	if (cert) {
+		X509 **ud = prepsimple(L, X509_CERT_CLASS);
+		*ud = cert;
+		X509_up_ref(cert);
+	}
+	else 
+		lua_pushnil(L);
 
-	return 0;
-} /* stx_add() */
+	return 1;
+} /* stx_getCurrentCert */
 
+static int stx_getCert(lua_State *L) {
+	X509_STORE_CTX *ctx = checksimple(L, 1, X509_STCTX_CLASS);
+	X509 *cert = X509_STORE_CTX_get0_cert(ctx);
+
+	if (cert) {
+		X509 **ud = prepsimple(L, X509_CERT_CLASS);
+		*ud = cert;
+		X509_up_ref(cert);
+	}
+	else 
+		lua_pushnil(L);
+
+	return 1;
+} /* stx_getCert */
+
+static int stx_getErrorDepth(lua_State *L) {
+	X509_STORE_CTX *ctx = checksimple(L, 1, X509_STCTX_CLASS);
+	auxL_Integer depth = X509_STORE_CTX_get_error_depth(ctx);
+	auxL_pushinteger(L, depth);
+
+	return 1;
+} /* stx_getErrorDepth */
 
 static int stx__gc(lua_State *L) {
-	X509_STORE **ud = luaL_checkudata(L, 1, X509_STORE_CLASS);
-
-	if (*ud) {
-		X509_STORE_free(*ud);
-		*ud = NULL;
-	}
-
+	/* dummy __gc */
+	X509_STORE **ud = luaL_checkudata(L, 1, X509_STCTX_CLASS);
 	return 0;
 } /* stx__gc() */
 
 
 static const auxL_Reg stx_methods[] = {
-	{ "add", &stx_add },
+	{ "getCurrentCert", &stx_getCurrentCert },
+	{ "getCert", &stx_getCert },
+	{ "getErrorDepth", &stx_getErrorDepth },
 	{ NULL,  NULL },
 };
 
@@ -8974,7 +8992,6 @@ static const auxL_Reg stx_metatable[] = {
 };
 
 static const auxL_Reg stx_globals[] = {
-	{ "new",       &stx_new },
 	{ "interpose", &stx_interpose },
 	{ NULL,        NULL },
 };
@@ -8986,7 +9003,6 @@ EXPORT int luaopen__openssl_x509_store_context(lua_State *L) {
 
 	return 1;
 } /* luaopen__openssl_x509_store_context() */
-#endif
 
 
 /*
@@ -9452,14 +9468,72 @@ static int sx_getParam(lua_State *L) {
 	return 1;
 } /* sx_getParam() */
 
+static int sx_setVerify_cb(int preverify_ok, X509_STORE_CTX *x509_ctx){
+	int isnum;
+	int ret;
+	SSL_CTX *ctx;
+	X509_STORE_CTX **x509_ctx_lua;
+	lua_State *L = NULL;
+	SSL *ssl = X509_STORE_CTX_get_ex_data(x509_ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
+	
+	if (ssl == NULL)
+		return 0;
+
+	ctx = SSL_get_SSL_CTX(ssl);
+	
+	/* expect one value: LUA callback */
+	if (ex_getdata(&L, EX_SSL_CTX_VERIFY_CB, ctx) != 1)		
+		return 0;
+
+	lua_pushinteger(L, preverify_ok);
+	/* See comment about openssl.x509.store.context and his memory manegment */
+	x509_ctx_lua = prepsimple(L, X509_STCTX_CLASS);
+	*x509_ctx_lua = x509_ctx;
+	
+	/* passed LUA callback, preverify_ok, x509_ctx */
+	if (LUA_OK != lua_pcall(L, 2, 1, 0)){
+		fprintf(stderr, "luaossl: verify callback error: %s\n", lua_tostring(L, -1));
+		return 0;
+	}
+
+	ret = lua_tointegerx(L, -1, &isnum);
+
+	if (isnum) 
+		return ret;
+
+	fprintf(stderr, "luaossl: verify callback has returned an incorrect value (not an integer)\n");
+	return 0;
+} /* sx_setVerify_cb() */
 
 static int sx_setVerify(lua_State *L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	int mode = luaL_optinteger(L, 2, -1);
 	int depth = luaL_optinteger(L, 3, -1);
+	int error = 1;
+	_Bool cb_passed = 0;
 
-	if (mode != -1)
-		SSL_CTX_set_verify(ctx, mode, 0);
+	if (lua_isnoneornil(L, 4) == 0) {
+		luaL_checktype(L, 4, LUA_TFUNCTION);
+		cb_passed = 1;
+	}
+
+	if (mode != -1){
+		if (cb_passed){
+			/* Passes lua callback*/
+			if ((error = ex_setdata(L, EX_SSL_CTX_VERIFY_CB, ctx, 1))) {
+				if (error > 0) {
+					return luaL_error(L, "unable to set verify callback: %s", aux_strerror(error));
+				} else if (error == auxL_EOPENSSL && !ERR_peek_error()) {
+					return luaL_error(L, "unable to set verify callback: Unknown internal error");
+				} else {
+					return auxL_error(L, error, "ssl.context:setVerify");
+				}
+			}
+			SSL_CTX_set_verify(ctx, mode, sx_setVerify_cb);
+		}
+		else
+			SSL_CTX_set_verify(ctx, mode, 0);
+	}
 
 	if (depth != -1)
 		SSL_CTX_set_verify_depth(ctx, depth);
@@ -13218,6 +13292,7 @@ static void initall(lua_State *L) {
 	auxL_addclass(L, CIPHER_CLASS, cipher_methods, cipher_metatable, 0);
 	auxL_addclass(L, OCSP_RESPONSE_CLASS, or_methods, or_metatable, 0);
 	auxL_addclass(L, OCSP_BASICRESP_CLASS, ob_methods, ob_metatable, 0);
+	auxL_addclass(L, X509_STCTX_CLASS, stx_methods, stx_metatable, 0);
 
 	if (LUA_TNIL == lua_rawgetp(L, LUA_REGISTRYINDEX, LUAOSSL_UNIQUE_LIGHTUSERDATA_MASK(&initall))) {
 		/* Create cache for pointers */
