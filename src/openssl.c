@@ -8952,7 +8952,7 @@ static int stx_getCurrentCert(lua_State *L) {
 static int stx_getCert(lua_State *L) {
 	X509_STORE_CTX *ctx = checksimple(L, 1, X509_STCTX_CLASS);
 	X509 *cert = X509_STORE_CTX_get0_cert(ctx);
-	
+
 	if (cert) {
 		X509 **ud = prepsimple(L, X509_CERT_CLASS);
 		*ud = cert;
@@ -8964,6 +8964,14 @@ static int stx_getCert(lua_State *L) {
 	return 1;
 } /* stx_getCert */
 
+static int stx_getErrorDepth(lua_State *L) {
+	X509_STORE_CTX *ctx = checksimple(L, 1, X509_STCTX_CLASS);
+	auxL_Integer depth = X509_STORE_CTX_get_error_depth(ctx);
+	auxL_pushinteger(L, depth);
+
+	return 1;
+} /* stx_getErrorDepth */
+
 static int stx__gc(lua_State *L) {
 	/* dummy __gc */
 	X509_STORE **ud = luaL_checkudata(L, 1, X509_STCTX_CLASS);
@@ -8974,6 +8982,7 @@ static int stx__gc(lua_State *L) {
 static const auxL_Reg stx_methods[] = {
 	{ "getCurrentCert", &stx_getCurrentCert },
 	{ "getCert", &stx_getCert },
+	{ "getErrorDepth", &stx_getErrorDepth },
 	{ NULL,  NULL },
 };
 
