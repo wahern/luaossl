@@ -4109,7 +4109,7 @@ static int pk_new(lua_State *L) {
 	EVP_PKEY **ud;
 
 	/* #1 table or key; if key, #2 format and #3 type */
-	lua_settop(L, 3);
+	lua_settop(L, 4);
 
 	if (lua_istable(L, 1) || lua_isnil(L, 1)) {
 		int type = EVP_PKEY_RSA;
@@ -4361,6 +4361,12 @@ static int pk_new(lua_State *L) {
 			}
 		}
 
+		int curve_id = -1;
+		if ((opt = luaL_optstring(L, 4, NULL))) {
+			if (!auxS_txt2nid(&curve_id, opt))
+				luaL_argerror(L, 4, lua_pushfstring(L, "%s: invalid curve", opt));
+		}
+
 		data = luaL_checklstring(L, 1, &len);
 
 		ud = prepsimple(L, PKEY_CLASS);
@@ -4402,6 +4408,31 @@ static int pk_new(lua_State *L) {
 
 				if (!(prvt = d2i_PrivateKey_bio(bio, NULL)))
 					goterr = 1;
+			}
+		}
+
+		if (type == X509_ANY && (pubonly && !pub) && curve_id >= 0) {
+			EC_KEY *ec = EC_KEY_new();
+
+			if (!EC_KEY_set_group(ec, EC_GROUP_new_by_curve_name(curve_id))) {
+				goterr = 1;
+			} else if (!EC_KEY_oct2key(ec, data, len, getctx(L))) {
+				goterr = 1;
+			} else {
+				pub = EVP_PKEY_new();
+				EVP_PKEY_assign_EC_KEY(pub, ec);
+			}
+		}
+
+		if (type == X509_ANY && (!pubonly && !prvt) && curve_id >= 0) {
+			EC_KEY *ec = EC_KEY_new();
+			if (!EC_KEY_set_group(ec, EC_GROUP_new_by_curve_name(curve_id))) {
+				goterr = 1;
+			} else if (!EC_KEY_oct2priv(ec, data, len)) {
+				goterr = 1;
+			} else {
+				prvt = EVP_PKEY_new();
+				EVP_PKEY_assign_EC_KEY(prvt, ec);
 			}
 		}
 
