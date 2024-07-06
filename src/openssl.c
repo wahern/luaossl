@@ -4108,7 +4108,7 @@ static BIO *getbio(lua_State *L) {
 static int pk_new(lua_State *L) {
 	EVP_PKEY **ud;
 
-	/* #1 table or key; if key, #2 format and #3 type */
+	/* #1 table or key; if key, #2 format and #3 type, #4 curve name */
 	lua_settop(L, 4);
 
 	if (lua_istable(L, 1) || lua_isnil(L, 1)) {
