@@ -276,9 +276,13 @@ Add or interpose a bignum class method. Returns the previous method, if any.
 
 \module{openssl.pkey} binds OpenSSL's libcrypto public-private key library. The \fn{\_\_tostring} metamethod generates a PEM encoded representation of the public key---excluding the private key.
 
-\subsubsection[\fn{pkey.new}]{\fn{pkey.new($string$[, $format$])}}
+\subsubsection[\fn{pkey.new}]{\fn{pkey.new($string$[, $format$[, $type$[, $curve$]]]])}}
 
-Initializes a new pkey object from the PEM- or DER-encoded key in $string$. $format$ defaults to ``*'', which means to automatically test the input encoding. If $format$ is explicitly ``PEM'' or ``DER'', then only that decoding format is used.
+Initializes a new pkey object from the PEM- or DER-encoded key in $string$. $format$ defaults to ``*'', which means to automatically detect the input encoding. If $format$ is explicitly ``PEM'' or ``DER'', then only that decoding format is used.
+
+If specified, $type$ may be ``public'' or ``private'' to indicate loading a public or private key, respectively.
+
+In the case of loading an EC key in a format that does not include the curve parameters, the $curve$ parameter should indicate the appropriate curve name.
 
 On failure throws an error.
 
@@ -334,6 +338,11 @@ Returns true on success, false for properly formatted but invalid signatures, an
 \subsubsection[\fn{pkey:toPEM}]{\fn{pkey:toPEM($which$[, $which$])}}
 
 Returns the PEM encoded string representation(s) of the specified key component. $which$ must be one of ``public'', ``PublicKey'', ``private'', or ``PrivateKey''. For the two argument form, returns two values.
+
+\subsubsection[\fn{pkey:derive}]{\fn{pkey:derive($peer$)}}
+
+Calculate the shared secret (e.g. DH/ECDH) derived from the key and the peer's
+(usually public) key.
 
 \end{Module}
 
