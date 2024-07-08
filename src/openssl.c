@@ -1487,15 +1487,17 @@ static const char *auxL_pusherror(lua_State *L, int error, const char *fun) {
 			file = path;
 		}
 
-		ERR_clear_error();
-
 		ERR_error_string_n(code, txt, sizeof txt);
 
 		if (fun) {
-			return lua_pushfstring(L, "%s: %s:%d:%s", fun, file, line, txt);
+			lua_pushfstring(L, "%s: %s:%d:%s", fun, file, line, txt);
 		} else {
-			return lua_pushfstring(L, "%s:%d:%s", file, line, txt);
+			lua_pushfstring(L, "%s:%d:%s", file, line, txt);
 		}
+
+		ERR_clear_error();
+
+		return 1;
 #if HAVE_DLADDR
 	} else if (error == auxL_EDYLD) {
 		const char *const fmt = (fun)? "%s: %s" : "%.0s%s";
