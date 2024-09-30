@@ -7819,6 +7819,137 @@ error:
 } /* xr_modifyRequestedExtension() */
 
 
+static int xr_getAttribute(lua_State *L) {
+	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
+	const char *attr_name = luaL_checkstring(L, 2);
+	int nid = OBJ_txt2nid(attr_name);
+	int lastpos = luaL_optinteger(L, 3, -1);
+	const char *err;
+
+	if(nid==0)
+		return luaL_error(L, "no oid for attribute '%s'", attr_name);
+
+
+	int index =  X509_REQ_get_attr_by_NID(csr, nid, lastpos);
+	X509_ATTRIBUTE *a = X509_REQ_get_attr(csr, index);
+	ASN1_OBJECT *aobj = X509_ATTRIBUTE_get0_object(a);
+
+	int val_count = X509_ATTRIBUTE_count(a);
+	ASN1_BIT_STRING *bs = NULL;
+
+	if (val_count == 0)
+		return luaL_error(L, "x509_r_invalid_attributes");
+
+	lua_createtable(L, val_count, 0);
+
+	for(int i=0; i < val_count; i++) {
+		ASN1_TYPE *at = X509_ATTRIBUTE_get0_type(a, i);
+		int type = at->type;
+		bs = at->value.asn1_string;
+
+		switch (type) {
+		case V_ASN1_PRINTABLESTRING:
+		case V_ASN1_T61STRING:
+		case V_ASN1_NUMERICSTRING:
+		case V_ASN1_UTF8STRING:
+		case V_ASN1_IA5STRING:
+			lua_pushlstring(L, (char *)bs->data, bs->length);
+			break;
+		default:
+			lua_pushnil(L);
+			break;
+		}
+		lua_seti(L, -2, i + 1);
+	}
+
+	lua_pushinteger(L, index);
+	return 2;
+}
+
+static int xr_getAttributeTypes(lua_State *L) {
+	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
+
+	int buf_len = 80;
+	char * buf = 0;
+	char * err = 0;
+	int attr_count =  X509_REQ_get_attr_count(csr);
+
+	buf = malloc(buf_len);
+
+	lua_createtable(L, attr_count, 0);
+	int table = lua_gettop(L);
+
+	for (int i = 0; i < attr_count; i++) {
+		X509_ATTRIBUTE *a;
+		ASN1_BIT_STRING *bs = NULL;
+		ASN1_OBJECT *aobj;
+		int name_len, val_count = 1;
+
+		a = X509_REQ_get_attr(csr, i);
+		aobj = X509_ATTRIBUTE_get0_object(a);
+
+		name_len = OBJ_obj2txt(buf, buf_len, aobj, 0);
+		if(name_len <= 0) continue;
+		if(name_len >= buf_len) {
+			buf_len = name_len;
+			buf = realloc(buf, buf_len);
+			OBJ_obj2txt(buf, buf_len, aobj, 0);
+		}
+		lua_pushnumber(L, i + 1);
+		lua_pushlstring(L, buf, name_len);
+		lua_settable(L, table);
+	}
+	if(buf) free(buf);
+	return 1;
+
+  failed:
+	if(buf) free(buf);
+	return luaL_error(L, "%s", err);
+}
+
+static int xr_addAttribute(lua_State *L) {
+	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
+	const char *attr_name = luaL_checkstring(L, 2);
+	int num_values;
+	unsigned long val_type = luaL_optinteger(L, 4, MBSTRING_ASC);
+
+	lua_len(L, 3);
+	num_values = lua_tointeger(L, -1);
+
+	int nid = OBJ_txt2nid(attr_name);
+	if(nid==0) return 0;
+
+	X509_ATTRIBUTE *attr =  X509_ATTRIBUTE_new();
+	if(!attr)
+		return luaL_error(L, "X509_ATTRIBUTE_new failed");
+
+	if(!X509_ATTRIBUTE_set1_object(attr, OBJ_txt2obj(attr_name, 0)))
+		return luaL_error(L, "X509_ATTRIBUTE_set1_object failed");
+
+	for(int i = 1; i <= num_values; i++) {
+		lua_geti(L, 3, i);
+		size_t data_len = 0;
+		char *data = lua_tolstring(L, -1, &data_len);
+		if(! X509_ATTRIBUTE_set1_data(attr, val_type, data,  data_len))
+			return luaL_error(L, "X509_ATTRIBUTE_set1_data failed");
+	}
+
+	if(! X509_REQ_add1_attr(csr, attr))
+		return luaL_error(L, "X509_REQ_add1_attr failed");
+
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+static int xr_deleteAttribute(lua_State *L) {
+	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
+	int index = luaL_checkinteger(L, 2);
+
+	lua_pushboolean(L, !! X509_REQ_delete_attr(csr, index));
+	return 1;
+}
+
+
 static int xr_setSubjectAlt(lua_State *L) {
 	X509_REQ *csr = checksimple(L, 1, X509_CSR_CLASS);
 	GENERAL_NAMES *gens = checksimple(L, 2, X509_GENS_CLASS);
@@ -8023,6 +8154,10 @@ static const auxL_Reg xr_methods[] = {
 	{ "setSubject",   &xr_setSubject },
 	{ "getPublicKey", &xr_getPublicKey },
 	{ "setPublicKey", &xr_setPublicKey },
+	{ "getAttributeTypes", &xr_getAttributeTypes },
+	{ "getAttribute", &xr_getAttribute },
+	{ "addAttribute", &xr_addAttribute },
+	{ "deleteAttribute", &xr_deleteAttribute },
 	{ "getSubjectAlt", &xr_getSubjectAlt },
 	{ "setSubjectAlt", &xr_setSubjectAlt },
 	{ "getRequestedExtension", &xr_getRequestedExtension },
@@ -13232,4 +13367,3 @@ static void initall(lua_State *L) {
 	}
 	lua_pop(L, 1);
 } /* initall() */
-
