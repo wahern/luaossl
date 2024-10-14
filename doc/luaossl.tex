@@ -1069,6 +1069,10 @@ Returns the X.509 certificate \module{openssl.x509} object to be sent during SSL
 
 \emph{Only supported since OpenSSL 1.0.2.}
 
+\subsubsection[\fn{context:setCertificateChainFromFile}]{\fn{context:setCertificateChainFromFile($filepath$[, $format$])}}
+
+Sets the X.509 certificate chain \module{openssl.x509.chain} object to send during SSL connection instance handshakes, load the certificate chain from the file $filepath$. $format$ is either ``ASN1'' or ``PEM'' (default).
+
 \subsubsection[\fn{context:setCertificateChain}]{\fn{context:setCertificateChain($chain$)}}
 
 Sets the X.509 certificate chain \module{openssl.x509.chain} object $chain$ to send during SSL connection instance handshakes.
@@ -1080,6 +1084,10 @@ Sets the X.509 certificate chain \module{openssl.x509.chain} object $chain$ to s
 Returns the X.509 certificate chain \module{openssl.x509.chain} object to be sent during SSL connection instance handshakes.
 
 \emph{Only supported since OpenSSL 1.0.2.}
+
+\subsubsection[\fn{context:setPrivateKeyFromFile}]{\fn{context:setPrivateKeyFromFile($filepath$[, $format$])}}
+
+Sets the private key \module{openssl.pkey} object to send during SSL connection instance handshakes, load the key from the file $filepath$. $format$ is either ``ASN1'' or ``PEM'' (default).
 
 \subsubsection[\fn{context:setPrivateKey}]{\fn{context:setPrivateKey($key$)}}
 
@@ -1286,6 +1294,13 @@ Returns two values: the integer verification result code and the string represen
 Sets the X.509 certificate \module{openssl.x509} object $crt$ to send during SSL connection instance handshakes.
 See \fn{openssl.ssl.context:setCertificate}.
 
+\subsubsection[\fn{ssl:setCertificateChainFromFile}]{\fn{ssl:setCertificateChainFromFile($filepath$[, $format$])}}
+
+Sets the X.509 certificate chain \module{openssl.x509.chain} object to send during SSL connection instance handshakes, load the certificate chain from the file $filepath$. $format$ is either ``ASN1'' or ``PEM'' (default).
+See \fn{openssl.ssl.context:setCertificateChainFromFile}.
+
+\emph{Only supported since OpenSSL 1.1.0.}
+
 \subsubsection[\fn{ssl:setCertificateChain}]{\fn{ssl:setCertificateChain($chain$)}}
 
 Sets the X.509 certificate chain \module{openssl.x509.chain} object $chain$ to send during SSL connection instance handshakes.
@@ -1293,12 +1308,17 @@ See \fn{openssl.ssl.context:setCertificateChain}.
 
 \emph{Only supported since OpenSSL 1.0.2.}
 
-\subsubsection[\fn{context:getCertificateChain}]{\fn{context:getCertificateChain()}}
+\subsubsection[\fn{ssl:getCertificateChain}]{\fn{ssl:getCertificateChain()}}
 
 Returns the X.509 certificate chain \module{openssl.x509.chain} object to be sent during SSL connection instance handshakes.
 See \fn{openssl.ssl.context:getCertificateChain}.
 
 \emph{Only supported since OpenSSL 1.0.2.}
+
+\subsubsection[\fn{ssl:setPrivateKeyFromFile}]{\fn{ssl:setPrivateKeyFromFile($filepath$[, $format$])}}
+
+Sets the private key \module{openssl.pkey} object to send during SSL connection instance handshakes, load the key from the file $filepath$. $format$ is either ``ASN1'' or ``PEM'' (default).
+See \fn{openssl.ssl.context:setPrivateKeyFromFile}.
 
 \subsubsection[\fn{ssl:setPrivateKey}]{\fn{ssl:setPrivateKey($key$)}}
 

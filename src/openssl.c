@@ -860,6 +860,25 @@ static int optencoding(lua_State *L, int index, const char *def, int allow) {
 	return type;
 } /* optencoding() */
 
+static int optfiletype(lua_State *L, int index, const char *def) {
+	static const char *const opts[] = { "pem", "asn1", NULL };
+	int type = 0;
+
+	switch (auxL_checkoption(L, index, def, opts, 1)) {
+	case 0:
+		type = SSL_FILETYPE_PEM;
+		break;
+	case 1:
+		type = SSL_FILETYPE_ASN1;
+		break;
+	}
+
+	if (!type) {
+		luaL_argerror(L, index, lua_pushfstring(L, "invalid option %s", luaL_checkstring(L, index)));
+	}
+
+	return type;
+}
 
 static _Bool rawgeti(lua_State *L, int index, int n) {
 	lua_rawgeti(L, index, n);
@@ -3256,12 +3275,6 @@ static const auxL_IntegerReg openssl_integers[] = {
 	{ NULL, 0 },
 };
 
-static const auxL_IntegerReg openssl_filetypes[] = {
-	{"PEM", SSL_FILETYPE_PEM},
-	{"ASN1", SSL_FILETYPE_ASN1},
-	{NULL, 0}
-};
-
 EXPORT int luaopen__openssl(lua_State *L) {
 	size_t i;
 
@@ -3284,12 +3297,6 @@ EXPORT int luaopen__openssl(lua_State *L) {
 
 	lua_pushstring(L, SHLIB_VERSION_NUMBER);
 	lua_setfield(L, -2, "SHLIB_VERSION_NUMBER");
-
-
-	lua_newtable(L);
-	auxL_setintegers(L, openssl_filetypes);
-
-	lua_setfield(L, -2, "filetypes");
 
 	return 1;
 } /* luaopen__openssl() */
@@ -9556,9 +9563,9 @@ static int sx_setPrivateKey(lua_State *L) {
 static int sx_setPrivateKeyFromFile(lua_State* L) {
 	SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
 	const char* filepath = luaL_checkstring(L, 2);
-	int typ = luaL_optinteger(L, 3, SSL_FILETYPE_PEM);
+	int type = optfiletype(L, 3, "PEM");
 
-	if (!SSL_CTX_use_PrivateKey_file(ctx, filepath, typ))
+	if (!SSL_CTX_use_PrivateKey_file(ctx, filepath, type))
 		return auxL_error(L, auxL_EOPENSSL, "ssl.context:setPrivateKeyFromFile");
 
 	lua_pushboolean(L, 1);
@@ -10896,9 +10903,9 @@ static int ssl_setPrivateKey(lua_State *L) {
 static int ssl_setPrivateKeyFromFile(lua_State* L) {
 	SSL *ssl = checksimple(L, 1, SSL_CLASS);
 	const char* filepath = luaL_checkstring(L, 2);
-	int typ = luaL_optinteger(L, 3, SSL_FILETYPE_PEM);
+	int type = optfiletype(L, 3, "PEM");
 
-	if (!SSL_use_PrivateKey_file(ssl, filepath, typ))
+	if (!SSL_use_PrivateKey_file(ssl, filepath, type))
 		return auxL_error(L, auxL_EOPENSSL, "ssl:setPrivateKeyFromFile");
 
 	lua_pushboolean(L, 1);
