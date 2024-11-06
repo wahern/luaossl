@@ -11918,8 +11918,10 @@ static int cipher_init(lua_State *L, _Bool encrypt) {
 	size_t n, m;
 
 	key = luaL_checklstring(L, 2, &n);
-	m = (size_t)EVP_CIPHER_CTX_key_length(ctx);
-	luaL_argcheck(L, n == m, 2, lua_pushfstring(L, "%d: invalid key length (should be %d)", (int)n, (int)m));
+	if (EVP_CIPHER_CTX_set_key_length(ctx, n) <= 0) {
+		m = (size_t)EVP_CIPHER_CTX_key_length(ctx);
+		luaL_argcheck(L, n == m, 2, lua_pushfstring(L, "%d: invalid key length (should be %d)", (int)n, (int)m));
+	}
 
 	iv = luaL_optlstring(L, 3, NULL, &n);
 	/* Set the IV length before init */
