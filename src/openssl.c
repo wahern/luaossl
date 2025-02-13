@@ -31,7 +31,7 @@
 
 #include <limits.h>       /* INT_MAX INT_MIN LLONG_MAX LLONG_MIN UCHAR_MAX ULLONG_MAX */
 #include <stdint.h>       /* uintptr_t */
-#include <string.h>       /* memset(3) strerror_r(3) */
+#include <string.h>       /* memset(3) strerror_r(3) strlen(3) strncpy(3) */
 #include <math.h>         /* INFINITY fabs(3) floor(3) frexp(3) fmod(3) round(3) isfinite(3) */
 #include <time.h>         /* struct tm time_t strptime(3) time(2) */
 #include <ctype.h>        /* isdigit(3), isxdigit(3), tolower(3) */
@@ -4105,10 +4105,37 @@ static BIO *getbio(lua_State *L) {
 } /* getbio() */
 
 
+/*
+ * PEM password callback for openssl
+ *
+ * Expects nil, string, or function on top of the stack. Leaves one item on the
+ * top of the stack: the original string, the string returned by the function,
+ * or nil (in case of an error or missing password).
+ *
+ * This callback may be called twice by pk_new when the PEM key is encrypted and
+ * its type is not specified. The user-provided function is called only once
+ * because it gets replaced on the stack by the return value. This callback may
+ * not be called at all if the supplied PEM key is not encrypted.
+ */
+static int pem_pw_cb(char *buf, int size, int rwflag, void *u) {
+	lua_State *L = (lua_State *) u;
+
+	if (lua_isfunction(L, -1) && lua_pcall(L, 0, 1, 0) || !lua_isstring(L, -1)) {
+		lua_pop(L, 1);
+		lua_pushnil(L);
+		return -1;
+	}
+
+	const char *pass = lua_tostring(L, -1);
+	strncpy(buf, pass, size);
+	return MIN(strlen(pass), (unsigned int) size);
+} /* pem_pw_cb() */
+
+
 static int pk_new(lua_State *L) {
 	EVP_PKEY **ud;
 
-	/* #1 table or key; if key, #2 format and #3 type */
+	/* #1 table or key; if key, #2 option table or format; if format, #3 type */
 	lua_settop(L, 3);
 
 	if (lua_istable(L, 1) || lua_isnil(L, 1)) {
@@ -4342,33 +4369,53 @@ static int pk_new(lua_State *L) {
 #endif
 		} /* switch() */
 	} else if (lua_isstring(L, 1)) {
-		int type = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
+		int format;
 		int pubonly = 0, prvtonly = 0;
-		const char *opt, *data;
+		const char *type, *data;
 		size_t len;
 		BIO *bio;
 		EVP_PKEY *pub = NULL, *prvt = NULL;
 		int goterr = 0;
 
+		if (lua_istable(L, 2)) {
+			lua_pop(L, 1);
+			lua_getfield(L, 2, "format");
+			lua_getfield(L, 2, "type");
+			lua_getfield(L, 2, "password");
+			lua_remove(L, 2);
+		} else
+			lua_pushnil(L);
+
+		/* #1 key, #2 format, #3 type, #4 password or callback */
+
+		data = luaL_checklstring(L, 1, &len);
+		format = optencoding(L, 2, "*", X509_ANY|X509_PEM|X509_DER);
+
 		/* check if specified publickey or privatekey */
-		if ((opt = luaL_optstring(L, 3, NULL))) {
-			if (xtolower(opt[0]) == 'p' && xtolower(opt[1]) == 'u') {
+		if ((type = luaL_optstring(L, 3, NULL))) {
+			if (xtolower(type[0]) == 'p' && xtolower(type[1]) == 'u') {
 				pubonly = 1;
-			} else if (xtolower(opt[0]) == 'p' && xtolower(opt[1]) == 'r') {
+			} else if (xtolower(type[0]) == 'p' && xtolower(type[1]) == 'r') {
 				prvtonly = 1;
 			} else {
-				return luaL_argerror(L, 3, lua_pushfstring(L, "invalid option %s", opt));
+				return luaL_error(L, "invalid key type: %s", type);
 			}
 		}
 
-		data = luaL_checklstring(L, 1, &len);
+		if (!lua_isnil(L, 4)) {
+			if (format == X509_DER)
+				return luaL_error(L, "decryption supported only for PEM keys");
+			else format = X509_PEM;
+		}
 
 		ud = prepsimple(L, PKEY_CLASS);
 
 		if (!(bio = BIO_new_mem_buf((void *)data, len)))
 			return auxL_error(L, auxL_EOPENSSL, "pkey.new");
 
-		if (type == X509_PEM || type == X509_ANY) {
+		if (format == X509_PEM || format == X509_ANY) {
+			lua_pushvalue(L, 4);
+
 			if (!prvtonly && !pub) {
 				/*
 				 * BIO_reset is a rewind for read-only
@@ -4377,19 +4424,21 @@ static int pk_new(lua_State *L) {
 				 */
 				BIO_reset(bio);
 
-				if (!(pub = PEM_read_bio_PUBKEY(bio, NULL, 0, "")))
+				if (!(pub = PEM_read_bio_PUBKEY(bio, NULL, pem_pw_cb, L)))
 					goterr = 1;
 			}
 
 			if (!pubonly && !prvt) {
 				BIO_reset(bio);
 
-				if (!(prvt = PEM_read_bio_PrivateKey(bio, NULL, 0, "")))
+				if (!(prvt = PEM_read_bio_PrivateKey(bio, NULL, pem_pw_cb, L)))
 					goterr = 1;
 			}
+
+			lua_pop(L, 1);
 		}
 
-		if (type == X509_DER || type == X509_ANY) {
+		if (format == X509_DER || format == X509_ANY) {
 			if (!prvtonly && !pub) {
 				BIO_reset(bio);
 
@@ -4718,14 +4767,27 @@ static int pk_toPEM(lua_State *L) {
 	bio = getbio(L);
 
 	for (i = 2; i <= top; i++) {
-		static const char *const opts[] = {
+		static const char *const types[] = {
 			"public", "PublicKey",
 			"private", "PrivateKey",
 //			"params", "Parameters",
 			NULL,
 		};
+		int type;
+		const char *cname = NULL;
+		const EVP_CIPHER *cipher = NULL;
 
-		switch (auxL_checkoption(L, i, NULL, opts, 1)) {
+		if (lua_istable(L, i)) {
+			loadfield(L, i, "cipher", LUA_TSTRING, &cname);
+			if (!getfield(L, i, "type"))
+				lua_pushstring(L, cname ? "private" : "public");
+		} else
+			lua_pushvalue(L, i);
+
+		type = auxL_checkoption(L, -1, NULL, types, 1);
+		lua_pop(L, 1);
+
+		switch (type) {
 		case 0: case 1: /* public, PublicKey */
 			if (!PEM_write_bio_PUBKEY(bio, key))
 				return auxL_error(L, auxL_EOPENSSL, "pkey:__tostring");
@@ -4736,8 +4798,20 @@ static int pk_toPEM(lua_State *L) {
 
 			break;
 		case 2: case 3: /* private, PrivateKey */
-			if (!PEM_write_bio_PrivateKey(bio, key, 0, 0, 0, 0, 0))
+			if (cname) {
+				cipher = EVP_get_cipherbyname(cname);
+				if (!cipher)
+					return luaL_error(L, "pkey:toPEM: unknown cipher: %s", cname);
+				if (!getfield(L, i, "password"))
+					return luaL_error(L, "pkey:toPEM: password not defined");
+			}
+			else
+				lua_pushnil(L);
+
+			if (!PEM_write_bio_PrivateKey(bio, key, cipher, NULL, 0, pem_pw_cb, L))
 				return auxL_error(L, auxL_EOPENSSL, "pkey:__tostring");
+
+			lua_pop(L, 1);
 
 			len = BIO_get_mem_data(bio, &pem);
 			lua_pushlstring(L, pem, len);
