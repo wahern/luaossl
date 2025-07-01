@@ -1477,6 +1477,7 @@ static const char *auxL_pusherror(lua_State *L, int error, const char *fun) {
 		const char *path, *file;
 		int line;
 		char txt[256];
+		char prefix[256];
 
 		if (!ERR_peek_error())
 			return lua_pushliteral(L, "oops: no OpenSSL errors set");
@@ -1493,15 +1494,16 @@ static const char *auxL_pusherror(lua_State *L, int error, const char *fun) {
 			file = path;
 		}
 
-		ERR_clear_error();
+		if (fun) {
+			snprintf(prefix, sizeof prefix, "%s: %s:%d", fun, file, line);
+		} else {
+			snprintf(prefix, sizeof prefix, "%s:%d", file, line);
+		}
 
 		ERR_error_string_n(code, txt, sizeof txt);
+		ERR_clear_error();
 
-		if (fun) {
-			return lua_pushfstring(L, "%s: %s:%d:%s", fun, file, line, txt);
-		} else {
-			return lua_pushfstring(L, "%s:%d:%s", file, line, txt);
-		}
+		return lua_pushfstring(L, "%s:%s", prefix, txt);
 #if HAVE_DLADDR
 	} else if (error == auxL_EDYLD) {
 		const char *const fmt = (fun)? "%s: %s" : "%.0s%s";
