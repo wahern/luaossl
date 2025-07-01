@@ -487,7 +487,7 @@
 #endif
 
 #ifndef HAVE_SSL_SET_GROUPS_LIST
-#if OPENSSL_PREREQ(1,1,1)
+#if OPENSSL_PREREQ(1,1,1) || LIBRESSL_PREREQ(2,5,1)
 #define HAVE_SSL_SET_GROUPS_LIST 1
 #elif HAVE_SSL_SET_CURVES_LIST
 #define SSL_set1_groups_list SSL_set1_curves_list
