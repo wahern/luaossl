@@ -1171,7 +1171,7 @@ NOTUSED static auxtype_t auxL_getref(lua_State *L, auxref_t ref) {
 
 static int auxL_testoption(lua_State *L, int index, const char *def, const char *const *optlist, _Bool nocase) {
 	const char *optname = (def)? luaL_optstring(L, index, def) : luaL_checkstring(L, index);
-	int (*optcmp)() = (nocase)?
+	int (*optcmp)(const char*, const char*) = (nocase)?
 #ifdef _WIN32
 		&_stricmp
 #else
