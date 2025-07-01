@@ -127,6 +127,10 @@
 #define __has_builtin(x) 0
 #endif
 
+#ifndef __has_attribute
+#define __has_attribute(x) 0
+#endif
+
 #ifndef __has_extension
 #define __has_extension(x) 0
 #endif
@@ -675,6 +679,12 @@
 #define NOTUSED __attribute__((unused))
 #else
 #define NOTUSED
+#endif
+
+#if __has_attribute(nonstring)
+#  define NONSTRING __attribute__((nonstring))
+#else
+#  define NONSTRING
 #endif
 
 #if HAVE_C___BUILTIN_UNREACHABLE
@@ -6561,7 +6571,7 @@ static int xc_digest(lua_State *L) {
 		break;
 	}
 	case 1: {
-		static const unsigned char x[16] = "0123456789abcdef";
+		static const unsigned char x[16] NONSTRING = "0123456789abcdef";
 		luaL_Buffer B;
 		unsigned i;
 
