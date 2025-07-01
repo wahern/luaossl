@@ -2827,8 +2827,8 @@ enum {
 static struct ex_type {
 	int class_index; /* OpenSSL object type identifier */
 	int index; /* OpenSSL-allocated external data identifier */
-	void *(*get_ex_data)();
-	int (*set_ex_data)();
+	void *(*get_ex_data)(const SSL_CTX *ssl, int idx);
+	int (*set_ex_data)(SSL_CTX *ssl, int idx, void *data);
 } ex_type[] = {
 	[EX_SSL_CTX_ALPN_SELECT_CB] = { CRYPTO_EX_INDEX_SSL_CTX, -1, &SSL_CTX_get_ex_data, &SSL_CTX_set_ex_data },
 	[EX_SSL_CTX_TLSEXT_SERVERNAME_CB] = { CRYPTO_EX_INDEX_SSL_CTX, -1, &SSL_CTX_get_ex_data, &SSL_CTX_set_ex_data },
