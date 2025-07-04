@@ -1495,15 +1495,15 @@ static const char *auxL_pusherror(lua_State *L, int error, const char *fun) {
 		}
 
 		if (fun) {
-			snprintf(prefix, sizeof prefix, "%s: %s:%d", fun, file, line);
+			snprintf(prefix, sizeof prefix, "%s: %s", fun, file);
 		} else {
-			snprintf(prefix, sizeof prefix, "%s:%d", file, line);
+			snprintf(prefix, sizeof prefix, "%s", file);
 		}
 
 		ERR_error_string_n(code, txt, sizeof txt);
 		ERR_clear_error();
 
-		return lua_pushfstring(L, "%s:%s", prefix, txt);
+		return lua_pushfstring(L, "%s:%d:%s", prefix, line, txt);
 #if HAVE_DLADDR
 	} else if (error == auxL_EDYLD) {
 		const char *const fmt = (fun)? "%s: %s" : "%.0s%s";
