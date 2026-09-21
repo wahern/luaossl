@@ -8782,6 +8782,13 @@ static int xs_add(lua_State *L) {
 				X509_CRL_free(crl_dup);
 				return auxL_error(L, auxL_EOPENSSL, "x509.store:add");
 			}
+
+			/* enable check revocation of chain leaf certificate if CRL is added to store */
+			if (!X509_STORE_set_flags(store, X509_V_FLAG_CRL_CHECK)) {
+				X509_CRL_free(crl_dup);
+				return auxL_error(L, auxL_EOPENSSL, "x509.store:add");
+			}
+
 		} else {
 			const char *path = luaL_checkstring(L, i);
 			struct stat st;
