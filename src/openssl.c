@@ -4116,8 +4116,8 @@ static BIO *getbio(lua_State *L) {
 static int pk_new(lua_State *L) {
 	EVP_PKEY **ud;
 
-	/* #1 table or key; if key, #2 format and #3 type */
-	lua_settop(L, 3);
+	/* #1 table or key; if key, #2 format and #3 type, #4 curve name */
+	lua_settop(L, 4);
 
 	if (lua_istable(L, 1) || lua_isnil(L, 1)) {
 		int type = EVP_PKEY_RSA;
@@ -4369,6 +4369,12 @@ static int pk_new(lua_State *L) {
 			}
 		}
 
+		int curve_id = -1;
+		if ((opt = luaL_optstring(L, 4, NULL))) {
+			if (!auxS_txt2nid(&curve_id, opt))
+				luaL_argerror(L, 4, lua_pushfstring(L, "%s: invalid curve", opt));
+		}
+
 		data = luaL_checklstring(L, 1, &len);
 
 		ud = prepsimple(L, PKEY_CLASS);
@@ -4410,6 +4416,31 @@ static int pk_new(lua_State *L) {
 
 				if (!(prvt = d2i_PrivateKey_bio(bio, NULL)))
 					goterr = 1;
+			}
+		}
+
+		if (type == X509_ANY && (pubonly && !pub) && curve_id >= 0) {
+			EC_KEY *ec = EC_KEY_new();
+
+			if (!EC_KEY_set_group(ec, EC_GROUP_new_by_curve_name(curve_id))) {
+				goterr = 1;
+			} else if (!EC_KEY_oct2key(ec, data, len, getctx(L))) {
+				goterr = 1;
+			} else {
+				pub = EVP_PKEY_new();
+				EVP_PKEY_assign_EC_KEY(pub, ec);
+			}
+		}
+
+		if (type == X509_ANY && (!pubonly && !prvt) && curve_id >= 0) {
+			EC_KEY *ec = EC_KEY_new();
+			if (!EC_KEY_set_group(ec, EC_GROUP_new_by_curve_name(curve_id))) {
+				goterr = 1;
+			} else if (!EC_KEY_oct2priv(ec, data, len)) {
+				goterr = 1;
+			} else {
+				prvt = EVP_PKEY_new();
+				EVP_PKEY_assign_EC_KEY(prvt, ec);
 			}
 		}
 
@@ -4670,6 +4701,53 @@ sslerr:
 
 	return auxL_error(L, auxL_EOPENSSL, "pkey:encrypt");
 } /* pk_encrypt() */
+
+static int pk_derive(lua_State *L) {
+	size_t outlen;
+	EVP_PKEY *key = checksimple(L, 1, PKEY_CLASS);
+	EVP_PKEY *peer = checksimple(L, 2, PKEY_CLASS);
+	EVP_PKEY_CTX *ctx;
+	BIO *bio;
+	BUF_MEM *buf;
+
+	bio = getbio(L);
+	BIO_get_mem_ptr(bio, &buf);
+
+	if (!(ctx = EVP_PKEY_CTX_new(key, NULL)))
+		goto sslerr;
+
+	if (EVP_PKEY_derive_init(ctx) <= 0)
+		goto sslerr;
+
+	if (EVP_PKEY_derive_set_peer(ctx, peer) <= 0)
+		goto sslerr;
+
+	if (EVP_PKEY_derive(ctx, NULL, &outlen) <= 0)
+		goto sslerr;
+
+	if (!BUF_MEM_grow_clean(buf, outlen))
+		goto sslerr;
+
+	if (EVP_PKEY_derive(ctx, (unsigned char*)buf->data, &outlen) <= 0)
+		goto sslerr;
+
+	EVP_PKEY_CTX_free(ctx);
+	ctx = NULL;
+
+	lua_pushlstring(L, buf->data, outlen);
+
+	BIO_reset(bio);
+
+	return 1;
+sslerr:
+	if (ctx) {
+		EVP_PKEY_CTX_free(ctx);
+		ctx = NULL;
+	}
+	BIO_reset(bio);
+
+	return auxL_error(L, auxL_EOPENSSL, "pkey:encrypt");
+} /* pk_derive() */
 #endif
 
 static int pk_sign(lua_State *L) {
@@ -5401,6 +5479,7 @@ static const auxL_Reg pk_methods[] = {
 	{ "toPEM",         &pk_toPEM },
 	{ "tostring",      &pk__tostring },
 	{ "verify",        &pk_verify },
+	{ "derive",        &pk_derive },
 	{ NULL,            NULL },
 };
 
