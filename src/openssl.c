@@ -12451,7 +12451,17 @@ static int or_toPEM(lua_State *L) {
 	size_t len;
 	char *bytes;
 
+	/*
+	 * LibreSSL, and OpenSSL before 3.0.19/3.3.6/3.4.4/3.5.5/3.6.1/4.0.0,
+	 * define PEM_write_bio_OCSP_RESPONSE() as a macro with an (int (*)())
+	 * cast, which C23 reads as (int (*)(void)), so the call fails to
+	 * compile. While it's a macro, use what the fixed macro expands to.
+	 */
+#ifdef PEM_write_bio_OCSP_RESPONSE
+	if (!PEM_ASN1_write_bio((i2d_of_void *)i2d_OCSP_RESPONSE, PEM_STRING_OCSP_RESPONSE, bio, (char *)resp, NULL, NULL, 0, NULL, NULL))
+#else
 	if (!PEM_write_bio_OCSP_RESPONSE(bio, resp))
+#endif
 		return auxL_error(L, auxL_EOPENSSL, "OCSP_RESPONSE:toPEM");
 
 	len = BIO_get_mem_data(bio, &bytes);
