@@ -9194,6 +9194,19 @@ static void sx_push(lua_State *L, SSL_CTX *ctx) {
 } /* sx_push() */
 
 
+static int sx_pushlightuserdata(lua_State *L) {
+	SSL_CTX *ptr;
+
+	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
+	ptr = lua_touserdata(L, 1);
+	luaL_argcheck(L, ptr, 1, "SSL_CTX* pointer must be non-null");
+
+	sx_push(L, ptr);
+
+	return 1;
+} /* sx_pushlightuserdata() */
+
+
 static int sx_pushffi(lua_State *L) {
 	SSL_CTX *ptr;
 
@@ -9208,7 +9221,7 @@ static int sx_pushffi(lua_State *L) {
 	sx_push(L, ptr);
 
 	return 1;
-} /* ssl_pushffi() */
+} /* sx_pushffi() */
 
 
 static int sx_new(lua_State *L) {
@@ -10396,10 +10409,11 @@ static const auxL_Reg sx_metatable[] = {
 };
 
 static const auxL_Reg sx_globals[] = {
-	{ "new",       &sx_new },
-	{ "pushffi",   &sx_pushffi, 1 },
-	{ "interpose", &sx_interpose },
-	{ NULL,        NULL },
+	{ "new",                 &sx_new },
+	{ "pushlightuserdata",   &sx_pushlightuserdata },
+	{ "pushffi",             &sx_pushffi, 1 },
+	{ "interpose",           &sx_interpose },
+	{ NULL,                  NULL },
 };
 
 static const auxL_IntegerReg sx_verify[] = {
@@ -10599,6 +10613,19 @@ static void ssl_push(lua_State *L, SSL *ssl) {
 	}
 	lua_remove(L, -2);
 } /* ssl_push() */
+
+
+static int ssl_pushlightuserdata(lua_State *L) {
+	SSL *ptr;
+
+	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
+	ptr = lua_touserdata(L, 1);
+	luaL_argcheck(L, ptr, 1, "SSL* pointer must be non-null");
+
+	ssl_push(L, ptr);
+
+	return 1;
+} /* ssl_pushlightuserdata() */
 
 
 static int ssl_pushffi(lua_State *L) {
@@ -11318,10 +11345,11 @@ static const auxL_Reg ssl_metatable[] = {
 };
 
 static const auxL_Reg ssl_globals[] = {
-	{ "new",       &ssl_new },
-	{ "pushffi",   &ssl_pushffi, 1 },
-	{ "interpose", &ssl_interpose },
-	{ NULL,        NULL },
+	{ "new",               &ssl_new },
+	{ "pushlightuserdata", &ssl_pushlightuserdata },
+	{ "pushffi",           &ssl_pushffi, 1 },
+	{ "interpose",         &ssl_interpose },
+	{ NULL,                NULL },
 };
 
 static const auxL_IntegerReg ssl_version[] = {
